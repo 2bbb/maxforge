@@ -54,7 +54,7 @@ export function lookupObject(
 
   const entry = database[firstToken];
   if (entry) {
-    if (entry.argDependent) {
+    if (entry.argDependent || entry.argRule) {
       const resolved = resolveArgDependent(objectText, entry);
       return { def: resolved, text: objectText, maxclass: entry.maxclass };
     }
@@ -153,6 +153,22 @@ function resolveArgDependent(
       def.numoutlets = firstArg;
       def.outlettype = Array(firstArg).fill("signal");
       break;
+    case "inlets = arg count, outlets = arg count":
+      def.numinlets = argCount;
+      def.numoutlets = argCount;
+      def.outlettype = Array(argCount).fill("");
+      break;
+    case "outlets = arg count, outlettype from args": {
+      const typeMap: Record<string, string> = {
+        b: "bang", bang: "bang",
+        i: "int", int: "int",
+        f: "float", float: "float",
+        l: "", list: "", s: "", symbol: "",
+      };
+      def.numoutlets = argCount;
+      def.outlettype = args.map(a => typeMap[a.toLowerCase()] ?? "");
+      break;
+    }
   }
 
   return def;
