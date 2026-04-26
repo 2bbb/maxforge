@@ -1,0 +1,26 @@
+{
+  "name": "maxpat-dsl",
+  "version": "0.1.0",
+  "description": "DSL compiler for Max/MSP .maxpat files",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "maxpat-dsl": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
+    "cli": "node --loader ts-node/esm src/cli/index.ts"
+  },
+  "keywords": ["max", "maxmsp", "maxpat", "dsl", "compiler"],
+  "author": "2bit",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
