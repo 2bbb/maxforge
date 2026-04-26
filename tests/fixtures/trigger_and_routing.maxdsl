@@ -1,0 +1,21 @@
+patch "Trigger and Routing"
+
+lb = loadbang
+t1 = trigger bang bang bang
+met = metro 500
+cnt = counter 0 15
+num = number
+
+lb -> t1
+t1 -> met
+t1[1] -> cnt
+t1[2] -> num
+
+g = gate 2
+tog = toggle
+a = number
+b = number
+
+tog -> g
+g -> a
+g[1] -> b

@@ -1,10 +1,136 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import fs from "fs";
+import path from "path";
 import { parse, compile, decompile } from "../src/index.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
 const db = dbData as ObjectDatabase;
+const fixturesDir = path.join(__dirname, "fixtures");
 
+function loadFixture(name: string): string {
+  return fs.readFileSync(path.join(fixturesDir, name), "utf-8");
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot tests
+// ---------------------------------------------------------------------------
+describe("snapshot", () => {
+  const fixtures = [
+    "basic_synth.maxdsl",
+    "midi_synth.maxdsl",
+    "subpatcher.maxdsl",
+    "trigger_and_routing.maxdsl",
+    "position_override.maxdsl",
+    "edge_cases.maxdsl",
+  ];
+
+  for (const name of fixtures) {
+    it(`matches snapshot: ${path.basename(name, ".maxdsl")}`, () => {
+      const source = loadFixture(name);
+      const { ast, errors } = parse(source);
+      expect(errors).toHaveLength(0);
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
+      expect(result.output!.patcher).toMatchSnapshot(
+        path.basename(name, ".maxdsl")
+      );
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Round-trip (deep property comparison)
+// ---------------------------------------------------------------------------
+describe("round-trip", () => {
+  function boxKey(bw: { box: { patching_rect: number[] } }): string {
+    return bw.box.patching_rect.join(",");
+  }
+
+  it("preserves all box properties (basic_synth)", () => {
+    const source = loadFixture("basic_synth.maxdsl");
+    const { ast } = parse(source);
+    const original = compile(ast, db);
+    expect(original.success).toBe(true);
+
+    const dsl = decompile(original.output!);
+    const { ast: ast2, errors } = parse(dsl);
+    expect(errors).toHaveLength(0);
+
+    const recompiled = compile(ast2, db);
+    expect(recompiled.success).toBe(true);
+
+    const origBoxes = original.output!.patcher.boxes;
+    const reBoxes = recompiled.output!.patcher.boxes;
+    expect(reBoxes.length).toBe(origBoxes.length);
+
+    for (const ob of origBoxes) {
+      const rb = reBoxes.find((b) => boxKey(b) === boxKey(ob));
+      expect(rb).toBeDefined();
+      expect(rb!.box.maxclass).toBe(ob.box.maxclass);
+      expect(rb!.box.numinlets).toBe(ob.box.numinlets);
+      expect(rb!.box.numoutlets).toBe(ob.box.numoutlets);
+      expect(rb!.box.text ?? "").toBe(ob.box.text ?? "");
+    }
+  });
+
+  it("preserves all line connections (basic_synth)", () => {
+    const source = loadFixture("basic_synth.maxdsl");
+    const { ast } = parse(source);
+    const original = compile(ast, db);
+    const dsl = decompile(original.output!);
+    const { ast: ast2 } = parse(dsl);
+    const recompiled = compile(ast2, db);
+
+    const origLines = original.output!.patcher.lines;
+    const reLines = recompiled.output!.patcher.lines;
+    expect(reLines.length).toBe(origLines.length);
+
+    // Build id→index maps for position-based matching
+    const origMap = new Map(
+      original.output!.patcher.boxes.map((b, i) => [b.box.id, i])
+    );
+    const reMap = new Map(
+      recompiled.output!.patcher.boxes.map((b, i) => [b.box.id, i])
+    );
+
+    for (const ol of origLines) {
+      const match = reLines.find((rl) => {
+        const oSrcIdx = origMap.get(ol.patchline.source[0]) ?? -1;
+        const oDstIdx = origMap.get(ol.patchline.destination[0]) ?? -1;
+        const rSrcIdx = reMap.get(rl.patchline.source[0]) ?? -1;
+        const rDstIdx = reMap.get(rl.patchline.destination[0]) ?? -1;
+        return (
+          oSrcIdx === rSrcIdx &&
+          ol.patchline.source[1] === rl.patchline.source[1] &&
+          oDstIdx === rDstIdx &&
+          ol.patchline.destination[1] === rl.patchline.destination[1]
+        );
+      });
+      expect(match).toBeDefined();
+    }
+  });
+
+  it("round-trips subpatcher preserving box count", () => {
+    const source = loadFixture("subpatcher.maxdsl");
+    const { ast } = parse(source);
+    const original = compile(ast, db);
+    const dsl = decompile(original.output!);
+    const { ast: ast2 } = parse(dsl);
+    const recompiled = compile(ast2, db);
+
+    expect(recompiled.output!.patcher.boxes.length).toBe(
+      original.output!.patcher.boxes.length
+    );
+    expect(recompiled.output!.patcher.lines.length).toBe(
+      original.output!.patcher.lines.length
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Parser
+// ---------------------------------------------------------------------------
 describe("parser", () => {
   it("parses a basic synth patch", () => {
     const source = `
@@ -18,8 +144,12 @@ freq -> mt -> osc -> dac
     const { ast, errors } = parse(source);
     expect(errors).toHaveLength(0);
     expect(ast.statements).toHaveLength(5);
-    expect(ast.statements.filter((s) => s.type === "object_def")).toHaveLength(4);
-    expect(ast.statements.filter((s) => s.type === "connection")).toHaveLength(1);
+    expect(ast.statements.filter((s) => s.type === "object_def")).toHaveLength(
+      4
+    );
+    expect(
+      ast.statements.filter((s) => s.type === "connection")
+    ).toHaveLength(1);
   });
 
   it("parses patch declaration", () => {
@@ -83,6 +213,9 @@ fx = p delay {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Compiler
+// ---------------------------------------------------------------------------
 describe("compiler", () => {
   it("compiles a basic synth", () => {
     const source = `
@@ -106,61 +239,11 @@ vol[1] -> dac[1]
     expect(result.output!.patcher.lines).toHaveLength(6);
   });
 
-  it("detects duplicate names", () => {
-    const source = `
-a = cycle~ 440
-a = cycle~ 220
-`;
-    const { ast } = parse(source);
-    const result = compile(ast, db);
-    expect(result.success).toBe(false);
-    expect(result.errors.some((e) => e.code === "E001")).toBe(true);
-  });
-
-  it("detects undefined references", () => {
-    const source = `
-a = toggle
-a -> b
-`;
-    const { ast } = parse(source);
-    const result = compile(ast, db);
-    expect(result.success).toBe(false);
-    expect(result.errors.some((e) => e.code === "E002")).toBe(true);
-  });
-
-  it("detects unknown objects", () => {
-    const source = `a = nonexistent_object`;
-    const { ast } = parse(source);
-    const result = compile(ast, db);
-    expect(result.success).toBe(false);
-    expect(result.errors.some((e) => e.code === "E003")).toBe(true);
-  });
-
   it("allows unknown objects with flag", () => {
     const source = `a = custom_object`;
     const { ast } = parse(source);
     const result = compile(ast, db, true);
     expect(result.success).toBe(true);
-  });
-
-  it("detects outlet out of range", () => {
-    const source = `
-a = cycle~ 440
-b = ezdac~
-a[5] -> b
-`;
-    const { ast } = parse(source);
-    const result = compile(ast, db);
-    expect(result.success).toBe(false);
-    expect(result.errors.some((e) => e.code === "E004")).toBe(true);
-  });
-
-  it("detects inlet outside subpatcher", () => {
-    const source = `a = inlet`;
-    const { ast } = parse(source);
-    const result = compile(ast, db);
-    expect(result.success).toBe(false);
-    expect(result.errors.some((e) => e.code === "E006")).toBe(true);
   });
 
   it("sets correct patching_rect from auto-layout", () => {
@@ -236,7 +319,9 @@ g[3] -> d
       const { ast } = parse(source);
       const result = compile(ast, db);
       expect(result.success).toBe(true);
-      const gate = result.output!.patcher.boxes.find((bw) => bw.box.text === "gate 4")!.box;
+      const gate = result.output!.patcher.boxes.find(
+        (bw) => bw.box.text === "gate 4"
+      )!.box;
       expect(gate.numoutlets).toBe(4);
       expect(gate.outlettype).toHaveLength(4);
     });
@@ -256,7 +341,9 @@ r[3] -> d
       const { ast } = parse(source);
       const result = compile(ast, db);
       expect(result.success).toBe(true);
-      const route = result.output!.patcher.boxes.find((bw) => bw.box.text === "route 1 2 3")!.box;
+      const route = result.output!.patcher.boxes.find(
+        (bw) => bw.box.text === "route 1 2 3"
+      )!.box;
       expect(route.numoutlets).toBe(4);
     });
 
@@ -273,7 +360,9 @@ c -> pk[2]
       const { ast } = parse(source);
       const result = compile(ast, db);
       expect(result.success).toBe(true);
-      const pack = result.output!.patcher.boxes.find((bw) => bw.box.text === "pack 0 0. 0")!.box;
+      const pack = result.output!.patcher.boxes.find(
+        (bw) => bw.box.text === "pack 0 0. 0"
+      )!.box;
       expect(pack.numinlets).toBe(3);
     });
 
@@ -294,7 +383,9 @@ sel -> out
       const { ast } = parse(source);
       const result = compile(ast, db);
       expect(result.success).toBe(true);
-      const sel = result.output!.patcher.boxes.find((bw) => bw.box.text === "selector~ 4")!.box;
+      const sel = result.output!.patcher.boxes.find(
+        (bw) => bw.box.text === "selector~ 4"
+      )!.box;
       expect(sel.numinlets).toBe(5);
     });
 
@@ -311,59 +402,264 @@ r[2] -> c
       const { ast } = parse(source);
       const result = compile(ast, db);
       expect(result.success).toBe(true);
-      const route = result.output!.patcher.boxes.find((bw) => bw.box.text === "route set get")!.box;
+      const route = result.output!.patcher.boxes.find(
+        (bw) => bw.box.text === "route set get"
+      )!.box;
       expect(route.numoutlets).toBe(3);
     });
-  });
 
-  describe("decompile", () => {
-    it("round-trips a basic synth", () => {
+    it("resolves trigger outlets and types from args", () => {
       const source = `
-freq = number
-mt = mtof
-osc = cycle~ 440
-mul = *~ 0.5
-vol = gain~
-dac = ezdac~
-
-freq -> mt -> osc -> mul -> vol -> dac
-vol[1] -> dac[1]
-`;
-      const { ast, errors: parseErrors } = parse(source);
-      expect(parseErrors).toHaveLength(0);
-      const compiled = compile(ast, db);
-      expect(compiled.success).toBe(true);
-
-      const dsl = decompile(compiled.output!);
-      const { ast: ast2, errors: parseErrors2 } = parse(dsl);
-      expect(parseErrors2).toHaveLength(0);
-
-      const recompiled = compile(ast2, db);
-      expect(recompiled.success).toBe(true);
-      expect(recompiled.output!.patcher.boxes.length).toBe(compiled.output!.patcher.boxes.length);
-      expect(recompiled.output!.patcher.lines.length).toBe(compiled.output!.patcher.lines.length);
-    });
-
-    it("preserves connection ports in round-trip", () => {
-      const source = `
-a = cycle~ 440
-b = gain~
-c = ezdac~
-a -> b -> c
-b[1] -> c[1]
+trig = trigger bang float int
+lb = loadbang
+lb -> trig
 `;
       const { ast } = parse(source);
-      const compiled = compile(ast, db);
-      const dsl = decompile(compiled.output!);
-      expect(dsl).toContain("[1] ->");
-
-      const { ast: ast2 } = parse(dsl);
-      const recompiled = compile(ast2, db);
-      const stereoLine = recompiled.output!.patcher.lines.find(
-        (lw) => lw.patchline.source[1] === 1
-      );
-      expect(stereoLine).toBeDefined();
-      expect(stereoLine!.patchline.destination[1]).toBe(1);
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
+      const t = result.output!.patcher.boxes.find((bw) =>
+        bw.box.text?.startsWith("trigger ")
+      )!.box;
+      expect(t.numoutlets).toBe(3);
+      expect(t.outlettype).toEqual(["bang", "float", "int"]);
     });
+
+    it("resolves t alias with shorthand types", () => {
+      const source = `
+trig = t b f i l
+lb = loadbang
+lb -> trig
+`;
+      const { ast } = parse(source);
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
+      const t = result.output!.patcher.boxes.find((bw) =>
+        bw.box.text?.startsWith("t ")
+      )!.box;
+      expect(t.numoutlets).toBe(4);
+      expect(t.outlettype).toEqual(["bang", "float", "int", ""]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error detection (E001–E008)
+// ---------------------------------------------------------------------------
+describe("error detection", () => {
+  it("E001: duplicate name", () => {
+    const { ast } = parse(`a = cycle~ 440\na = cycle~ 220`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E001")).toBe(true);
+  });
+
+  it("E002: undefined reference", () => {
+    const { ast } = parse(`a = toggle\na -> b`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E002")).toBe(true);
+  });
+
+  it("E003: unknown object type", () => {
+    const { ast } = parse(`a = nonexistent_object`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E003")).toBe(true);
+  });
+
+  it("E004: outlet index out of range", () => {
+    const { ast } = parse(`a = cycle~ 440\nb = ezdac~\na[5] -> b`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E004")).toBe(true);
+  });
+
+  it("E005: inlet index out of range", () => {
+    const { ast } = parse(`a = toggle\nb = toggle\na -> b[5]`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E005")).toBe(true);
+  });
+
+  it("E006: inlet/outlet outside subpatcher", () => {
+    const { ast } = parse(`a = inlet`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E006")).toBe(true);
+  });
+
+  it("E007: syntax error", () => {
+    const { errors } = parse(`this is garbage`);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.code === "E007")).toBe(true);
+  });
+
+  it("E008: subpatcher with no inlet or outlet", () => {
+    const source = `
+fx = p empty {
+  x = cycle~ 440
+}
+`;
+    const { ast } = parse(source);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((e) => e.code === "E008")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+describe("edge cases", () => {
+  it("comment with -> is not treated as connection", () => {
+    const source = `cmt = comment "A -> B -> C"`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    expect(ast.statements[0].type).toBe("object_def");
+  });
+
+  it("parses at(x,y) position override", () => {
+    const source = `osc = cycle~ 440 at(100, 200)`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const obj = ast.statements[0];
+    if (obj.type === "object_def") {
+      expect(obj.pos).toEqual([100, 200]);
+      expect(obj.objectText).toBe("cycle~ 440");
+    }
+  });
+
+  it("respects at(x,y) in compiled output", () => {
+    const source = `
+a = cycle~ 440 at(100, 200)
+b = cycle~ 220
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const a = result.output!.patcher.boxes.find(
+      (b) => b.box.text === "cycle~ 440"
+    )!.box;
+    const b = result.output!.patcher.boxes.find(
+      (b) => b.box.text === "cycle~ 220"
+    )!.box;
+    expect(a.patching_rect[0]).toBe(100);
+    expect(a.patching_rect[1]).toBe(200);
+    // b should be auto-layouted, not at (0,0)
+    expect(b.patching_rect[0]).toBe(50);
+  });
+
+  it("handles nested subpatchers", () => {
+    const source = `
+outer = p outer_patch {
+  o_in = inlet
+  o_out = outlet
+  inner = p inner_patch {
+    in = inlet
+    out = outlet
+    in -> out
+  }
+  o_in -> inner -> o_out
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const outer = result.output!.patcher.boxes[0].box;
+    expect(outer.patcher).toBeDefined();
+    const innerBox = outer.patcher!.boxes.find(
+      (b: { box: { text: string } }) => b.box.text === "p inner_patch"
+    );
+    expect(innerBox).toBeDefined();
+    expect(innerBox!.box.patcher).toBeDefined();
+  });
+
+  it("handles empty patch", () => {
+    const source = `patch "Empty"`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.boxes).toHaveLength(0);
+  });
+
+  it("handles send/receive pair", () => {
+    const source = `
+snd = send mybus
+rcv = receive mybus
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const s = result.output!.patcher.boxes.find(
+      (b) => b.box.text === "send mybus"
+    )!.box;
+    const r = result.output!.patcher.boxes.find(
+      (b) => b.box.text === "receive mybus"
+    )!.box;
+    expect(s.numinlets).toBe(1);
+    expect(s.numoutlets).toBe(0);
+    expect(r.numinlets).toBe(0);
+    expect(r.numoutlets).toBe(1);
+  });
+
+  it("decompiles operator objects preserving text", () => {
+    const source = `
+mul = *~ 0.5
+add = +~ 0.1
+mul -> add
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    const dsl = decompile(result.output!);
+    expect(dsl).toContain("*~ 0.5");
+    expect(dsl).toContain("+~ 0.1");
+  });
+
+  it("decompiles with unique names for duplicate operators", () => {
+    const source = `
+a = *~ 0.5
+b = *~ 0.3
+dac = ezdac~
+a -> dac
+b -> dac[1]
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    const dsl = decompile(result.output!);
+    const { ast: ast2, errors: errors2 } = parse(dsl);
+    expect(errors2).toHaveLength(0);
+  });
+
+  it("handles message objects", () => {
+    const source = `
+msg = message "open file.txt"
+tog = toggle
+tog -> msg
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const msg = result.output!.patcher.boxes.find(
+      (b) => b.box.maxclass === "message"
+    )!.box;
+    expect(msg.text).toBe("open file.txt");
+  });
+
+  it("handles loadbang with no inlets", () => {
+    const source = `lb = loadbang`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const lb = result.output!.patcher.boxes[0].box;
+    expect(lb.numinlets).toBe(0);
+    expect(lb.numoutlets).toBe(1);
   });
 });

@@ -11,11 +11,13 @@ export function decompile(patch: PatcherJSON): string {
   }
 
   const idToName = new Map<string, string>();
+  const usedNames = new Set<string>();
 
   for (const bw of p.boxes) {
     const box = bw.box;
-    const name = generateName(box, idToName);
+    const name = generateName(box, usedNames);
     idToName.set(box.id, name);
+    usedNames.add(name);
 
     const dslLine = boxToDSL(box, name);
     lines.push(dslLine);
@@ -32,7 +34,7 @@ export function decompile(patch: PatcherJSON): string {
   return lines.join("\n") + "\n";
 }
 
-function generateName(box: BoxJSON, usedNames: Map<string, string>): string {
+function generateName(box: BoxJSON, usedNames: Set<string>): string {
   const base = nameFromBox(box);
   let name = base;
   let counter = 2;
@@ -60,7 +62,19 @@ const OPERATOR_NAMES: Record<string, string> = {
   "<=": "lte",
 };
 
+const INLET_OUTLET_NAMES: Record<string, string> = {
+  inlet: "in",
+  "inlet~": "audio_in",
+  outlet: "out",
+  "outlet~": "audio_out",
+};
+
 function nameFromBox(box: BoxJSON): string {
+  if (box.maxclass === "inlet" || box.maxclass === "inlet~" ||
+      box.maxclass === "outlet" || box.maxclass === "outlet~") {
+    return INLET_OUTLET_NAMES[box.maxclass] || box.maxclass;
+  }
+
   if (box.text) {
     const firstToken = box.text.split(/\s+/)[0];
 

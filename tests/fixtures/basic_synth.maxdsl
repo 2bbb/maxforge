@@ -1,0 +1,11 @@
+patch "Basic Synth" | "number -> mtof -> cycle~ -> *~ -> gain~ -> ezdac~" | 640x480
+
+freq = number
+mt = mtof
+osc = cycle~ 440
+mul = *~ 0.5
+vol = gain~
+dac = ezdac~
+
+freq -> mt -> osc -> mul -> vol -> dac
+vol[1] -> dac[1]

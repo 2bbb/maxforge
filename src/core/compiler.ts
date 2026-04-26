@@ -246,6 +246,15 @@ export function compile(
     const outletType =
       hasAudioOutlet && outlets.length === 1 ? ["signal"] : [""];
 
+    if (inlets.length === 0 && outlets.length === 0) {
+      errors.push({
+        code: ErrorCode.EMPTY_SUBPATCHER,
+        message: `Subpatcher "${stmt.name}" has no inlets or outlets`,
+        line: stmt.line,
+      });
+      return;
+    }
+
     const box: CompiledBox = {
       id: nextId(),
       name: stmt.name,

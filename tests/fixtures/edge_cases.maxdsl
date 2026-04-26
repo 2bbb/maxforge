@@ -1,0 +1,20 @@
+patch "Edge Cases"
+
+# comment with -> arrow in object text
+cmt = comment "A -> B -> C"
+
+# operators that need name mangling
+mul = *~ 0.5
+add = +~ 0.1
+
+# at(x,y) position
+pinned = number at(100, 200)
+
+# send/receive
+snd = send mybus
+rcv = receive mybus
+
+# message
+msg = message "open file.txt"
+
+mul -> add

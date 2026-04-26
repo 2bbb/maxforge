@@ -1,0 +1,9 @@
+patch "Position Override"
+
+cmt = comment "Title" at(50, 30)
+freq = number at(50, 80)
+osc = cycle~ 440
+filt = lores~ 1000 0.5
+dac = ezdac~
+
+freq -> osc -> filt -> dac

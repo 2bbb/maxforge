@@ -1,0 +1,16 @@
+patch "MIDI Synth" | "notein -> midiparse -> mtof -> cycle~ -> *~ -> gain~ -> ezdac~"
+
+note = notein
+parse = midiparse
+mtof_obj = mtof
+osc = cycle~ 440
+env = line~
+mul = *~
+vol = gain~
+dac = ezdac~
+
+note -> parse
+parse -> mtof_obj -> osc -> mul -> vol -> dac
+vol[1] -> dac[1]
+parse[1] -> env
+env -> mul[1]
