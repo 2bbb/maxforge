@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { parse, compile, serialize, decompile, loadDatabase } from "../index.js";
+import { toClipboardText } from "../core/clipboard.js";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -38,6 +39,7 @@ async function compileCommand(cmdArgs: string[]) {
   let inputFile = "";
   let outputFile = "";
   let allowUnknown = false;
+  let clipboard = false;
 
   for (let i = 0; i < cmdArgs.length; i++) {
     if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
@@ -45,6 +47,8 @@ async function compileCommand(cmdArgs: string[]) {
       i++;
     } else if (cmdArgs[i] === "--allow-unknown") {
       allowUnknown = true;
+    } else if (cmdArgs[i] === "--clipboard") {
+      clipboard = true;
     } else if (!inputFile) {
       inputFile = cmdArgs[i];
     }
@@ -81,7 +85,9 @@ async function compileCommand(cmdArgs: string[]) {
 
   const json = serialize(result.output!);
 
-  if (outputFile) {
+  if (clipboard) {
+    console.log(toClipboardText(json));
+  } else if (outputFile) {
     const outPath = resolve(outputFile);
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, json, "utf-8");
@@ -171,7 +177,7 @@ function printHelp() {
   console.log(`maxpat-dsl - Max/MSP patch DSL compiler
 
 Usage:
-  maxpat-dsl compile <input.maxdsl> [-o output.maxpat] [--allow-unknown]
+  maxpat-dsl compile <input.maxdsl> [-o output.maxpat] [--allow-unknown] [--clipboard]
   maxpat-dsl decompile <input.maxpat> [-o output.maxdsl]
   maxpat-dsl validate <input.maxdsl> [--allow-unknown]
 
@@ -183,6 +189,7 @@ Commands:
 Options:
   -o <file>          Output file path
   --allow-unknown    Allow objects not in the database
+  --clipboard        Output compressed text pasteable into Max
 `);
 }
 

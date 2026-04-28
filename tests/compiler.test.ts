@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
 import { parse, compile, decompile } from "../src/index.js";
+import { toClipboardText, fromClipboardText } from "../src/core/clipboard.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
@@ -661,5 +662,39 @@ tog -> msg
     const lb = result.output!.patcher.boxes[0].box;
     expect(lb.numinlets).toBe(0);
     expect(lb.numoutlets).toBe(1);
+  });
+});
+
+describe("clipboard", () => {
+  it("produces valid compressed text with markers", () => {
+    const source = loadFixture("basic_synth.maxdsl");
+    const { ast } = parse(source);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const json = JSON.stringify(result.output);
+    const clip = toClipboardText(json);
+
+    expect(clip).toContain("----------begin_max5_patcher-----------");
+    expect(clip).toContain("-----------end_max5_patcher-----------");
+    expect(clip).toMatch(/^\d+\./m);
+  });
+
+  it("round-trips through clipboard format", () => {
+    const source = loadFixture("basic_synth.maxdsl");
+    const { ast } = parse(source);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const json = JSON.stringify(result.output);
+    const clip = toClipboardText(json);
+    const recovered = fromClipboardText(clip);
+    const recoveredObj = JSON.parse(recovered);
+
+    expect(recoveredObj.patcher.boxes.length).toBe(
+      result.output!.patcher.boxes.length
+    );
+    expect(recoveredObj.patcher.lines.length).toBe(
+      result.output!.patcher.lines.length
+    );
   });
 });
