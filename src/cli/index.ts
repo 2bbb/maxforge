@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { parse, compile, serialize, decompile, loadDatabase } from "../index.js";
-import { toClipboardText } from "../core/clipboard.js";
+import { toClipboardText, fromClipboardText } from "../core/clipboard.js";
+import { createReadStream } from "fs";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -27,6 +28,11 @@ async function main() {
 
   if (command === "validate") {
     await validateCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "from-clipboard") {
+    fromClipboardCommand(args.slice(1));
     return;
   }
 
@@ -173,18 +179,51 @@ function decompileCommand(cmdArgs: string[]) {
   }
 }
 
+function fromClipboardCommand(cmdArgs: string[]) {
+  let outputFile = "";
+
+  for (let i = 0; i < cmdArgs.length; i++) {
+    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
+      outputFile = cmdArgs[i + 1];
+      i++;
+    }
+  }
+
+  let input = "";
+  process.stdin.setEncoding("utf-8");
+  process.stdin.on("data", (chunk: string) => {
+    input += chunk;
+  });
+  process.stdin.on("end", () => {
+    const json = fromClipboardText(input);
+    const patch = JSON.parse(json);
+    const dsl = decompile(patch);
+
+    if (outputFile) {
+      const outPath = resolve(outputFile);
+      mkdirSync(dirname(outPath), { recursive: true });
+      writeFileSync(outPath, dsl, "utf-8");
+      console.log(`Written: ${outPath}`);
+    } else {
+      console.log(dsl);
+    }
+  });
+}
+
 function printHelp() {
   console.log(`maxpat-dsl - Max/MSP patch DSL compiler
 
 Usage:
   maxpat-dsl compile <input.maxdsl> [-o output.maxpat] [--allow-unknown] [--clipboard]
   maxpat-dsl decompile <input.maxpat> [-o output.maxdsl]
+  maxpat-dsl from-clipboard [-o output.maxdsl]
   maxpat-dsl validate <input.maxdsl> [--allow-unknown]
 
 Commands:
-  compile      Compile .maxdsl to .maxpat JSON
-  decompile    Convert .maxpat JSON to .maxdsl text
-  validate     Validate .maxdsl without writing output
+  compile         Compile .maxdsl to .maxpat JSON
+  decompile       Convert .maxpat JSON to .maxdsl text
+  from-clipboard  Read compressed patcher from stdin, output .maxdsl
+  validate        Validate .maxdsl without writing output
 
 Options:
   -o <file>          Output file path

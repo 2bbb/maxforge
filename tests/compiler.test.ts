@@ -697,4 +697,25 @@ describe("clipboard", () => {
       result.output!.patcher.lines.length
     );
   });
+
+  it("clipboard → DSL round-trip produces valid DSL", () => {
+    const source = loadFixture("basic_synth.maxdsl");
+    const { ast } = parse(source);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const json = JSON.stringify(result.output);
+    const clip = toClipboardText(json);
+    const recoveredJson = fromClipboardText(clip);
+    const patch = JSON.parse(recoveredJson);
+    const dsl = decompile(patch);
+
+    const { ast: ast2, errors } = parse(dsl);
+    expect(errors).toHaveLength(0);
+    const recompiled = compile(ast2, db);
+    expect(recompiled.success).toBe(true);
+    expect(recompiled.output!.patcher.boxes.length).toBe(
+      result.output!.patcher.boxes.length
+    );
+  });
 });
