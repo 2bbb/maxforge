@@ -961,6 +961,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
           "boxes": [
             {
               "box": {
+                "comment": "audio input",
                 "id": "obj-1",
                 "maxclass": "inlet~",
                 "numinlets": 0,
@@ -974,11 +975,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
                   25,
                   25,
                 ],
-                "text": "inlet~ "audio input"",
               },
             },
             {
               "box": {
+                "comment": "audio left",
                 "id": "obj-2",
                 "maxclass": "outlet~",
                 "numinlets": 1,
@@ -989,11 +990,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
                   25,
                   25,
                 ],
-                "text": "outlet~ "audio left"",
               },
             },
             {
               "box": {
+                "comment": "audio right",
                 "id": "obj-3",
                 "maxclass": "outlet~",
                 "numinlets": 1,
@@ -1004,7 +1005,6 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
                   25,
                   25,
                 ],
-                "text": "outlet~ "audio right"",
               },
             },
             {

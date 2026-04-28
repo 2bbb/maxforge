@@ -85,7 +85,7 @@ function extractFirstToken(text: string): string {
   return match ? match[1] : trimmed;
 }
 
-function extractQuotedContent(text: string): string {
+export function extractQuotedContent(text: string): string {
   const afterType = text.replace(/^\S+\s*/, "").trim();
   if (afterType.startsWith('"') && afterType.endsWith('"')) {
     return afterType.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");

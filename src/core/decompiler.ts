@@ -115,6 +115,17 @@ function boxToDSL(box: BoxJSON, name: string): string {
     return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
 
+  if (
+    box.maxclass === "inlet" || box.maxclass === "inlet~" ||
+    box.maxclass === "outlet" || box.maxclass === "outlet~"
+  ) {
+    const comment = (box.comment as string) || "";
+    if (comment) {
+      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    }
+    return `${name} = ${box.maxclass}`;
+  }
+
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
     const subName = box.text.substring(2);
     if (box.patcher) {

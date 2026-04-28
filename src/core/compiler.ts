@@ -17,7 +17,7 @@ import {
   ErrorCode,
   WarningCode,
 } from "./types.js";
-import { lookupObject } from "./object-db.js";
+import { lookupObject, extractQuotedContent } from "./object-db.js";
 import { autoLayout } from "./layout.js";
 
 interface CompiledBox {
@@ -28,6 +28,7 @@ interface CompiledBox {
   numoutlets: number;
   outlettype: string[];
   text?: string;
+  comment?: string;
   defaultSize: [number, number];
   patcher?: PatcherJSON["patcher"];
   line: number;
@@ -103,6 +104,7 @@ export function compile(
       return;
     }
 
+    const INLET_OUTLET = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
     const box: CompiledBox = {
       id: nextId(),
       name: stmt.name,
@@ -111,7 +113,10 @@ export function compile(
       numoutlets: result.def.numoutlets,
       outlettype: result.def.outlettype,
       defaultSize: result.def.defaultSize,
-      text: result.text || undefined,
+      text: INLET_OUTLET.has(firstToken) ? undefined : (result.text || undefined),
+      comment: INLET_OUTLET.has(firstToken)
+        ? extractQuotedContent(stmt.objectText) || undefined
+        : undefined,
       line: stmt.line,
       x: stmt.pos?.[0] ?? 0,
       y: stmt.pos?.[1] ?? 0,
@@ -326,6 +331,9 @@ function buildPatcherJSON(
 
     if (b.text !== undefined && !isUINative) {
       box.text = b.text;
+    }
+    if (b.comment !== undefined) {
+      box.comment = b.comment;
     }
     if (b.patcher) {
       box.patcher = b.patcher;
