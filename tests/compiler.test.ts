@@ -756,6 +756,14 @@ describe("attributes", () => {
     expect(stmt.attrs).toEqual({ fontname: ["Courier"] });
   });
 
+  it("does not treat @ inside quoted object text as an attribute", () => {
+    const { ast, errors } = parse('msg = message "@target open" @presentation 1');
+    expect(errors).toHaveLength(0);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.objectText).toBe('message "@target open"');
+    expect(stmt.attrs).toEqual({ presentation: [1] });
+  });
+
   it("compiles single-value attrs as scalar in box JSON", () => {
     const { ast } = parse('freq = number @minimum 0 @maximum 127');
     const result = compile(ast, db);
