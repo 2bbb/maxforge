@@ -55,7 +55,8 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     const subpatcherMatch = line.match(/^(\w+)\s*=\s*p\s+(\w+)(.*?)\s*\{$/);
     if (subpatcherMatch) {
       const [, name, subpatcherName, attrText] = subpatcherMatch;
-      const { attrs } = parseAttributes(`p ${subpatcherName}${attrText}`);
+      const { text: cleanSubpatcherText, pos } = parsePositionSuffix(`p ${subpatcherName}${attrText}`);
+      const { attrs } = parseAttributes(cleanSubpatcherText);
       const { body, endLine } = parseSubpatcherBody(lines, i + 1, errors);
       statements.push({
         type: "subpatcher_def",
@@ -63,6 +64,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
         subpatcherName,
         body,
         line: i + 1,
+        pos,
         attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
       } as SubpatcherDefStmt);
       i = endLine + 1;
@@ -75,19 +77,15 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
       const name = line.substring(0, eqIdx).trim();
       let objectText = line.substring(eqIdx + 1).trim();
       if (/^\w+$/.test(name)) {
-        let pos: [number, number] | undefined;
-        const posMatch = objectText.match(/\s+at\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*$/);
-        if (posMatch) {
-          pos = [parseInt(posMatch[1]), parseInt(posMatch[2])];
-          objectText = objectText.substring(0, objectText.length - posMatch[0].length).trim();
-        }
+        const positioned = parsePositionSuffix(objectText);
+        objectText = positioned.text;
         const { text: cleanText, attrs } = parseAttributes(objectText);
         statements.push({
           type: "object_def",
           name,
           objectText: cleanText,
           line: i + 1,
-          pos,
+          pos: positioned.pos,
           attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
         } as ObjectDefStmt);
         i++;
@@ -211,6 +209,16 @@ function parseSubpatcherBody(
     });
   }
   return { body: ast.statements, endLine: i - 1 };
+}
+
+function parsePositionSuffix(text: string): { text: string; pos?: [number, number] } {
+  const posMatch = text.match(/\s+at\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*$/);
+  if (!posMatch) return { text };
+
+  return {
+    text: text.substring(0, text.length - posMatch[0].length).trim(),
+    pos: [parseInt(posMatch[1]), parseInt(posMatch[2])],
+  };
 }
 
 function parseAttributes(text: string): { text: string; attrs: Record<string, AttrValue[]> } {

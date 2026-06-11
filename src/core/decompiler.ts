@@ -112,15 +112,16 @@ function sanitizeName(name: string): string {
 function boxToDSL(box: BoxJSON, name: string): string {
   const attrs = extractAttrs(box);
   const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
+  const posSuffix = positionSuffix(box);
 
   if (box.maxclass === "comment") {
     const text = box.text || "";
-    return `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
+    return `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
   }
 
   if (box.maxclass === "message") {
     const text = box.text || "";
-    return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
+    return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
   }
 
   if (
@@ -129,9 +130,9 @@ function boxToDSL(box: BoxJSON, name: string): string {
   ) {
     const comment = (box.comment as string) || "";
     if (comment) {
-      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
+      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
     }
-    return `${name} = ${box.maxclass}${attrSuffix}`;
+    return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
   }
 
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
@@ -140,16 +141,21 @@ function boxToDSL(box: BoxJSON, name: string): string {
       const inner = decompile({ patcher: box.patcher });
       const innerLines = inner.trim().split("\n");
       const body = innerLines.map((l) => "  " + l).join("\n");
-      return `${name} = p ${subName}${attrSuffix} {\n${body}\n}`;
+      return `${name} = p ${subName}${attrSuffix}${posSuffix} {\n${body}\n}`;
     }
-    return `${name} = p ${subName}${attrSuffix}`;
+    return `${name} = p ${subName}${attrSuffix}${posSuffix}`;
   }
 
   if (box.maxclass === "newobj") {
-    return `${name} = ${box.text || box.maxclass}${attrSuffix}`;
+    return `${name} = ${box.text || box.maxclass}${attrSuffix}${posSuffix}`;
   }
 
-  return `${name} = ${box.maxclass}${attrSuffix}`;
+  return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
+}
+
+function positionSuffix(box: BoxJSON): string {
+  const [x, y] = box.patching_rect;
+  return ` at(${Math.round(x)}, ${Math.round(y)})`;
 }
 
 function extractAttrs(box: BoxJSON): string[] {

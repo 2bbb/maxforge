@@ -288,9 +288,9 @@ export function compile(
       text: `p ${stmt.subpatcherName}`,
       line: stmt.line,
       patcher: subResult.output!.patcher,
-      x: 0,
-      y: 0,
-      pinnedPos: false,
+      x: stmt.pos?.[0] ?? 0,
+      y: stmt.pos?.[1] ?? 0,
+      pinnedPos: stmt.pos !== undefined,
       attrs: stmt.attrs,
     };
 

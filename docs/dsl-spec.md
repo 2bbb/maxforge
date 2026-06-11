@@ -39,7 +39,7 @@ position          ::= 'at' , '(' , INTEGER , ',' , INTEGER , ')' ;
 attribute         ::= '@' , IDENT , attr_value , { attr_value } ;
 attr_value        ::= NUMBER | STRING | unquoted_token ;
 
-subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , { attribute } , '{' , { statement } , '}' ;
+subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , { attribute } , [ position ] , '{' , { statement } , '}' ;
 
 connection        ::= port_ref , { '->' , port_ref } , NEWLINE ;
 port_ref          ::= IDENT , [ '[' , port_spec , ']' ] ;
@@ -282,7 +282,7 @@ name = type [args...] [@attr val ...] [at(x, y)]
 ### 4.3 Subpatcher Definition
 
 ```
-name = p subpatcher_name [@attr value...] {
+name = p subpatcher_name [@attr value...] [at(x, y)] {
   ...statements...
 }
 ```
@@ -291,6 +291,7 @@ name = p subpatcher_name [@attr value...] {
 - `p` — literal keyword.
 - `subpatcher_name` — IDENT, used in the Max text field as `p subpatcher_name`.
 - Attributes after `subpatcher_name` apply to the parent subpatcher box.
+- `at(x, y)` pins the parent subpatcher box position.
 - `{ }` — contains inner statements (objects, connections, nested subpatchers).
 - `numinlets` / `numoutlets` are auto-derived from the count of `inlet`/`outlet` objects inside.
 - Inner object IDs are independently numbered (scoped).
@@ -428,7 +429,7 @@ osc = cycle~ 440
 dac = ezdac~ at(50, 300)
 ```
 
-The current decompiler does not emit `at(x, y)` from `patching_rect`. Round-trip tests verify object/line structure and important box properties, not exact source text or manual coordinates.
+The decompiler emits `at(x, y)` from the first two values of `patching_rect` so positions survive decompile/recompile. Width and height are still derived from the object database/defaults; they are not represented in DSL syntax.
 
 ## 7. Output Format
 

@@ -143,6 +143,7 @@ export interface SubpatcherDefStmt {
   subpatcherName: string;
   body: Statement[];
   line: number;
+  pos?: [number, number];
   attrs?: Record<string, AttrValue[]>;
 }
 

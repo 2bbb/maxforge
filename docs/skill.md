@@ -170,7 +170,7 @@ src[0] -> dst[1]
 ### Subpatcher
 
 ```
-fx = p delay_fx {
+fx = p delay_fx at(200, 300) {
   in = inlet~ "audio in"
   out = outlet~ "audio out"
   buf = tapin~ 500
@@ -184,6 +184,7 @@ fx = p delay_fx {
 
 - `inlet` / `inlet~` / `outlet` / `outlet~` は**サブパッチャー内でのみ使用可能**。
 - 親から見た `numinlets` / `numoutlets` は内部の inlet/outlet 数から自動計算。
+- `at(x, y)` は親側の subpatcher box の位置指定。
 - 内部のオブジェクトIDはスコープごとに独立採番。
 - ネスト可能（subpatcher内にsubpatcher）。
 
@@ -317,7 +318,7 @@ node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 
 - オブジェクト名は `text` の先頭トークンまたは `maxclass` から推定され、重複時は `_2`, `_3` が付く
 - 演算子オブジェクト（`*~`, `+~`等）は意味名に変換（`mul`, `add`等）
-- 現時点では `patching_rect` から `at(x, y)` は出力しない
+- `patching_rect` の x/y は `at(x, y)` として出力する（幅/高さはDSLでは表現しない）
 - DSL→maxpat→DSLのラウンドトリップで box数/line数が一致することを確認済み
 
 ## Best Practices

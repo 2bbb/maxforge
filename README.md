@@ -7,7 +7,7 @@ DSL compiler for Max/MSP `.maxpat` patches. Write compact text, get valid Max pa
 maxpat-dsl is a domain-specific language and compiler that lets you describe Max/MSP patches as concise text files (`.maxdsl`) instead of editing JSON by hand or clicking through the Max GUI. It supports:
 
 - **Forward compilation** — `.maxdsl` → `.maxpat` JSON
-- **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure round-trip verified; exact source text and manual `at()` positions are not preserved)
+- **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
 - **Clipboard output** — compressed text pasteable directly into Max
 - **Clipboard input** — decompress pasted patches back to DSL
 - **374 built-in objects** with auto inlet/outlet resolution

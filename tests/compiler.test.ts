@@ -863,6 +863,58 @@ fx = p inner @color 1 0 0 1 {
     const result = compile(ast, db);
     expect(result.success).toBe(true);
     const dsl = decompile(result.output!);
-    expect(dsl).toContain("= p inner @color 1 0 0 1 {");
+    expect(dsl).toContain("= p inner @color 1 0 0 1 at(");
+  });
+
+  it("decompiles box positions as at(x, y) and preserves them through recompile", () => {
+    const source = `
+osc = cycle~ 440 at(123, 234)
+dac = ezdac~ at(321, 432)
+osc -> dac
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const dsl = decompile(result.output!);
+    expect(dsl).toContain("cycle~ 440 at(123, 234)");
+    expect(dsl).toContain("ezdac~ at(321, 432)");
+
+    const { ast: ast2, errors: errors2 } = parse(dsl);
+    expect(errors2).toHaveLength(0);
+    const result2 = compile(ast2, db);
+    expect(result2.success).toBe(true);
+    const osc = result2.output!.patcher.boxes.find(
+      (b) => b.box.text === "cycle~ 440"
+    )!.box;
+    const dac = result2.output!.patcher.boxes.find(
+      (b) => b.box.maxclass === "ezdac~"
+    )!.box;
+    expect(osc.patching_rect[0]).toBe(123);
+    expect(osc.patching_rect[1]).toBe(234);
+    expect(dac.patching_rect[0]).toBe(321);
+    expect(dac.patching_rect[1]).toBe(432);
+  });
+
+  it("parses and compiles subpatcher at(x, y) positions", () => {
+    const source = `
+fx = p inner @color 0 1 0 1 at(200, 300) {
+  i = inlet
+  o = outlet
+  i -> o
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const sub = ast.statements[0] as any;
+    expect(sub.pos).toEqual([200, 300]);
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const box = result.output!.patcher.boxes[0].box as any;
+    expect(box.patching_rect[0]).toBe(200);
+    expect(box.patching_rect[1]).toBe(300);
+    expect(box.color).toEqual([0, 1, 0, 1]);
   });
 });
