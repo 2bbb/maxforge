@@ -211,13 +211,13 @@ function fromClipboardCommand(cmdArgs: string[]) {
 }
 
 function printHelp() {
-  console.log(`maxpat-dsl - Max/MSP patch DSL compiler
+  console.log(`maxforge - unofficial Max/MSP patch DSL compiler
 
 Usage:
-  maxpat-dsl compile <input.maxdsl> [-o output.maxpat] [--allow-unknown] [--clipboard]
-  maxpat-dsl decompile <input.maxpat> [-o output.maxdsl]
-  maxpat-dsl from-clipboard [-o output.maxdsl]
-  maxpat-dsl validate <input.maxdsl> [--allow-unknown]
+  maxforge compile <input.maxdsl> [-o output.maxpat] [--allow-unknown] [--clipboard]
+  maxforge decompile <input.maxpat> [-o output.maxdsl]
+  maxforge from-clipboard [-o output.maxdsl]
+  maxforge validate <input.maxdsl> [--allow-unknown]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON

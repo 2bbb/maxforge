@@ -1,10 +1,12 @@
-# maxpat-dsl
+# maxforge
 
-DSL compiler for Max/MSP `.maxpat` patches. Write compact text, get valid Max patch JSON.
+Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches. Write compact text, get valid Max patch JSON.
+
+maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.
 
 ## Overview
 
-maxpat-dsl is a domain-specific language and compiler that lets you describe Max/MSP patches as concise text files (`.maxdsl`) instead of editing JSON by hand or clicking through the Max GUI. It supports:
+maxforge is a domain-specific language and compiler that lets you describe Max/MSP patches as concise text files (`.maxdsl`) instead of editing JSON by hand or clicking through the Max GUI. It supports:
 
 - **Forward compilation** — `.maxdsl` → `.maxpat` JSON
 - **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
@@ -20,8 +22,8 @@ maxpat-dsl is a domain-specific language and compiler that lets you describe Max
 Run without installing globally after the package is published:
 
 ```bash
-npx maxpat-dsl compile input.maxdsl -o output.maxpat
-npx maxpat-dsl validate input.maxdsl
+npx maxforge compile input.maxdsl -o output.maxpat
+npx maxforge validate input.maxdsl
 ```
 
 For local package smoke testing before publishing:
@@ -29,7 +31,7 @@ For local package smoke testing before publishing:
 ```bash
 npm run build
 pkg="$(npm pack | tail -1)"
-npm exec --package "./$pkg" -- maxpat-dsl validate examples/basic_synth.maxdsl
+npm exec --package "./$pkg" -- maxforge validate examples/basic_synth.maxdsl
 ```
 
 For repository development:
@@ -64,26 +66,26 @@ node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
 ## CLI Reference
 
 After `npm run build`, local development can use `node dist/cli/index.js ...`.
-When installed as a package binary, use `maxpat-dsl ...`.
+When installed as a package binary, use `maxforge ...`.
 
 ```bash
 # DSL → maxpat
-maxpat-dsl compile input.maxdsl -o output.maxpat
+maxforge compile input.maxdsl -o output.maxpat
 
 # DSL → compressed text (paste into Max with Ctrl+V / Cmd+V)
-maxpat-dsl compile input.maxdsl --clipboard | pbcopy
+maxforge compile input.maxdsl --clipboard | pbcopy
 
 # Compressed text → DSL (from stdin)
-pbpaste | maxpat-dsl from-clipboard -o output.maxdsl
+pbpaste | maxforge from-clipboard -o output.maxdsl
 
 # maxpat → DSL (from file)
-maxpat-dsl decompile input.maxpat -o output.maxdsl
+maxforge decompile input.maxpat -o output.maxdsl
 
 # Validate without writing output
-maxpat-dsl validate input.maxdsl
+maxforge validate input.maxdsl
 
 # Allow objects not in the database
-maxpat-dsl compile input.maxdsl --allow-unknown -o output.maxpat
+maxforge compile input.maxdsl --allow-unknown -o output.maxpat
 ```
 
 ## DSL Syntax

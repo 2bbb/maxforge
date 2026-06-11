@@ -5,7 +5,7 @@ description: maxdsl DSLからMaxMSPパッチ(.maxpat/.maxhelp)を生成する
 
 # maxdsl — AI Agent Guide
 
-Max/MSPパッチを記述するDSL。生JSONの代わりにコンパクトなテキストで記述し、CLIで `.maxpat` に変換する。
+Max/MSPパッチを記述する非公式DSL。生JSONの代わりにコンパクトなテキストで記述し、`maxforge` CLIで `.maxpat` に変換する。
 
 ## Trigger
 
@@ -283,7 +283,7 @@ env -> mul[1]
 ## CLI Usage
 
 ローカル開発時は `npm run build` 後に `node dist/cli/index.js ...` を使う。
-パッケージとしてインストール済みの場合のみ `maxpat-dsl ...` が使える。
+パッケージとしてインストール済みの場合のみ `maxforge ...` が使える。
 
 ```bash
 # DSL → maxpat

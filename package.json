@@ -1,12 +1,12 @@
 {
-  "name": "maxpat-dsl",
+  "name": "maxforge",
   "version": "0.1.0",
-  "description": "DSL compiler for Max/MSP .maxpat files",
+  "description": "Unofficial text DSL compiler for generating Max/MSP .maxpat patches",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "maxpat-dsl": "dist/cli/index.js"
+    "maxforge": "dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",
