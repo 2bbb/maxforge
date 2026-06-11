@@ -1,0 +1,18 @@
+patch "maxforge node.script demo" | "Use node.script to compile DSL and create objects through thispatcher" | 900x560
+
+title = comment "maxforge node.script -> thispatcher demo" at(40, 35)
+step1 = comment "Before opening: run npm install && npm run build at the repository root." at(40, 70)
+step2 = comment "Click generate. node.script reads generated_patch.maxdsl, compiles it with maxforge, then sends script messages to thispatcher." at(40, 95)
+step3 = comment "Click clear after generate to remove the generated boxes from this patcher." at(40, 120)
+
+generate = message "generate" at(40, 175)
+clear = message "clear" at(40, 215)
+node = node.script maxforge_node_script_demo.cjs @watch 1 at(170, 195)
+patcher = thispatcher at(430, 195)
+
+status = comment "Open the Max Console for maxforge status/errors." at(40, 265)
+output = comment "Generated objects appear in this same patcher." at(430, 235)
+
+generate -> node
+clear -> node
+node -> patcher

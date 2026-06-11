@@ -43,7 +43,10 @@
     "SKILL.md",
     "docs/dsl-spec.md",
     "docs/agent-guide.md",
-    "examples/*.maxdsl"
+    "examples/**/*.maxdsl",
+    "examples/**/*.maxpat",
+    "examples/**/*.cjs",
+    "examples/**/README.md"
   ],
   "exports": {
     ".": {

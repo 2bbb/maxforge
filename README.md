@@ -120,6 +120,18 @@ inside of the subpatcher are emitted with `targetPath`; plain `thispatcher` does
 magically route those messages into nested patchers. Use a small Max-side router/helper
 or generate a flat patch if you need direct outlet-to-`thispatcher` operation today.
 
+A runnable smoke-test patch lives in `examples/max_node_script/`:
+
+```bash
+npm install
+npm run build
+open examples/max_node_script/maxforge_node_script_demo.maxpat
+```
+
+The harness patch itself is generated from
+`examples/max_node_script/maxforge_node_script_demo.maxdsl` with maxforge; the
+runtime payload is `examples/max_node_script/generated_patch.maxdsl`.
+
 ## AI agent skill
 
 Install the maxforge skill into supported agents with:

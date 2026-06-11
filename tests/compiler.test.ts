@@ -60,6 +60,30 @@ describe("examples", () => {
       expect(result.success).toBe(true);
     });
   }
+
+  it("compiles the Max node.script demo harness with unknown Max runtime objects", () => {
+    const source = fs.readFileSync(
+      path.join(examplesDir, "max_node_script", "maxforge_node_script_demo.maxdsl"),
+      "utf-8"
+    );
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+
+    const result = compile(ast, db, true);
+    expect(result.success).toBe(true);
+  });
+
+  it("compiles the Max node.script runtime-generated DSL with unknown print object", () => {
+    const source = fs.readFileSync(
+      path.join(examplesDir, "max_node_script", "generated_patch.maxdsl"),
+      "utf-8"
+    );
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+
+    const result = compile(ast, db, true);
+    expect(result.success).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
