@@ -4,12 +4,6 @@ import {
   ObjectDefStmt,
   ConnectionStmt,
   SubpatcherDefStmt,
-  BoxJSON,
-  BoxWrapper,
-  LineJSON,
-  LineWrapper,
-  PatcherJSON,
-  ObjectDef,
   ObjectDatabase,
   CompileResult,
   CompileError,
@@ -19,32 +13,9 @@ import {
 } from "./types.js";
 import { lookupObject, extractQuotedContent } from "./object-db.js";
 import { autoLayout } from "./layout.js";
-import { applyBoxAttrs, isReservedAttributeKey } from "./attributes.js";
-
-interface CompiledBox {
-  id: string;
-  name: string;
-  maxclass: string;
-  numinlets: number;
-  numoutlets: number;
-  outlettype: string[];
-  text?: string;
-  comment?: string;
-  defaultSize: [number, number];
-  patcher?: PatcherJSON["patcher"];
-  line: number;
-  x: number;
-  y: number;
-  pinnedPos: boolean;
-  attrs?: Record<string, (string | number)[]>;
-}
-
-interface CompiledLine {
-  sourceId: string;
-  sourceOutlet: number;
-  destId: string;
-  destInlet: number;
-}
+import { isReservedAttributeKey } from "./attributes.js";
+import { CompiledBox, CompiledLine } from "./compiled-model.js";
+import { buildPatcherJSON } from "./patcher-json.js";
 
 const INLET_OBJECT_TYPES = ["inlet", "inlet~"] as const;
 const OUTLET_OBJECT_TYPES = ["outlet", "outlet~"] as const;
@@ -331,99 +302,4 @@ function isPortObjectStmt(
 function isObjectTextKind(objectText: string, objectType: string): boolean {
   const trimmed = objectText.trim();
   return trimmed === objectType || trimmed.startsWith(`${objectType} `);
-}
-
-function buildPatcherJSON(
-  patchDecl: ASTNode["patchDecl"],
-  boxes: CompiledBox[],
-  lines: CompiledLine[]
-): PatcherJSON {
-  const boxWrappers: BoxWrapper[] = boxes.map((b) => {
-    const box: BoxJSON = {
-      id: b.id,
-      maxclass: b.maxclass,
-      numinlets: b.numinlets,
-      numoutlets: b.numoutlets,
-      patching_rect: [b.x, b.y, b.defaultSize[0], b.defaultSize[1]],
-    };
-
-    if (b.outlettype.length > 0) {
-      box.outlettype = b.outlettype;
-    }
-
-    const isUINative =
-      b.maxclass !== "newobj" &&
-      b.maxclass !== "comment" &&
-      b.maxclass !== "message" &&
-      b.maxclass !== "inlet" &&
-      b.maxclass !== "outlet" &&
-      b.maxclass !== "inlet~" &&
-      b.maxclass !== "outlet~";
-
-    if (b.text !== undefined && !isUINative) {
-      box.text = b.text;
-    }
-    if (b.comment !== undefined) {
-      box.comment = b.comment;
-    }
-    if (b.patcher) {
-      box.patcher = b.patcher;
-    }
-
-    applyBoxAttrs(box, b.attrs);
-
-    return { box };
-  });
-
-  const lineWrappers: LineWrapper[] = lines.map((l) => ({
-    patchline: {
-      source: [l.sourceId, l.sourceOutlet],
-      destination: [l.destId, l.destInlet],
-    },
-  }));
-
-  return {
-    patcher: {
-      fileversion: 1,
-      appversion: {
-        major: 8,
-        minor: 6,
-        revision: 4,
-        processor: "x86",
-        platform: "macintel",
-      },
-      classnamespace: "box",
-      rect: [100.0, 100.0, patchDecl?.size?.[0] ?? 640, patchDecl?.size?.[1] ?? 480],
-      bglocked: 0,
-      openrect: [0.0, 0.0, 0.0, 0.0],
-      openinpresentation: 0,
-      default_fontsize: 12.0,
-      default_fontface: 0,
-      default_fontname: "Arial",
-      gridonopen: 2,
-      gridsize: [15.0, 15.0],
-      gridsnaponopen: 0,
-      objectsnaponopen: 1,
-      statusbarvisible: 2,
-      toolbarvisible: 2,
-      lefttoolbarpinned: 0,
-      toptoolbarpinned: 0,
-      righttoolbarpinned: 0,
-      bottomtoolbarpinned: 0,
-      toolbars_unpinned_last_save: 0,
-      tallnewobj: 0,
-      boxanimatetime: 200,
-      enablehscroll: 1,
-      enablevscroll: 1,
-      devicewidth: 0.0,
-      description: patchDecl?.description ?? "",
-      digest: "",
-      tags: "",
-      style: "",
-      subpatcher_template: "",
-      assistshowspatchername: 0,
-      boxes: boxWrappers,
-      lines: lineWrappers,
-    },
-  };
 }

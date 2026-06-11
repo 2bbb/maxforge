@@ -197,6 +197,8 @@ src/
   dsl/expression.ts    Numeric expression evaluator for macro expansion
   core/
     compiler.ts        AST → maxpat JSON compiler
+    compiled-model.ts  Compiler intermediate box/line model
+    patcher-json.ts    Compiler model → maxpat JSON builder
     decompiler.ts      maxpat JSON → DSL text
     attributes.ts      Shared box attribute helpers
     object-db.ts       Object lookup + argDependent resolution
