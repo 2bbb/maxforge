@@ -192,6 +192,7 @@ src/
   cli/index.ts         CLI entry point
   dsl/parser.ts        Line-oriented DSL parser
   dsl/blocks.ts        Shared brace-delimited block collection
+  dsl/object-syntax.ts Object attributes and position suffix parsing
   dsl/expander.ts      for/if/${expr} macro expansion
   dsl/expression.ts    Numeric expression evaluator for macro expansion
   core/
