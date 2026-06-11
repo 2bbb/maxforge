@@ -1,10 +1,6 @@
 import { CompileError, ErrorCode } from "../core/types.js";
+import { collectBlock, SourceLine, toSourceLines } from "./blocks.js";
 import { evaluateExpression } from "./expression.js";
-
-interface SourceLine {
-  text: string;
-  line: number;
-}
 
 interface ExpandResult {
   source: string;
@@ -16,7 +12,7 @@ const IF_RE = /^if\s+(.+)\s*\{$/;
 const INTERPOLATION_RE = /\$\{([^}]*)\}/g;
 
 export function expandControlFlow(source: string): ExpandResult {
-  const lines = source.split("\n").map((text, index) => ({ text, line: index + 1 }));
+  const lines = toSourceLines(source);
   const errors: CompileError[] = [];
   const result = expandBlock(lines, 0, new Map(), false, errors);
 
@@ -61,7 +57,7 @@ function expandBlock(
 
     const forMatch = trimmed.match(FOR_RE);
     if (forMatch) {
-      const body = collectRawBlock(sourceLines, i + 1);
+      const body = collectBlock(sourceLines, i + 1);
       if (!body.closed) {
         errors.push({
           code: ErrorCode.SYNTAX_ERROR,
@@ -88,7 +84,7 @@ function expandBlock(
 
     const ifMatch = trimmed.match(IF_RE);
     if (ifMatch) {
-      const body = collectRawBlock(sourceLines, i + 1);
+      const body = collectBlock(sourceLines, i + 1);
       if (!body.closed) {
         errors.push({
           code: ErrorCode.SYNTAX_ERROR,
@@ -132,37 +128,6 @@ function expandBlock(
   }
 
   return { lines: output, nextIndex: i, closed: false };
-}
-
-function collectRawBlock(sourceLines: SourceLine[], startIndex: number): {
-  lines: SourceLine[];
-  nextIndex: number;
-  closed: boolean;
-} {
-  const lines: SourceLine[] = [];
-  let depth = 1;
-  let i = startIndex;
-
-  while (i < sourceLines.length) {
-    const current = sourceLines[i];
-    const trimmed = current.text.trim();
-
-    if (trimmed.endsWith("{")) {
-      depth++;
-      lines.push(current);
-    } else if (trimmed === "}") {
-      depth--;
-      if (depth === 0) {
-        return { lines, nextIndex: i + 1, closed: true };
-      }
-      lines.push(current);
-    } else {
-      lines.push(current);
-    }
-    i++;
-  }
-
-  return { lines, nextIndex: i, closed: false };
 }
 
 function evalRange(

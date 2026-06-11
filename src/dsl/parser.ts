@@ -10,6 +10,7 @@ import {
   CompileError,
   AttrValue,
 } from "../core/types.js";
+import { collectBlock, SourceLine, toSourceLines } from "./blocks.js";
 import { expandControlFlow } from "./expander.js";
 
 export function parse(source: string): { ast: ASTNode; errors: CompileError[] } {
@@ -22,13 +23,14 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
   }
 
   const errors: CompileError[] = [];
-  const lines = expanded.source.split("\n");
+  const lines = toSourceLines(expanded.source);
   let patchDecl: PatchDecl | undefined;
   const statements: Statement[] = [];
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i].trim();
+    const current = lines[i];
+    const line = current.text.trim();
 
     if (line === "" || line.startsWith("#")) {
       i++;
@@ -37,14 +39,14 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
 
     // patch declaration
     if (line.startsWith("patch ")) {
-      const parsed = parsePatchDecl(line, i + 1);
+      const parsed = parsePatchDecl(line, current.line);
       if (parsed) {
         patchDecl = parsed;
       } else {
         errors.push({
           code: ErrorCode.SYNTAX_ERROR,
           message: `Invalid patch declaration`,
-          line: i + 1,
+          line: current.line,
         });
       }
       i++;
@@ -57,13 +59,13 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
       const [, name, subpatcherName, attrText] = subpatcherMatch;
       const { text: cleanSubpatcherText, pos } = parsePositionSuffix(`p ${subpatcherName}${attrText}`);
       const { attrs } = parseAttributes(cleanSubpatcherText);
-      const { body, endLine } = parseSubpatcherBody(lines, i + 1, errors);
+      const { body, endLine } = parseSubpatcherBody(lines, i + 1, current.line, errors);
       statements.push({
         type: "subpatcher_def",
         name,
         subpatcherName,
         body,
-        line: i + 1,
+        line: current.line,
         pos,
         attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
       } as SubpatcherDefStmt);
@@ -84,7 +86,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
           type: "object_def",
           name,
           objectText: cleanText,
-          line: i + 1,
+          line: current.line,
           pos: positioned.pos,
           attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
         } as ObjectDefStmt);
@@ -95,14 +97,14 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
 
     // connection: contains -> (only if no = found)
     if (line.includes("->")) {
-      const parsed = parseConnection(line, i + 1);
+      const parsed = parseConnection(line, current.line);
       if (parsed) {
         statements.push(parsed);
       } else {
         errors.push({
           code: ErrorCode.SYNTAX_ERROR,
           message: `Invalid connection syntax: ${line}`,
-          line: i + 1,
+          line: current.line,
         });
       }
       i++;
@@ -112,7 +114,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     errors.push({
       code: ErrorCode.SYNTAX_ERROR,
       message: `Unrecognized statement: ${line}`,
-      line: i + 1,
+      line: current.line,
     });
     i++;
   }
@@ -171,44 +173,29 @@ function parsePortRef(text: string): PortRef | null {
 }
 
 function parseSubpatcherBody(
-  lines: string[],
-  startLine: number,
+  lines: SourceLine[],
+  startIndex: number,
+  openLine: number,
   errors: CompileError[]
 ): { body: Statement[]; endLine: number } {
-  let depth = 1;
-  const bodyLines: string[] = [];
-  let i = startLine;
+  const block = collectBlock(lines, startIndex);
 
-  while (i < lines.length && depth > 0) {
-    const line = lines[i].trim();
-    if (line.endsWith("{")) {
-      depth++;
-      bodyLines.push(lines[i]);
-    } else if (line === "}") {
-      depth--;
-      if (depth > 0) bodyLines.push(lines[i]);
-    } else {
-      bodyLines.push(lines[i]);
-    }
-    i++;
-  }
-
-  if (depth > 0) {
+  if (!block.closed) {
     errors.push({
       code: ErrorCode.SYNTAX_ERROR,
       message: "Unclosed subpatcher block",
-      line: startLine,
+      line: openLine,
     });
   }
 
-  const { ast, errors: childErrors } = parse(bodyLines.join("\n"));
+  const { ast, errors: childErrors } = parse(block.lines.map((line) => line.text).join("\n"));
   for (const error of childErrors) {
     errors.push({
       ...error,
-      line: error.line === undefined ? undefined : startLine + error.line,
+      line: error.line === undefined ? undefined : block.lines[error.line - 1]?.line,
     });
   }
-  return { body: ast.statements, endLine: i - 1 };
+  return { body: ast.statements, endLine: block.nextIndex - 1 };
 }
 
 function parsePositionSuffix(text: string): { text: string; pos?: [number, number] } {

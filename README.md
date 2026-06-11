@@ -191,6 +191,7 @@ Some objects change inlet/outlet count based on arguments:
 src/
   cli/index.ts         CLI entry point
   dsl/parser.ts        Line-oriented DSL parser
+  dsl/blocks.ts        Shared brace-delimited block collection
   dsl/expander.ts      for/if/${expr} macro expansion
   dsl/expression.ts    Numeric expression evaluator for macro expansion
   core/
@@ -209,6 +210,7 @@ docs/
   skill.md             AI agent documentation
 tests/
   compiler.test.ts     compiler/parser/decompiler test suite
+  block.test.ts        brace block parsing regression tests
   expander.test.ts     for/if/${expr} expansion test suite
   fixtures/            DSL fixture files for snapshot testing
 examples/
