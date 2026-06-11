@@ -30,7 +30,8 @@ vol[1] -> dac[1]
 ```
 
 ```bash
-npx maxpat-dsl compile basic_synth.maxdsl -o basic_synth.maxpat
+npm run build
+node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
 ```
 
 ## Syntax Reference
@@ -66,16 +67,24 @@ name = type [args...] [@attr val ...] [at(x, y)]
 **属性の書き方:**
 
 ```
-freq = number @minimum 0 @maximum 127     # range指定
-vol = slider @size 20 140 @min 0 @max 100 # 複数値は配列になる
-num = flonum @fontname "Courier"           # 文字列値
-tog = toggle @triangle 0                   # 数値
+# range指定
+freq = number @minimum 0 @maximum 127
+
+# 複数値は配列になる
+vol = slider @size 20 140 @min 0 @max 100
+
+# 文字列値
+num = flonum @fontname "Courier"
+
+# 数値
+tog = toggle @triangle 0
 ```
 
 - 単一値 → box JSONのスカラー (`"minimum": 0`)
 - 複数値 → box JSONの配列 (`"size": [20, 140]`)
 - 文字列値は `"` で囲むか、英数字のみならそのまま
-- デコンパイル時、標準キー以外はすべて `@key value` として復元される
+- デコンパイル時、構造キー以外はすべて `@key value` として復元される
+- `id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `patching_rect`, `text`, `patcher`, `comment` は予約キーなので `@` では指定不可
 
 **書き方の一覧:**
 
@@ -113,6 +122,30 @@ cmt = comment "Title" at(50, 30)
 osc = cycle~ 440 at(100, 100)
 ```
 
+### for / if / 四則演算
+
+Max が苦手な「大量の類似オブジェクト生成」は `for` と `${expr}` で書く。
+これは Max の実行時制御ではなく、`.maxdsl` のコンパイル前展開。
+
+```
+for i in 0..7 {
+  osc_${i} = cycle~ ${220 + i * 20} at(${50 + i * 100}, 80)
+  amp_${i} = *~ 0.125 at(${50 + i * 100}, 140)
+  osc_${i} -> amp_${i}
+
+  if i < 2 {
+    meter_${i} = meter~ at(${50 + i * 100}, 200)
+    amp_${i} -> meter_${i}
+  }
+}
+```
+
+- `for i in 0..7` は **両端含む** ので 8 回展開。
+- `step` 指定可: `for i in 0..6 step 2`
+- `${expr}` は名前、引数、属性、座標、接続のどこでも使用可能。
+- 式は数値、ループ変数、`+ - * /`、括弧、比較演算 `== != < <= > >=` をサポート。
+- `if expr { ... }` は式が `0` 以外なら展開。比較は true=`1`, false=`0`。
+
 ### Connections
 
 ```
@@ -120,8 +153,11 @@ osc = cycle~ 440 at(100, 100)
 a -> b -> c -> d
 
 # 個別ポート指定 [outlet_index] または [outlet_index:inlet_index]
-vol[1] -> dac[1]       # vol の outlet 1 → dac の inlet 1
-src[0] -> dst[1]       # src の outlet 0 → dst の inlet 1
+# vol の outlet 1 → dac の inlet 1
+vol[1] -> dac[1]
+
+# src の outlet 0 → dst の inlet 1
+src[0] -> dst[1]
 
 # ポート番号は 0-indexed（左端 = 0）
 ```
@@ -213,11 +249,11 @@ env -> mul[1]
 ### 詳細リファレンス
 
 オブジェクトの全仕様は以下を参照:
-- 音声: `max-patgen/reference/objects_msp.md`
-- ロジック: `max-patgen/reference/objects_logic.md`
-- MIDI: `max-patgen/reference/objects_midi.md`
-- Jitter: `max-patgen/reference/objects_jitter.md`
-- フォーマット: `max-patgen/reference/format.md`
+- 音声: `.agents/skills/max-patgen/reference/objects_msp.md`
+- ロジック: `.agents/skills/max-patgen/reference/objects_logic.md`
+- MIDI: `.agents/skills/max-patgen/reference/objects_midi.md`
+- Jitter: `.agents/skills/max-patgen/reference/objects_jitter.md`
+- フォーマット: `.agents/skills/max-patgen/reference/format.md`
 
 ## Error Messages
 
@@ -233,44 +269,55 @@ env -> mul[1]
 | E006 | inlet/outletがsubpatcher外 | `p name { ... }` の中で使う |
 | E007 | 構文エラー | 行を確認 |
 | E008 | 空のsubpatcher | inlet/outletを最低1つ追加 |
+| E009 | 予約属性キー | `@patching_rect` など構造キーを属性にしない |
 
 ### Warnings (コンパイル継続)
 
 | Code | 意味 |
 |------|------|
 | W001 | 接続の重複 |
-| W002 | 未接続のオブジェクト |
+
+`W002` は型定義上は存在するが、現時点の compiler は未接続オブジェクト警告を出さない。
 
 ## CLI Usage
 
+ローカル開発時は `npm run build` 後に `node dist/cli/index.js ...` を使う。
+パッケージとしてインストール済みの場合のみ `maxpat-dsl ...` が使える。
+
 ```bash
 # DSL → maxpat
-npx maxpat-dsl compile input.maxdsl -o output.maxpat
+node dist/cli/index.js compile input.maxdsl -o output.maxpat
 
 # maxpat → DSL（逆コンパイル）
-npx maxpat-dsl decompile input.maxpat -o output.maxdsl
+node dist/cli/index.js decompile input.maxpat -o output.maxdsl
 
 # バリデーションのみ
-npx maxpat-dsl validate input.maxdsl
+node dist/cli/index.js validate input.maxdsl
 
 # 標準出力へ（ファイル書き出しなし）
-npx maxpat-dsl compile input.maxdsl
-npx maxpat-dsl decompile input.maxpat
+node dist/cli/index.js compile input.maxdsl
+node dist/cli/index.js decompile input.maxpat
 
 # 不明オブジェクトを許容
-npx maxpat-dsl compile input.maxdsl --allow-unknown -o output.maxpat
+node dist/cli/index.js compile input.maxdsl --allow-unknown -o output.maxpat
+
+# Max clipboard 形式へ圧縮して標準出力
+node dist/cli/index.js compile input.maxdsl --clipboard
+
+# Max clipboard 形式を標準入力から読み、DSLへ戻す
+pbpaste | node dist/cli/index.js from-clipboard -o output.maxdsl
 
 # maxhelpとして出力
-npx maxpat-dsl compile input.maxdsl -o object_name.maxhelp
+node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 ```
 
 ### 逆コンパイル (Decompile)
 
 既存の `.maxpat` ファイルをDSLテキストに変換する。
 
-- オブジェクト名は `maxclass` + 連番で自動生成（例: `cycle_1`, `gain_1`）
+- オブジェクト名は `text` の先頭トークンまたは `maxclass` から推定され、重複時は `_2`, `_3` が付く
 - 演算子オブジェクト（`*~`, `+~`等）は意味名に変換（`mul`, `add`等）
-- 座標は `at(x, y)` として出力
+- 現時点では `patching_rect` から `at(x, y)` は出力しない
 - DSL→maxpat→DSLのラウンドトリップで box数/line数が一致することを確認済み
 
 ## Best Practices

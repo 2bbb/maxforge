@@ -143,6 +143,7 @@ export interface SubpatcherDefStmt {
   subpatcherName: string;
   body: Statement[];
   line: number;
+  attrs?: Record<string, AttrValue[]>;
 }
 
 export interface PortRef {
@@ -161,6 +162,7 @@ export enum ErrorCode {
   INLET_OUTSIDE_SUBPATCHER = "E006",
   SYNTAX_ERROR = "E007",
   EMPTY_SUBPATCHER = "E008",
+  RESERVED_ATTRIBUTE = "E009",
 }
 
 export enum WarningCode {

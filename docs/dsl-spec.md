@@ -1,9 +1,9 @@
-# maxdsl Formal Specification v1.2
+# maxdsl Formal Specification v1.3
 
 ## 1. Overview
 
 maxdsl is a domain-specific language for describing Max/MSP patches.
-It compiles to `.maxpat` / `.maxhelp` JSON files.
+It compiles to Max patcher JSON that can be saved as `.maxpat` or `.maxhelp`.
 
 Design principles:
 - **Minimal syntax** — only describe WHAT (objects + connections), not HOW (IDs, boilerplate)
@@ -11,6 +11,7 @@ Design principles:
 - **Object database resolution** — `numinlets`, `numoutlets`, `outlettype` are auto-derived
 - **Optional position override** — `at(x, y)` pins an object to a specific coordinate; un-pinned objects use auto-layout
 - **Object attributes** — `@key value` pairs set arbitrary box properties (minimum, maximum, size, etc.)
+- **Macro expansion for repetition** — `for`, `if`, and `${expr}` generate repetitive object graphs before parsing
 
 ## 2. EBNF Grammar
 
@@ -20,6 +21,8 @@ program           ::= { statement } ;
 statement         ::= patch_decl
                     | object_def
                     | connection
+                    | for_block
+                    | if_block
                     | comment
                     | blank_line ;
 
@@ -36,18 +39,29 @@ position          ::= 'at' , '(' , INTEGER , ',' , INTEGER , ')' ;
 attribute         ::= '@' , IDENT , attr_value , { attr_value } ;
 attr_value        ::= NUMBER | STRING | unquoted_token ;
 
-subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , '{' , { statement } , '}' ;
+subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , { attribute } , '{' , { statement } , '}' ;
 
 connection        ::= port_ref , { '->' , port_ref } , NEWLINE ;
 port_ref          ::= IDENT , [ '[' , port_spec , ']' ] ;
 port_spec         ::= INTEGER , [ ':' , INTEGER ] ;
                   (* outlet_index [ : inlet_index ] *)
 
+for_block         ::= 'for' , IDENT , 'in' , expr , '..' , expr , [ 'step' , expr ] , '{' , { statement } , '}' ;
+if_block          ::= 'if' , expr , '{' , { statement } , '}' ;
+interpolation     ::= '${' , expr , '}' ;
+expr              ::= comparison ;
+comparison        ::= additive , [ ( '==' | '!=' | '<=' | '>=' | '<' | '>' ) , additive ] ;
+additive          ::= multiplicative , { ( '+' | '-' ) , multiplicative } ;
+multiplicative    ::= unary , { ( '*' | '/' ) , unary } ;
+unary             ::= [ '+' | '-' ] , primary ;
+primary           ::= NUMBER | IDENT | '(' , expr , ')' ;
+
 (* Terminals *)
-IDENT             ::= ( LETTER | '_' ) , { LETTER | DIGIT | '_' } ;
+IDENT             ::= WORD ;
 STRING            ::= '"' , { char | escaped_char } , '"' ;
 INTEGER           ::= DIGIT , { DIGIT } ;
 NUMBER            ::= [ '-' ] , INTEGER , [ '.' , { DIGIT } ] ;
+WORD              ::= ( LETTER | DIGIT | '_' ) , { LETTER | DIGIT | '_' } ;
 LETTER            ::= 'a'..'z' | 'A'..'Z' ;
 DIGIT             ::= '0'..'9' ;
 ```
@@ -56,7 +70,7 @@ DIGIT             ::= '0'..'9' ;
 
 ### 3.1 Whitespace
 
-- Statements are **line-delimited**. Each statement occupies one line (except subpatcher `{ ... }`).
+- Statements are **line-delimited**. Each simple statement occupies one line; block statements (`subpatcher`, `for`, `if`) span `{ ... }`.
 - Blank lines are ignored.
 - Leading/trailing whitespace on a line is trimmed.
 - Within a line, whitespace separates tokens.
@@ -65,20 +79,22 @@ DIGIT             ::= '0'..'9' ;
 
 ```
 # This is a comment
-osc = cycle~ 440  # inline comments NOT supported in v1
+osc = cycle~ 440
+# inline comments after a statement are not supported
 ```
 
 - A line starting with `#` (after optional whitespace) is a comment.
 - Comments are stripped before parsing.
-- Inline comments (after a statement) are **NOT supported** in v1.
+- Inline comments (after a statement) are **NOT supported**.
 
 ### 3.3 Identifiers (IDENT)
 
 ```
-IDENT ::= ( a-z | A-Z | _ ) ( a-z | A-Z | 0-9 | _ )*
+IDENT ::= ( a-z | A-Z | 0-9 | _ )+
 ```
 
-- Must start with a letter or underscore.
+- Current parser accepts letters, digits, and underscores, including a digit as the first character.
+- For portable output and readable decompilation, prefer starting names with a letter or underscore.
 - Case-sensitive.
 - Used for: object names (LHS of `=`), connection references.
 
@@ -91,8 +107,10 @@ STRING ::= '"' ... '"'
 ```
 
 - Delimited by double quotes.
-- Escape sequences: `\"` → `"`, `\\` → `\`, `\n` → newline.
-- Used in: `patch` declaration, `comment` text, `message` text.
+- Escaped quotes are recognized while tokenizing quoted values.
+- `comment` and `message` text unescape `\"` and `\\`.
+- `\n` is not interpreted as a newline escape.
+- Used in: `patch` declaration, `comment` text, `message` text, and quoted attribute values.
 
 ### 3.5 Arrow Operator
 
@@ -101,7 +119,7 @@ ARROW ::= '-' , '>'
 ```
 
 - Separator in connection statements.
-- Must be surrounded by whitespace: `a -> b` (not `a->b`).
+- Whitespace around `->` is optional in the current parser, but `a -> b` is the recommended style.
 
 ### 3.6 Port Specifiers
 
@@ -122,7 +140,7 @@ position ::= 'at' '(' INTEGER ',' INTEGER ')'
 
 - Appears at the end of an object definition line.
 - `x` and `y` are pixel coordinates in the Max patching rect.
-- No spaces inside parentheses: `at(100,200)` or `at(100, 200)`.
+- Spaces around the numbers and comma are allowed: `at(100,200)`, `at(100, 200)`, `at( 100, 200 )`.
 - If present, auto-layout is skipped for this object.
 
 ### 3.8 Attributes
@@ -155,7 +173,58 @@ freq = number @minimum 0 @maximum 127 at(100, 50)
 vol = slider @size 20 140 @min 0 @max 100
 ```
 
-The decompiler reverses this: any non-standard key in a box JSON is emitted as `@key value`.
+The decompiler reverses this: any non-structural box key in a box JSON is emitted as `@key value`.
+
+Reserved structural keys cannot be set with attributes: `id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `patching_rect`, `text`, `patcher`, and `comment`.
+
+### 3.9 Control-flow and arithmetic expansion
+
+Control-flow is expanded before normal DSL parsing. It is intentionally a macro system, not a runtime feature in Max.
+
+#### Interpolation
+
+```
+${expr}
+```
+
+`${expr}` can appear inside object names, object arguments, attributes, positions, and connections. Expressions support:
+
+- numbers and loop variables
+- `+`, `-`, `*`, `/`
+- parentheses
+- comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
+
+Examples:
+
+```maxdsl
+osc_${i} = cycle~ ${220 + i * 10} at(${50 + i * 120}, 100)
+slider_${i} = slider @size ${20} ${80 + i * 10}
+```
+
+#### For loop
+
+```
+for i in 0..7 {
+  osc_${i} = cycle~ ${220 + i * 20}
+}
+```
+
+- Ranges are inclusive: `0..7` emits 8 iterations.
+- Descending ranges are allowed: `3..0`.
+- Optional `step` is supported: `for i in 0..6 step 2`.
+- `step 0` is a syntax error.
+
+#### If block
+
+```
+for i in 0..7 {
+  if i < 4 {
+    left_${i} = *~ 0.25
+  }
+}
+```
+
+The block is emitted when the expression is non-zero. Comparisons return `1` for true and `0` for false.
 
 ## 4. Statement Semantics
 
@@ -168,8 +237,8 @@ patch "Patch Name" | "Description text" | 800x600
 ```
 
 - **Optional**. If omitted, defaults to `"Untitled" | "" | 640x480`.
-- Must appear **before** any object definitions or connections.
-- Only ONE `patch` declaration per file (or per subpatcher).
+- Recommended position is before any object definitions or connections.
+- Use at most one `patch` declaration. If multiple declarations are present, the current parser keeps the last one; do not rely on this.
 - Parameters after `|`:
   1. Description (string)
   2. Window size (`WIDTHxHEIGHT`)
@@ -182,8 +251,9 @@ name = type [args...] [@attr val ...] [at(x, y)]
 
 - `name` — IDENT, must be unique within the current scope (patcher/subpatcher).
 - `=` — literal equals sign.
-- Everything after `=` (trimmed, excluding the optional `at(...)` suffix) is the **object text**.
+- Everything after `=` (trimmed, excluding the optional attributes and `at(...)` suffix) is the **object text**.
 - The first token of the object text is resolved against the object database.
+- Attributes are emitted as box JSON keys after structural keys are generated. Reserved structural keys are rejected.
 - `at(x, y)` — **Optional** position override. Pins the object to coordinate `(x, y)`. Objects without `at()` are positioned by auto-layout.
 
 **Object text examples:**
@@ -205,14 +275,14 @@ name = type [args...] [@attr val ...] [at(x, y)]
 |-------------|----------|---------------|
 | `comment` | `comment` | text = content inside `""` |
 | `message` | `message` | text = content inside `""` |
-| Anything else with `~` | `newobj` | text = full line after `=` |
-| Anything else | `newobj` | text = full line after `=` |
+| Database object with `maxclass: "newobj"` | `newobj` | text = object text |
+| Unknown object with `--allow-unknown` | `newobj` | text = object text |
 | `toggle`, `number`, `flonum`, etc. | same as token | no text field |
 
 ### 4.3 Subpatcher Definition
 
 ```
-name = p subpatcher_name {
+name = p subpatcher_name [@attr value...] {
   ...statements...
 }
 ```
@@ -220,6 +290,7 @@ name = p subpatcher_name {
 - `name` — IDENT, unique in current scope.
 - `p` — literal keyword.
 - `subpatcher_name` — IDENT, used in the Max text field as `p subpatcher_name`.
+- Attributes after `subpatcher_name` apply to the parent subpatcher box.
 - `{ }` — contains inner statements (objects, connections, nested subpatchers).
 - `numinlets` / `numoutlets` are auto-derived from the count of `inlet`/`outlet` objects inside.
 - Inner object IDs are independently numbered (scoped).
@@ -274,6 +345,7 @@ name[1:2] -> name
 2. Outlet index must be < source object's `numoutlets`.
 3. Inlet index must be < destination object's `numinlets`.
 4. Duplicate connections (same source+outlet, same dest+inlet) are ignored with a warning.
+5. Connections are resolved in source order, so objects must be defined before a connection that references them.
 
 ### 4.5 Implicit Objects
 
@@ -328,32 +400,35 @@ If an object type is NOT found in the database:
 ### 6.1 Rules
 
 1. Extract connection graph from all connection statements.
-2. Perform topological sort (respecting connection direction: source → destination).
-3. Assign Y-coordinates based on topological order:
-   - First object: Y = 50
-   - Each subsequent: Y += 60
-4. Assign X-coordinates:
-   - Objects in the main chain: X = 50
-   - Branches (objects with multiple destinations or feedback): X += 120
+2. Compute levels using a simple topological traversal from objects with zero incoming edges.
+3. Assign Y-coordinates by level:
+   - Level 0: Y = 50
+   - Each later level: Y += 60
+4. Assign X-coordinates within each level:
+   - First object in a level: X = 50
+   - Each additional object in the same level: X += 150
 5. Width/height from object database defaults.
 
 ### 6.2 Feedback loops
 
-If the graph contains cycles (feedback):
-- Detect cycle edges.
-- Route feedback connections with a right-offset (X += 240) and midpoint routing.
+There is no special feedback routing. Nodes left unvisited by the topological traversal are placed in later levels in declaration order. Patchlines are emitted without midpoints.
 
 ### 6.3 Manual override
 
 Objects with `at(x, y)` are **pinned** to the specified coordinates. Auto-layout skips pinned objects and positions only un-pinned ones.
 
-```
-cmt = comment "Title" at(50, 30)     # pinned at (50, 30)
-osc = cycle~ 440                      # auto-layout
-dac = ezdac~ at(50, 300)              # pinned at (50, 300)
+```maxdsl
+# pinned at (50, 30)
+cmt = comment "Title" at(50, 30)
+
+# auto-layout
+osc = cycle~ 440
+
+# pinned at (50, 300)
+dac = ezdac~ at(50, 300)
 ```
 
-Decompiled output always includes `at(x, y)` so that round-tripping preserves positions.
+The current decompiler does not emit `at(x, y)` from `patching_rect`. Round-trip tests verify object/line structure and important box properties, not exact source text or manual coordinates.
 
 ## 7. Output Format
 
@@ -365,7 +440,7 @@ The compiler outputs a JSON object matching the Max `.maxpat` format:
 - IDs: `"obj-1"`, `"obj-2"`, ... (sequential per scope)
 - 2-space indentation
 - UTF-8, LF line endings
-- Keys ordered: `id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `patching_rect`, `text`, ...
+- Box keys are generated in compiler order: structural fields first, then optional fields such as `outlettype`, `text`, `comment`, `patcher`, and attributes.
 
 ### 7.2 File extension
 
@@ -386,14 +461,15 @@ The compiler outputs a JSON object matching the Max `.maxpat` format:
 | E006 | `inlet/outlet outside subpatcher` | inlet/outlet used at top level |
 | E007 | `Syntax error at line {N}: {detail}` | Malformed statement |
 | E008 | `Subpatcher "{name}" has no inlets or outlets` | Empty subpatcher with no inlet/outlet objects |
+| E009 | `Reserved attribute cannot be set with @{key}` | Attribute would corrupt structural box JSON |
 
 ### 8.2 Warnings (non-fatal)
 
 | Code | Message |
 |------|---------|
 | W001 | `Duplicate connection: {src}[{out}] -> {dst}[{in}]` |
-| W002 | `Unconnected object: "{name}"` |
-| W003 | `Object "{name}" has no outgoing connections and no UI purpose` |
+
+`W002` exists in the TypeScript enum but is not currently emitted.
 
 ## 9. Complete Example
 

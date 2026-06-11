@@ -3,11 +3,6 @@ import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
 const STANDARD_BOX_KEYS = new Set([
   "id", "maxclass", "numinlets", "numoutlets", "outlettype",
   "patching_rect", "text", "patcher", "comment",
-  "parameter_enable", "presentation", "presentation_rect",
-  "hidden", "varname", "fontsize", "fontname", "fontface",
-  "color", "bgcolor", "textcolor",
-  "id", "maxclass", "numinlets", "numoutlets", "outlettype",
-  "patching_rect", "text", "patcher", "comment",
 ]);
 
 export function decompile(patch: PatcherJSON): string {
@@ -145,7 +140,7 @@ function boxToDSL(box: BoxJSON, name: string): string {
       const inner = decompile({ patcher: box.patcher });
       const innerLines = inner.trim().split("\n");
       const body = innerLines.map((l) => "  " + l).join("\n");
-      return `${name} = p ${subName} {\n${body}\n}`;
+      return `${name} = p ${subName}${attrSuffix} {\n${body}\n}`;
     }
     return `${name} = p ${subName}${attrSuffix}`;
   }

@@ -10,12 +10,19 @@ import {
   CompileError,
   AttrValue,
 } from "../core/types.js";
-
-const SPECIAL_OBJECTS = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
+import { expandControlFlow } from "./expander.js";
 
 export function parse(source: string): { ast: ASTNode; errors: CompileError[] } {
+  const expanded = expandControlFlow(source);
+  if (expanded.errors.length > 0) {
+    return {
+      ast: { type: "program", statements: [] },
+      errors: expanded.errors,
+    };
+  }
+
   const errors: CompileError[] = [];
-  const lines = source.split("\n");
+  const lines = expanded.source.split("\n");
   let patchDecl: PatchDecl | undefined;
   const statements: Statement[] = [];
   let i = 0;
@@ -44,10 +51,11 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
       continue;
     }
 
-    // subpatcher: name = p subname { ... }
-    const subpatcherMatch = line.match(/^(\w+)\s*=\s*p\s+(\w+)\s*\{$/);
+    // subpatcher: name = p subname [@attrs...] { ... }
+    const subpatcherMatch = line.match(/^(\w+)\s*=\s*p\s+(\w+)(.*?)\s*\{$/);
     if (subpatcherMatch) {
-      const [, name, subpatcherName] = subpatcherMatch;
+      const [, name, subpatcherName, attrText] = subpatcherMatch;
+      const { attrs } = parseAttributes(`p ${subpatcherName}${attrText}`);
       const { body, endLine } = parseSubpatcherBody(lines, i + 1, errors);
       statements.push({
         type: "subpatcher_def",
@@ -55,6 +63,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
         subpatcherName,
         body,
         line: i + 1,
+        attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
       } as SubpatcherDefStmt);
       i = endLine + 1;
       continue;
@@ -186,7 +195,21 @@ function parseSubpatcherBody(
     i++;
   }
 
-  const { ast } = parse(bodyLines.join("\n"));
+  if (depth > 0) {
+    errors.push({
+      code: ErrorCode.SYNTAX_ERROR,
+      message: "Unclosed subpatcher block",
+      line: startLine,
+    });
+  }
+
+  const { ast, errors: childErrors } = parse(bodyLines.join("\n"));
+  for (const error of childErrors) {
+    errors.push({
+      ...error,
+      line: error.line === undefined ? undefined : startLine + error.line,
+    });
+  }
   return { body: ast.statements, endLine: i - 1 };
 }
 
@@ -232,7 +255,7 @@ function tokenizeWithQuotes(text: string): string[] {
   const tokens: string[] = [];
   let i = 0;
   while (i < text.length) {
-    while (i < text.length && text[i] === " ") i++;
+    while (i < text.length && /\s/.test(text[i])) i++;
     if (i >= text.length) break;
     if (text[i] === '"') {
       let j = i + 1;
@@ -244,7 +267,7 @@ function tokenizeWithQuotes(text: string): string[] {
       i = j + 1;
     } else {
       let j = i;
-      while (j < text.length && text[j] !== " ") j++;
+      while (j < text.length && !/\s/.test(text[j])) j++;
       tokens.push(text.substring(i, j));
       i = j;
     }

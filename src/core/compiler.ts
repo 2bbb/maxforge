@@ -45,6 +45,18 @@ interface CompiledLine {
   destInlet: number;
 }
 
+const RESERVED_ATTR_KEYS = new Set([
+  "id",
+  "maxclass",
+  "numinlets",
+  "numoutlets",
+  "outlettype",
+  "patching_rect",
+  "text",
+  "patcher",
+  "comment",
+]);
+
 export function compile(
   ast: ASTNode,
   database: ObjectDatabase,
@@ -105,6 +117,8 @@ export function compile(
       return;
     }
 
+    if (!validateAttrs(stmt.attrs, stmt.line)) return;
+
     const INLET_OUTLET = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
     const box: CompiledBox = {
       id: nextId(),
@@ -130,8 +144,6 @@ export function compile(
   }
 
   function compileConnection(stmt: ConnectionStmt) {
-    const compiled: CompiledLine[] = [];
-
     for (let i = 0; i < stmt.refs.length - 1; i++) {
       const src = stmt.refs[i];
       const dst = stmt.refs[i + 1];
@@ -176,7 +188,6 @@ export function compile(
         continue;
       }
 
-      const lineKey = `${srcBox.id}:${outletIdx}->${dstBox.id}:${inletIdx}`;
       const isDup = lines.some(
         (l) =>
           l.sourceId === srcBox.id &&
@@ -212,6 +223,8 @@ export function compile(
       });
       return;
     }
+
+    if (!validateAttrs(stmt.attrs, stmt.line)) return;
 
     const subResult = compile(
       {
@@ -278,6 +291,7 @@ export function compile(
       x: 0,
       y: 0,
       pinnedPos: false,
+      attrs: stmt.attrs,
     };
 
     boxes.push(box);
@@ -286,6 +300,24 @@ export function compile(
   }
 
   const SPECIAL_OBJECTS = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
+
+  function validateAttrs(
+    attrs: Record<string, (string | number)[]> | undefined,
+    line: number
+  ): boolean {
+    if (!attrs) return true;
+    for (const key of Object.keys(attrs)) {
+      if (RESERVED_ATTR_KEYS.has(key)) {
+        errors.push({
+          code: ErrorCode.RESERVED_ATTRIBUTE,
+          message: `Reserved attribute cannot be set with @${key}`,
+          line,
+        });
+        return false;
+      }
+    }
+    return true;
+  }
 
   compileStatements(ast.statements, isSubpatcher);
 

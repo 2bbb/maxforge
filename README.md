@@ -7,12 +7,13 @@ DSL compiler for Max/MSP `.maxpat` patches. Write compact text, get valid Max pa
 maxpat-dsl is a domain-specific language and compiler that lets you describe Max/MSP patches as concise text files (`.maxdsl`) instead of editing JSON by hand or clicking through the Max GUI. It supports:
 
 - **Forward compilation** — `.maxdsl` → `.maxpat` JSON
-- **Reverse decompilation** — `.maxpat` → `.maxdsl` text (round-trip verified)
+- **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure round-trip verified; exact source text and manual `at()` positions are not preserved)
 - **Clipboard output** — compressed text pasteable directly into Max
 - **Clipboard input** — decompress pasted patches back to DSL
 - **374 built-in objects** with auto inlet/outlet resolution
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
+- **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
 
 ## Quickstart
 
@@ -44,6 +45,9 @@ node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
 ```
 
 ## CLI Reference
+
+After `npm run build`, local development can use `node dist/cli/index.js ...`.
+When installed as a package binary, use `maxpat-dsl ...`.
 
 ```bash
 # DSL → maxpat
@@ -87,26 +91,66 @@ name = type [args...] [@attr value...] [at(x, y)]
 - `type args` — resolved against the object database; `numinlets`/`numoutlets` auto-derived
 - `@attr value` — optional attributes; emitted directly as box JSON properties
 - `at(x, y)` — optional position override; omit for auto-layout
+- structural keys such as `id`, `maxclass`, `patching_rect`, `text`, and `patcher` are reserved and cannot be set with `@`
 
 ```maxdsl
-osc = cycle~ 440              # audio oscillator
-mul = *~ 0.5                  # signal multiply
-freq = number @minimum 0 @maximum 127  # with range
-vol = slider @size 20 140     # with custom size
-cmt = comment "Hello"         # comment
-msg = message "open"          # message box
-filt = lores~ 1000 0.5 at(50, 200)  # with position
+# audio oscillator
+osc = cycle~ 440
+
+# signal multiply
+mul = *~ 0.5
+
+# attributes
+freq = number @minimum 0 @maximum 127
+vol = slider @size 20 140
+
+# comment and message boxes
+cmt = comment "Hello"
+msg = message "open"
+
+# manual position
+filt = lores~ 1000 0.5 at(50, 200)
 ```
+
+Inline comments after a statement are not supported; put comments on their own line.
+
+### Repetition and Arithmetic
+
+Use `for`, `if`, and `${expr}` when Max would otherwise require many similar objects.
+Expansion happens before normal parsing.
+
+```maxdsl
+for i in 0..7 {
+  osc_${i} = cycle~ ${220 + i * 20} at(${50 + i * 100}, 80)
+  amp_${i} = *~ 0.125 at(${50 + i * 100}, 140)
+  osc_${i} -> amp_${i}
+
+  if i < 2 {
+    meter_${i} = meter~ at(${50 + i * 100}, 200)
+    amp_${i} -> meter_${i}
+  }
+}
+```
+
+- `0..7` is inclusive; use `step`, e.g. `for i in 0..6 step 2`
+- expressions support loop variables, `+ - * /`, parentheses, and comparisons
+- `${expr}` can be used in names, object arguments, attributes, positions, and connections
+- expressions are deliberately numeric only; there are no strings, arrays, functions, or modulo operator
 
 ### Connections
 
 ```maxdsl
-a -> b -> c          # chain: outlet 0 → inlet 0
-vol[1] -> dac[1]     # outlet 1 → inlet 1
-src[0] -> dst[2]     # outlet 0 → inlet 2
+# chain: outlet 0 → inlet 0
+a -> b -> c
+
+# outlet 1 → inlet 1
+vol[1] -> dac[1]
+
+# outlet 0 → inlet 2
+src[0] -> dst[2]
 ```
 
-Indices are 0-based (leftmost = 0).
+Indices are 0-based (leftmost = 0). `[N]` on a destination means destination inlet `N`.
 
 ### Subpatchers
 
@@ -147,6 +191,7 @@ Some objects change inlet/outlet count based on arguments:
 src/
   cli/index.ts         CLI entry point
   dsl/parser.ts        Line-oriented DSL parser
+  dsl/expander.ts      for/if/${expr} macro expansion
   core/
     compiler.ts        AST → maxpat JSON compiler
     decompiler.ts      maxpat JSON → DSL text
@@ -161,7 +206,7 @@ docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   skill.md             AI agent documentation
 tests/
-  compiler.test.ts     48 tests (snapshot, round-trip, errors, edge cases)
+  compiler.test.ts     test suite (snapshot, round-trip, errors, edge cases)
   fixtures/            DSL fixture files for snapshot testing
 examples/
   basic_synth.maxdsl   Example patch
@@ -171,7 +216,7 @@ examples/
 
 ```bash
 npm run build          # compile TypeScript
-npm test               # run 48 tests with vitest
+npm test               # run tests with vitest
 npm run dev            # watch mode
 ```
 
@@ -187,6 +232,7 @@ npm run dev            # watch mode
 | E006 | inlet/outlet used outside subpatcher |
 | E007 | Syntax error |
 | E008 | Subpatcher has no inlet or outlet |
+| E009 | Reserved attribute key |
 
 ## License
 
