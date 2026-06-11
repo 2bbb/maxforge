@@ -39,7 +39,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
 
     // patch declaration
     if (line.startsWith("patch ")) {
-      const parsed = parsePatchDecl(line, current.line);
+      const parsed = parsePatchDecl(line);
       if (parsed) {
         patchDecl = parsed;
       } else {
@@ -122,7 +122,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
   return { ast: { type: "program", patchDecl, statements }, errors };
 }
 
-function parsePatchDecl(line: string, lineNum: number): PatchDecl | null {
+function parsePatchDecl(line: string): PatchDecl | null {
   const pipeParts = line.split("|").map((s) => s.trim());
 
   const firstPart = pipeParts[0];

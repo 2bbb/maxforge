@@ -14,7 +14,7 @@ const INTERPOLATION_RE = /\$\{([^}]*)\}/g;
 export function expandControlFlow(source: string): ExpandResult {
   const lines = toSourceLines(source);
   const errors: CompileError[] = [];
-  const result = expandBlock(lines, 0, new Map(), false, errors);
+  const result = expandBlock(lines, 0, new Map(), errors);
 
   if (result.closed) {
     errors.push({
@@ -38,7 +38,6 @@ function expandBlock(
   sourceLines: SourceLine[],
   startIndex: number,
   env: Map<string, number>,
-  allowClose: boolean,
   errors: CompileError[]
 ): BlockResult {
   const output: string[] = [];
@@ -49,9 +48,6 @@ function expandBlock(
     const trimmed = current.text.trim();
 
     if (trimmed === "}") {
-      if (!allowClose) {
-        return { lines: output, nextIndex: i + 1, closed: true, closeLine: current.line };
-      }
       return { lines: output, nextIndex: i + 1, closed: true, closeLine: current.line };
     }
 
@@ -73,7 +69,7 @@ function expandBlock(
         for (const value of range) {
           const innerEnv = new Map(env);
           innerEnv.set(varName, value);
-          const expanded = expandBlock(body.lines, 0, innerEnv, false, errors);
+          const expanded = expandBlock(body.lines, 0, innerEnv, errors);
           output.push(...expanded.lines);
         }
       }
@@ -96,7 +92,7 @@ function expandBlock(
 
       const condition = evalExpression(ifMatch[1], env, current.line, errors);
       if (condition !== null && condition !== 0) {
-        const expanded = expandBlock(body.lines, 0, env, false, errors);
+        const expanded = expandBlock(body.lines, 0, env, errors);
         output.push(...expanded.lines);
       }
 
@@ -108,7 +104,7 @@ function expandBlock(
       const header = interpolateLine(current.text, env, current.line, errors);
       output.push(header);
 
-      const body = expandBlock(sourceLines, i + 1, env, true, errors);
+      const body = expandBlock(sourceLines, i + 1, env, errors);
       output.push(...body.lines);
       if (!body.closed) {
         errors.push({
