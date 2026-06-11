@@ -200,6 +200,7 @@ src/
     compiled-model.ts  Compiler intermediate box/line model
     connection-compiler.ts Connection validation and line compilation
     patcher-json.ts    Compiler model → maxpat JSON builder
+    port-objects.ts    inlet/outlet object classification helpers
     decompiler.ts      maxpat JSON → DSL text
     attributes.ts      Shared box attribute helpers
     object-db.ts       Object lookup + argDependent resolution

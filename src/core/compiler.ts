@@ -16,13 +16,14 @@ import { isReservedAttributeKey } from "./attributes.js";
 import { CompiledBox, CompiledLine } from "./compiled-model.js";
 import { compileConnectionPair } from "./connection-compiler.js";
 import { buildPatcherJSON } from "./patcher-json.js";
-
-const INLET_OBJECT_TYPES = ["inlet", "inlet~"] as const;
-const OUTLET_OBJECT_TYPES = ["outlet", "outlet~"] as const;
-const SPECIAL_OBJECTS = new Set<string>([
-  ...INLET_OBJECT_TYPES,
-  ...OUTLET_OBJECT_TYPES,
-]);
+import {
+  firstObjectToken,
+  INLET_OBJECT_TYPES,
+  isObjectTextKind,
+  isPortObjectStmt,
+  isPortObjectToken,
+  OUTLET_OBJECT_TYPES,
+} from "./port-objects.js";
 
 export function compile(
   ast: ASTNode,
@@ -65,7 +66,7 @@ export function compile(
 
     const firstToken = firstObjectToken(stmt.objectText);
 
-    if (SPECIAL_OBJECTS.has(firstToken) && !isSubpatcher) {
+    if (isPortObjectToken(firstToken) && !isSubpatcher) {
       errors.push({
         code: ErrorCode.INLET_OUTSIDE_SUBPATCHER,
         message: `${firstToken} can only be used inside a subpatcher`,
@@ -86,7 +87,7 @@ export function compile(
 
     if (!validateAttrs(stmt.attrs, stmt.line)) return;
 
-    const isPortObject = SPECIAL_OBJECTS.has(firstToken);
+    const isPortObject = isPortObjectToken(firstToken);
     const box: CompiledBox = {
       id: nextId(),
       name: stmt.name,
@@ -228,22 +229,4 @@ export function compile(
   );
 
   return { success: true, errors: [], warnings, output: patcherJSON };
-}
-
-function firstObjectToken(objectText: string): string {
-  return objectText.trim().split(/\s+/)[0] ?? "";
-}
-
-function isPortObjectStmt(
-  stmt: Statement,
-  objectTypes: readonly string[]
-): stmt is ObjectDefStmt {
-  return stmt.type === "object_def" && objectTypes.some((type) =>
-    isObjectTextKind(stmt.objectText, type)
-  );
-}
-
-function isObjectTextKind(objectText: string, objectType: string): boolean {
-  const trimmed = objectText.trim();
-  return trimmed === objectType || trimmed.startsWith(`${objectType} `);
 }
