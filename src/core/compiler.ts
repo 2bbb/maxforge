@@ -35,6 +35,7 @@ interface CompiledBox {
   x: number;
   y: number;
   pinnedPos: boolean;
+  attrs?: Record<string, (string | number)[]>;
 }
 
 interface CompiledLine {
@@ -121,6 +122,7 @@ export function compile(
       x: stmt.pos?.[0] ?? 0,
       y: stmt.pos?.[1] ?? 0,
       pinnedPos: stmt.pos !== undefined,
+      attrs: stmt.attrs,
     };
 
     boxes.push(box);
@@ -337,6 +339,12 @@ function buildPatcherJSON(
     }
     if (b.patcher) {
       box.patcher = b.patcher;
+    }
+
+    if (b.attrs) {
+      for (const [key, values] of Object.entries(b.attrs)) {
+        (box as Record<string, unknown>)[key] = values.length === 1 ? values[0] : values;
+      }
     }
 
     return { box };

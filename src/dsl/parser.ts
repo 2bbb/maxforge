@@ -8,6 +8,7 @@ import {
   PortRef,
   ErrorCode,
   CompileError,
+  AttrValue,
 } from "../core/types.js";
 
 const SPECIAL_OBJECTS = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
@@ -71,12 +72,14 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
           pos = [parseInt(posMatch[1]), parseInt(posMatch[2])];
           objectText = objectText.substring(0, objectText.length - posMatch[0].length).trim();
         }
+        const { text: cleanText, attrs } = parseAttributes(objectText);
         statements.push({
           type: "object_def",
           name,
-          objectText,
+          objectText: cleanText,
           line: i + 1,
           pos,
+          attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
         } as ObjectDefStmt);
         i++;
         continue;
@@ -185,4 +188,73 @@ function parseSubpatcherBody(
 
   const { ast } = parse(bodyLines.join("\n"));
   return { body: ast.statements, endLine: i - 1 };
+}
+
+function parseAttributes(text: string): { text: string; attrs: Record<string, AttrValue[]> } {
+  const attrs: Record<string, AttrValue[]> = {};
+  const tokens = tokenizeWithQuotes(text);
+
+  const attrIndices: number[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].startsWith("@")) {
+      attrIndices.push(i);
+    }
+  }
+
+  if (attrIndices.length === 0) {
+    return { text, attrs };
+  }
+
+  const firstAttr = attrIndices[0];
+  const objectTokens = tokens.slice(0, firstAttr);
+
+  for (const startIdx of attrIndices) {
+    const key = tokens[startIdx].substring(1);
+    const endIdx = attrIndices.find(idx => idx > startIdx) ?? tokens.length;
+    const values: AttrValue[] = [];
+    for (let j = startIdx + 1; j < endIdx; j++) {
+      const t = tokens[j];
+      if (/^-?\d+(\.\d+)?$/.test(t)) {
+        values.push(parseFloat(t));
+      } else {
+        values.push(stripQuotes(t));
+      }
+    }
+    if (values.length > 0) {
+      attrs[key] = values;
+    }
+  }
+
+  return { text: objectTokens.join(" "), attrs };
+}
+
+function tokenizeWithQuotes(text: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    while (i < text.length && text[i] === " ") i++;
+    if (i >= text.length) break;
+    if (text[i] === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') {
+        if (text[j] === "\\") j++;
+        j++;
+      }
+      tokens.push(text.substring(i, j + 1));
+      i = j + 1;
+    } else {
+      let j = i;
+      while (j < text.length && text[j] !== " ") j++;
+      tokens.push(text.substring(i, j));
+      i = j;
+    }
+  }
+  return tokens;
+}
+
+function stripQuotes(s: string): string {
+  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+    return s.substring(1, s.length - 1);
+  }
+  return s;
 }

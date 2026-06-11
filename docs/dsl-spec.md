@@ -1,4 +1,4 @@
-# maxdsl Formal Specification v1.1
+# maxdsl Formal Specification v1.2
 
 ## 1. Overview
 
@@ -10,6 +10,7 @@ Design principles:
 - **Strict grammar** — no ambiguity, every valid program has exactly one parse tree
 - **Object database resolution** — `numinlets`, `numoutlets`, `outlettype` are auto-derived
 - **Optional position override** — `at(x, y)` pins an object to a specific coordinate; un-pinned objects use auto-layout
+- **Object attributes** — `@key value` pairs set arbitrary box properties (minimum, maximum, size, etc.)
 
 ## 2. EBNF Grammar
 
@@ -29,9 +30,11 @@ patch_decl        ::= 'patch' , STRING , { '|' , patch_param } ;
 patch_param       ::= STRING | size ;
 size              ::= INTEGER , 'x' , INTEGER ;
 
-object_def        ::= IDENT , '=' , object_text , [ position ] , NEWLINE ;
+object_def        ::= IDENT , '=' , object_text , { attribute } , [ position ] , NEWLINE ;
 object_text       ::= { non_newline } , { trimmed } ;
 position          ::= 'at' , '(' , INTEGER , ',' , INTEGER , ')' ;
+attribute         ::= '@' , IDENT , attr_value , { attr_value } ;
+attr_value        ::= NUMBER | STRING | unquoted_token ;
 
 subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , '{' , { statement } , '}' ;
 
@@ -121,6 +124,38 @@ position ::= 'at' '(' INTEGER ',' INTEGER ')'
 - `x` and `y` are pixel coordinates in the Max patching rect.
 - No spaces inside parentheses: `at(100,200)` or `at(100, 200)`.
 - If present, auto-layout is skipped for this object.
+
+### 3.8 Attributes
+
+```
+attribute ::= '@' IDENT attr_value { attr_value }
+attr_value ::= NUMBER | STRING | unquoted_token
+```
+
+- `@key value` pairs appear between the object text and the optional `at(x, y)`.
+- Each `@` token starts a new attribute; values are consumed until the next `@` or `at(` or end of line.
+- Single-value attributes emit a scalar in the box JSON; multi-value emit an array.
+- String values can be quoted (`"Courier"`) or unquoted (`Arial`).
+- Numeric values are parsed as numbers; everything else is a string.
+
+Examples:
+
+| DSL | Box JSON key | Value |
+|-----|-------------|-------|
+| `@minimum 0` | `minimum` | `0` |
+| `@maximum 127` | `maximum` | `127` |
+| `@size 20 100` | `size` | `[20, 100]` |
+| `@fontname "Courier"` | `fontname` | `"Courier"` |
+| `@triangle 0` | `triangle` | `0` |
+
+Full object definition with attributes:
+
+```maxdsl
+freq = number @minimum 0 @maximum 127 at(100, 50)
+vol = slider @size 20 140 @min 0 @max 100
+```
+
+The decompiler reverses this: any non-standard key in a box JSON is emitted as `@key value`.
 
 ## 4. Statement Semantics
 

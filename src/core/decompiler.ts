@@ -1,5 +1,15 @@
 import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
 
+const STANDARD_BOX_KEYS = new Set([
+  "id", "maxclass", "numinlets", "numoutlets", "outlettype",
+  "patching_rect", "text", "patcher", "comment",
+  "parameter_enable", "presentation", "presentation_rect",
+  "hidden", "varname", "fontsize", "fontname", "fontface",
+  "color", "bgcolor", "textcolor",
+  "id", "maxclass", "numinlets", "numoutlets", "outlettype",
+  "patching_rect", "text", "patcher", "comment",
+]);
+
 export function decompile(patch: PatcherJSON): string {
   const lines: string[] = [];
   const p = patch.patcher;
@@ -105,14 +115,17 @@ function sanitizeName(name: string): string {
 }
 
 function boxToDSL(box: BoxJSON, name: string): string {
+  const attrs = extractAttrs(box);
+  const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
+
   if (box.maxclass === "comment") {
     const text = box.text || "";
-    return `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    return `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
   }
 
   if (box.maxclass === "message") {
     const text = box.text || "";
-    return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
   }
 
   if (
@@ -121,9 +134,9 @@ function boxToDSL(box: BoxJSON, name: string): string {
   ) {
     const comment = (box.comment as string) || "";
     if (comment) {
-      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}`;
     }
-    return `${name} = ${box.maxclass}`;
+    return `${name} = ${box.maxclass}${attrSuffix}`;
   }
 
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
@@ -134,14 +147,41 @@ function boxToDSL(box: BoxJSON, name: string): string {
       const body = innerLines.map((l) => "  " + l).join("\n");
       return `${name} = p ${subName} {\n${body}\n}`;
     }
-    return `${name} = p ${subName}`;
+    return `${name} = p ${subName}${attrSuffix}`;
   }
 
   if (box.maxclass === "newobj") {
-    return `${name} = ${box.text || box.maxclass}`;
+    return `${name} = ${box.text || box.maxclass}${attrSuffix}`;
   }
 
-  return `${name} = ${box.maxclass}`;
+  return `${name} = ${box.maxclass}${attrSuffix}`;
+}
+
+function extractAttrs(box: BoxJSON): string[] {
+  const result: string[] = [];
+  for (const [key, value] of Object.entries(box)) {
+    if (STANDARD_BOX_KEYS.has(key)) continue;
+    if (value === undefined || value === null) continue;
+    result.push(formatAttr(key, value));
+  }
+  return result;
+}
+
+function formatAttr(key: string, value: unknown): string {
+  if (Array.isArray(value)) {
+    const parts = value.map(v => formatAttrValue(v));
+    return `@${key} ${parts.join(" ")}`;
+  }
+  return `@${key} ${formatAttrValue(value)}`;
+}
+
+function formatAttrValue(value: unknown): string {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") {
+    if (/^[\w.-]+$/.test(value)) return value;
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return String(value);
 }
 
 function lineToDSL(pl: LineJSON, idToName: Map<string, string>): string | null {

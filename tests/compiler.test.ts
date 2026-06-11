@@ -719,3 +719,111 @@ describe("clipboard", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Attribute tests
+// ---------------------------------------------------------------------------
+describe("attributes", () => {
+  it("parses single @key value into attrs", () => {
+    const { ast, errors } = parse('freq = number @minimum 0');
+    expect(errors).toHaveLength(0);
+    expect(ast.statements).toHaveLength(1);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.type).toBe("object_def");
+    expect(stmt.objectText).toBe("number");
+    expect(stmt.attrs).toEqual({ minimum: [0] });
+  });
+
+  it("parses multiple @key value pairs", () => {
+    const { ast, errors } = parse('freq = number @minimum 0 @maximum 127');
+    expect(errors).toHaveLength(0);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.objectText).toBe("number");
+    expect(stmt.attrs).toEqual({ minimum: [0], maximum: [127] });
+  });
+
+  it("parses @key with multiple values as array", () => {
+    const { ast, errors } = parse('s = slider @size 20 100');
+    expect(errors).toHaveLength(0);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.attrs).toEqual({ size: [20, 100] });
+  });
+
+  it("parses @key with string value", () => {
+    const { ast, errors } = parse('n = number @fontname "Courier"');
+    expect(errors).toHaveLength(0);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.attrs).toEqual({ fontname: ["Courier"] });
+  });
+
+  it("compiles single-value attrs as scalar in box JSON", () => {
+    const { ast } = parse('freq = number @minimum 0 @maximum 127');
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const box = result.output!.patcher.boxes[0].box as any;
+    expect(box.minimum).toBe(0);
+    expect(box.maximum).toBe(127);
+  });
+
+  it("compiles multi-value attrs as array in box JSON", () => {
+    const { ast } = parse('s = slider @size 20 100');
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const box = result.output!.patcher.boxes[0].box as any;
+    expect(box.size).toEqual([20, 100]);
+  });
+
+  it("compiles and decompiles attrs in round-trip", () => {
+    const dsl = 'freq = number @minimum 0 @maximum 127\nout = number';
+    const { ast } = parse(dsl);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const decompiled = decompile(result.output!);
+    expect(decompiled).toContain("@minimum 0");
+    expect(decompiled).toContain("@maximum 127");
+
+    const { ast: ast2, errors } = parse(decompiled);
+    expect(errors).toHaveLength(0);
+    const result2 = compile(ast2, db);
+    expect(result2.success).toBe(true);
+
+    const box1 = result.output!.patcher.boxes[0].box as any;
+    const box2 = result2.output!.patcher.boxes[0].box as any;
+    expect(box1.minimum).toBe(box2.minimum);
+    expect(box1.maximum).toBe(box2.maximum);
+  });
+
+  it("handles attrs with at(x, y) position", () => {
+    const { ast, errors } = parse('freq = number @minimum 0 @maximum 127 at(100, 200)');
+    expect(errors).toHaveLength(0);
+    const stmt = ast.statements[0] as any;
+    expect(stmt.objectText).toBe("number");
+    expect(stmt.attrs).toEqual({ minimum: [0], maximum: [127] });
+    expect(stmt.pos).toEqual([100, 200]);
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const box = result.output!.patcher.boxes[0].box as any;
+    expect(box.minimum).toBe(0);
+    expect(box.maximum).toBe(127);
+    expect(box.patching_rect[0]).toBe(100);
+    expect(box.patching_rect[1]).toBe(200);
+  });
+
+  it("preserves attrs through clipboard round-trip", () => {
+    const dsl = 'freq = number @minimum 0 @maximum 127\nout = number';
+    const { ast } = parse(dsl);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const json = JSON.stringify(result.output);
+    const clip = toClipboardText(json);
+    const recoveredJson = fromClipboardText(clip);
+    const patch = JSON.parse(recoveredJson);
+    const decompiled = decompile(patch);
+
+    expect(decompiled).toContain("@minimum 0");
+    expect(decompiled).toContain("@maximum 127");
+  });
+});

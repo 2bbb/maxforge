@@ -72,6 +72,7 @@ export interface BoxJSON {
   color?: [number, number, number, number];
   bgcolor?: [number, number, number, number];
   textcolor?: [number, number, number, number];
+  [key: string]: unknown;
 }
 
 export interface LineWrapper {
@@ -125,7 +126,10 @@ export interface ObjectDefStmt {
   objectText: string;
   line: number;
   pos?: [number, number];
+  attrs?: Record<string, AttrValue[]>;
 }
+
+export type AttrValue = string | number;
 
 export interface ConnectionStmt {
   type: "connection";

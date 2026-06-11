@@ -60,7 +60,22 @@ name = type [args...] [@attr val ...] [at(x, y)]
 - `name` — 英字/アンダースコア始まりの識別子。スコープ内で一意。
 - `=` 以降がMaxのtextフィールドになる。
 - `numinlets`/`numoutlets`/`outlettype` はオブジェクトDBから**自動解決**。書く必要なし。
+- `@attr val` — **省略可**の属性指定。box JSONに直接出力される。
 - `at(x, y)` — **省略可**の座標指定。指定するとauto-layoutを上書き。省略時は自動配置。
+
+**属性の書き方:**
+
+```
+freq = number @minimum 0 @maximum 127     # range指定
+vol = slider @size 20 140 @min 0 @max 100 # 複数値は配列になる
+num = flonum @fontname "Courier"           # 文字列値
+tog = toggle @triangle 0                   # 数値
+```
+
+- 単一値 → box JSONのスカラー (`"minimum": 0`)
+- 複数値 → box JSONの配列 (`"size": [20, 140]`)
+- 文字列値は `"` で囲むか、英数字のみならそのまま
+- デコンパイル時、標準キー以外はすべて `@key value` として復元される
 
 **書き方の一覧:**
 

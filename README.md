@@ -80,17 +80,19 @@ Default: `"Untitled" | "" | 640x480`
 ### Object Definition
 
 ```maxdsl
-name = type [args...] [at(x, y)]
+name = type [args...] [@attr value...] [at(x, y)]
 ```
 
 - `name` — identifier, unique within scope
 - `type args` — resolved against the object database; `numinlets`/`numoutlets` auto-derived
+- `@attr value` — optional attributes; emitted directly as box JSON properties
 - `at(x, y)` — optional position override; omit for auto-layout
 
 ```maxdsl
 osc = cycle~ 440              # audio oscillator
 mul = *~ 0.5                  # signal multiply
-freq = number                 # UI number box
+freq = number @minimum 0 @maximum 127  # with range
+vol = slider @size 20 140     # with custom size
 cmt = comment "Hello"         # comment
 msg = message "open"          # message box
 filt = lores~ 1000 0.5 at(50, 200)  # with position
