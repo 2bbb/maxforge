@@ -17,6 +17,23 @@ maxpat-dsl is a domain-specific language and compiler that lets you describe Max
 
 ## Quickstart
 
+Run without installing globally after the package is published:
+
+```bash
+npx maxpat-dsl compile input.maxdsl -o output.maxpat
+npx maxpat-dsl validate input.maxdsl
+```
+
+For local package smoke testing before publishing:
+
+```bash
+npm run build
+pkg="$(npm pack | tail -1)"
+npm exec --package "./$pkg" -- maxpat-dsl validate examples/basic_synth.maxdsl
+```
+
+For repository development:
+
 ```bash
 npm install
 npm run build
@@ -228,6 +245,7 @@ examples/
 npm run build          # compile TypeScript
 npm test               # run tests with vitest
 npm run dev            # watch mode
+npm run pack:dry-run   # inspect npm package contents
 ```
 
 ## Error Codes

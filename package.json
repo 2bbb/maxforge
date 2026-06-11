@@ -10,17 +10,41 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepack": "npm run build",
     "dev": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
-    "cli": "node --loader ts-node/esm src/cli/index.ts"
+    "cli": "node --loader ts-node/esm src/cli/index.ts",
+    "pack:dry-run": "npm pack --dry-run"
   },
-  "keywords": ["max", "maxmsp", "maxpat", "dsl", "compiler"],
+  "keywords": [
+    "max",
+    "maxmsp",
+    "maxpat",
+    "dsl",
+    "compiler"
+  ],
   "author": "2bit",
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0"
+  },
+  "files": [
+    "dist/",
+    "data/objects.json",
+    "README.md",
+    "docs/dsl-spec.md",
+    "examples/*.maxdsl"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
