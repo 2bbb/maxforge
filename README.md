@@ -83,6 +83,43 @@ npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
 manual patching: generating many similar Max objects and connections from a
 small loop.
 
+## Max / node.script integration (experimental)
+
+maxforge can emit Max `thispatcher` scripting message arrays from `.maxdsl`:
+
+```js
+// In a Max node.script file. `max-api` is provided by Max, not by maxforge.
+const maxApi = require("max-api");
+
+async function compileToThispatcher(dsl) {
+  const { compileDslToThispatcherCommands, loadDatabase } = await import("maxforge");
+  const db = await loadDatabase();
+  const result = compileDslToThispatcherCommands(dsl, db);
+
+  if (!result.success) {
+    maxApi.post(JSON.stringify(result.errors));
+    return;
+  }
+
+  for (const command of result.commands) {
+    if (command.targetPath.length === 0) {
+      maxApi.outlet(...command.message);
+    } else {
+      // Nested subpatcher commands need a Max-side router/helper.
+      maxApi.post(JSON.stringify(command));
+    }
+  }
+}
+
+maxApi.addHandler("dsl", compileToThispatcher);
+```
+
+Connect the node.script outlet to `thispatcher` for flat patch generation. When using
+`{ asSubpatcher: "Name" }` or DSL-defined `p name { ... }`, commands targeting the
+inside of the subpatcher are emitted with `targetPath`; plain `thispatcher` does not
+magically route those messages into nested patchers. Use a small Max-side router/helper
+or generate a flat patch if you need direct outlet-to-`thispatcher` operation today.
+
 ## AI agent skill
 
 Install the maxforge skill into supported agents with:
