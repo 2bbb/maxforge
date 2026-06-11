@@ -9,12 +9,12 @@ import {
   CompileError,
   CompileWarning,
   ErrorCode,
-  WarningCode,
 } from "./types.js";
 import { lookupObject, extractQuotedContent } from "./object-db.js";
 import { autoLayout } from "./layout.js";
 import { isReservedAttributeKey } from "./attributes.js";
 import { CompiledBox, CompiledLine } from "./compiled-model.js";
+import { compileConnectionPair } from "./connection-compiler.js";
 import { buildPatcherJSON } from "./patcher-json.js";
 
 const INLET_OBJECT_TYPES = ["inlet", "inlet~"] as const;
@@ -112,72 +112,16 @@ export function compile(
 
   function compileConnection(stmt: ConnectionStmt) {
     for (let i = 0; i < stmt.refs.length - 1; i++) {
-      const src = stmt.refs[i];
-      const dst = stmt.refs[i + 1];
-
-      const srcBox = nameMap.get(src.name);
-      const dstBox = nameMap.get(dst.name);
-
-      if (!srcBox) {
-        errors.push({
-          code: ErrorCode.UNDEFINED_REF,
-          message: `Undefined reference: "${src.name}"`,
-          line: stmt.line,
-        });
-        continue;
-      }
-      if (!dstBox) {
-        errors.push({
-          code: ErrorCode.UNDEFINED_REF,
-          message: `Undefined reference: "${dst.name}"`,
-          line: stmt.line,
-        });
-        continue;
-      }
-
-      const outletIdx = src.outlet ?? 0;
-      const inletIdx = dst.inlet ?? dst.outlet ?? 0;
-
-      if (outletIdx >= srcBox.numoutlets) {
-        errors.push({
-          code: ErrorCode.OUTLET_OUT_OF_RANGE,
-          message: `Outlet index out of range: ${src.name}[${outletIdx}] has ${srcBox.numoutlets} outlets`,
-          line: stmt.line,
-        });
-        continue;
-      }
-      if (inletIdx >= dstBox.numinlets) {
-        errors.push({
-          code: ErrorCode.INLET_OUT_OF_RANGE,
-          message: `Inlet index out of range: ${dst.name}[${inletIdx}] has ${dstBox.numinlets} inlets`,
-          line: stmt.line,
-        });
-        continue;
-      }
-
-      const isDup = lines.some(
-        (l) =>
-          l.sourceId === srcBox.id &&
-          l.sourceOutlet === outletIdx &&
-          l.destId === dstBox.id &&
-          l.destInlet === inletIdx
+      const result = compileConnectionPair(
+        stmt.refs[i],
+        stmt.refs[i + 1],
+        stmt.line,
+        nameMap,
+        lines
       );
-
-      if (isDup) {
-        warnings.push({
-          code: WarningCode.DUPLICATE_CONNECTION,
-          message: `Duplicate connection: ${src.name}[${outletIdx}] -> ${dst.name}[${inletIdx}]`,
-          line: stmt.line,
-        });
-        continue;
-      }
-
-      lines.push({
-        sourceId: srcBox.id,
-        sourceOutlet: outletIdx,
-        destId: dstBox.id,
-        destInlet: inletIdx,
-      });
+      errors.push(...result.errors);
+      if (result.warning) warnings.push(result.warning);
+      if (result.line) lines.push(result.line);
     }
   }
 
