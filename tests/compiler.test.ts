@@ -247,6 +247,16 @@ vol[1] -> dac[1]
     expect(result.success).toBe(true);
   });
 
+  it("emits patch declaration metadata into patcher JSON", () => {
+    const source = `patch "Meta" | "Generated patch" | 900x700\nn = number`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.rect).toEqual([100, 100, 900, 700]);
+    expect(result.output!.patcher.description).toBe("Generated patch");
+  });
+
   it("sets correct patching_rect from auto-layout", () => {
     const source = `
 a = cycle~ 440
