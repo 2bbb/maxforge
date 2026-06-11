@@ -257,6 +257,22 @@ vol[1] -> dac[1]
     expect(result.output!.patcher.description).toBe("Generated patch");
   });
 
+  it("warns and emits one line for duplicate connections", () => {
+    const source = `
+a = toggle
+b = toggle
+a -> b
+a -> b
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines).toHaveLength(1);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0].code).toBe("W001");
+  });
+
   it("sets correct patching_rect from auto-layout", () => {
     const source = `
 a = cycle~ 440
