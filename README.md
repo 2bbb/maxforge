@@ -192,6 +192,7 @@ src/
   cli/index.ts         CLI entry point
   dsl/parser.ts        Line-oriented DSL parser
   dsl/expander.ts      for/if/${expr} macro expansion
+  dsl/expression.ts    Numeric expression evaluator for macro expansion
   core/
     compiler.ts        AST → maxpat JSON compiler
     decompiler.ts      maxpat JSON → DSL text
@@ -206,7 +207,8 @@ docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   skill.md             AI agent documentation
 tests/
-  compiler.test.ts     test suite (snapshot, round-trip, errors, edge cases)
+  compiler.test.ts     compiler/parser/decompiler test suite
+  expander.test.ts     for/if/${expr} expansion test suite
   fixtures/            DSL fixture files for snapshot testing
 examples/
   basic_synth.maxdsl   Example patch
