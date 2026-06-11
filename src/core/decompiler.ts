@@ -1,9 +1,5 @@
 import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
-
-const STANDARD_BOX_KEYS = new Set([
-  "id", "maxclass", "numinlets", "numoutlets", "outlettype",
-  "patching_rect", "text", "patcher", "comment",
-]);
+import { extractBoxAttrStrings } from "./attributes.js";
 
 export function decompile(patch: PatcherJSON): string {
   const lines: string[] = [];
@@ -110,7 +106,7 @@ function sanitizeName(name: string): string {
 }
 
 function boxToDSL(box: BoxJSON, name: string): string {
-  const attrs = extractAttrs(box);
+  const attrs = extractBoxAttrStrings(box);
   const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
   const posSuffix = positionSuffix(box);
 
@@ -156,33 +152,6 @@ function boxToDSL(box: BoxJSON, name: string): string {
 function positionSuffix(box: BoxJSON): string {
   const [x, y] = box.patching_rect;
   return ` at(${Math.round(x)}, ${Math.round(y)})`;
-}
-
-function extractAttrs(box: BoxJSON): string[] {
-  const result: string[] = [];
-  for (const [key, value] of Object.entries(box)) {
-    if (STANDARD_BOX_KEYS.has(key)) continue;
-    if (value === undefined || value === null) continue;
-    result.push(formatAttr(key, value));
-  }
-  return result;
-}
-
-function formatAttr(key: string, value: unknown): string {
-  if (Array.isArray(value)) {
-    const parts = value.map(v => formatAttrValue(v));
-    return `@${key} ${parts.join(" ")}`;
-  }
-  return `@${key} ${formatAttrValue(value)}`;
-}
-
-function formatAttrValue(value: unknown): string {
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") {
-    if (/^[\w.-]+$/.test(value)) return value;
-    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  }
-  return String(value);
 }
 
 function lineToDSL(pl: LineJSON, idToName: Map<string, string>): string | null {

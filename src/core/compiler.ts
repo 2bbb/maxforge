@@ -19,6 +19,7 @@ import {
 } from "./types.js";
 import { lookupObject, extractQuotedContent } from "./object-db.js";
 import { autoLayout } from "./layout.js";
+import { applyBoxAttrs, isReservedAttributeKey } from "./attributes.js";
 
 interface CompiledBox {
   id: string;
@@ -44,18 +45,6 @@ interface CompiledLine {
   destId: string;
   destInlet: number;
 }
-
-const RESERVED_ATTR_KEYS = new Set([
-  "id",
-  "maxclass",
-  "numinlets",
-  "numoutlets",
-  "outlettype",
-  "patching_rect",
-  "text",
-  "patcher",
-  "comment",
-]);
 
 export function compile(
   ast: ASTNode,
@@ -307,7 +296,7 @@ export function compile(
   ): boolean {
     if (!attrs) return true;
     for (const key of Object.keys(attrs)) {
-      if (RESERVED_ATTR_KEYS.has(key)) {
+      if (isReservedAttributeKey(key)) {
         errors.push({
           code: ErrorCode.RESERVED_ATTRIBUTE,
           message: `Reserved attribute cannot be set with @${key}`,
@@ -373,11 +362,7 @@ function buildPatcherJSON(
       box.patcher = b.patcher;
     }
 
-    if (b.attrs) {
-      for (const [key, values] of Object.entries(b.attrs)) {
-        (box as Record<string, unknown>)[key] = values.length === 1 ? values[0] : values;
-      }
-    }
+    applyBoxAttrs(box, b.attrs);
 
     return { box };
   });

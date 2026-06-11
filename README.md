@@ -196,6 +196,7 @@ src/
   core/
     compiler.ts        AST → maxpat JSON compiler
     decompiler.ts      maxpat JSON → DSL text
+    attributes.ts      Shared box attribute helpers
     object-db.ts       Object lookup + argDependent resolution
     layout.ts          Auto-layout via topological sort
     clipboard.ts       Compress/decompress for Max clipboard
