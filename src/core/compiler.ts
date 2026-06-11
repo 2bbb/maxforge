@@ -46,6 +46,13 @@ interface CompiledLine {
   destInlet: number;
 }
 
+const INLET_OBJECT_TYPES = ["inlet", "inlet~"] as const;
+const OUTLET_OBJECT_TYPES = ["outlet", "outlet~"] as const;
+const SPECIAL_OBJECTS = new Set<string>([
+  ...INLET_OBJECT_TYPES,
+  ...OUTLET_OBJECT_TYPES,
+]);
+
 export function compile(
   ast: ASTNode,
   database: ObjectDatabase,
@@ -85,7 +92,7 @@ export function compile(
       return;
     }
 
-    const firstToken = stmt.objectText.trim().split(/\s+/)[0];
+    const firstToken = firstObjectToken(stmt.objectText);
 
     if (SPECIAL_OBJECTS.has(firstToken) && !isSubpatcher) {
       errors.push({
@@ -108,7 +115,7 @@ export function compile(
 
     if (!validateAttrs(stmt.attrs, stmt.line)) return;
 
-    const INLET_OUTLET = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
+    const isPortObject = SPECIAL_OBJECTS.has(firstToken);
     const box: CompiledBox = {
       id: nextId(),
       name: stmt.name,
@@ -117,8 +124,8 @@ export function compile(
       numoutlets: result.def.numoutlets,
       outlettype: result.def.outlettype,
       defaultSize: result.def.defaultSize,
-      text: INLET_OUTLET.has(firstToken) ? undefined : (result.text || undefined),
-      comment: INLET_OUTLET.has(firstToken)
+      text: isPortObject ? undefined : (result.text || undefined),
+      comment: isPortObject
         ? extractQuotedContent(stmt.objectText) || undefined
         : undefined,
       line: stmt.line,
@@ -231,29 +238,16 @@ export function compile(
       return;
     }
 
-    const inlets = stmt.body.filter(
-      (s): s is ObjectDefStmt =>
-        s.type === "object_def" &&
-        (/^inlet[~]?\s/.test(s.objectText.trim()) ||
-          s.objectText.trim() === "inlet" ||
-          s.objectText.trim() === "inlet~")
+    const inlets = stmt.body.filter((s): s is ObjectDefStmt =>
+      isPortObjectStmt(s, INLET_OBJECT_TYPES)
     );
-    const outlets = stmt.body.filter(
-      (s): s is ObjectDefStmt =>
-        s.type === "object_def" &&
-        (/^outlet[~]?\s/.test(s.objectText.trim()) ||
-          s.objectText.trim() === "outlet" ||
-          s.objectText.trim() === "outlet~")
-    );
-
-    const hasAudioInlet = inlets.some((s) =>
-      s.objectText.trim().startsWith("inlet~")
-    );
-    const hasAudioOutlet = outlets.some((s) =>
-      s.objectText.trim().startsWith("outlet~")
+    const outlets = stmt.body.filter((s): s is ObjectDefStmt =>
+      isPortObjectStmt(s, OUTLET_OBJECT_TYPES)
     );
     const outletType =
-      hasAudioOutlet && outlets.length === 1 ? ["signal"] : [""];
+      outlets.length === 1 && isObjectTextKind(outlets[0].objectText, "outlet~")
+        ? "signal"
+        : "";
 
     if (inlets.length === 0 && outlets.length === 0) {
       errors.push({
@@ -270,9 +264,7 @@ export function compile(
       maxclass: "newobj",
       numinlets: inlets.length,
       numoutlets: outlets.length,
-      outlettype: Array(outlets.length).fill(
-        outletType[0]
-      ),
+      outlettype: Array(outlets.length).fill(outletType),
       defaultSize: [100, 22],
       text: `p ${stmt.subpatcherName}`,
       line: stmt.line,
@@ -287,8 +279,6 @@ export function compile(
     nameMap.set(stmt.name, box);
     warnings.push(...subResult.warnings);
   }
-
-  const SPECIAL_OBJECTS = new Set(["inlet", "inlet~", "outlet", "outlet~"]);
 
   function validateAttrs(
     attrs: Record<string, (string | number)[]> | undefined,
@@ -323,6 +313,24 @@ export function compile(
   );
 
   return { success: true, errors: [], warnings, output: patcherJSON };
+}
+
+function firstObjectToken(objectText: string): string {
+  return objectText.trim().split(/\s+/)[0] ?? "";
+}
+
+function isPortObjectStmt(
+  stmt: Statement,
+  objectTypes: readonly string[]
+): stmt is ObjectDefStmt {
+  return stmt.type === "object_def" && objectTypes.some((type) =>
+    isObjectTextKind(stmt.objectText, type)
+  );
+}
+
+function isObjectTextKind(objectText: string, objectType: string): boolean {
+  const trimmed = objectText.trim();
+  return trimmed === objectType || trimmed.startsWith(`${objectType} `);
 }
 
 function buildPatcherJSON(
