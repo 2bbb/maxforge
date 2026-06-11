@@ -299,6 +299,7 @@ fx = p myfx {
     expect(topBox.text).toBe("p myfx");
     expect(topBox.numinlets).toBe(1);
     expect(topBox.numoutlets).toBe(1);
+    expect(topBox.outlettype).toEqual(["signal"]);
     expect(topBox.patcher).toBeDefined();
   });
 
