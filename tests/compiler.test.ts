@@ -329,6 +329,27 @@ fx = p myfx {
     expect(topBox.patcher).toBeDefined();
   });
 
+  it("emits inlet and outlet labels as comments inside subpatchers", () => {
+    const source = `
+fx = p labelled {
+  in = inlet "control input"
+  out = outlet~ "audio output"
+  in -> out
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const innerBoxes = result.output!.patcher.boxes[0].box.patcher!.boxes;
+    const inlet = innerBoxes.find((b) => b.box.maxclass === "inlet")!.box;
+    const outlet = innerBoxes.find((b) => b.box.maxclass === "outlet~")!.box;
+    expect(inlet.text).toBeUndefined();
+    expect(inlet.comment).toBe("control input");
+    expect(outlet.text).toBeUndefined();
+    expect(outlet.comment).toBe("audio output");
+  });
+
   describe("argDependent resolution", () => {
     it("resolves gate outlets from arg", () => {
       const source = `
