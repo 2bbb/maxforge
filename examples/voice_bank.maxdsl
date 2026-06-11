@@ -1,0 +1,17 @@
+patch "Voice Bank" | "Eight repeated oscillator voices generated with for, if, and interpolated arithmetic" | 980x520
+
+dac = ezdac~ at(430, 420)
+
+# One loop creates each oscillator/gain pair.
+# This is the kind of repeated patching that is tedious to do by hand in Max.
+for i in 0..7 {
+  osc_${i} = cycle~ ${110 + i * 27.5} at(${40 + i * 110}, 80)
+  amp_${i} = *~ 0.125 at(${40 + i * 110}, 140)
+  osc_${i} -> amp_${i}
+  amp_${i} -> dac
+
+  if i < 4 {
+    meter_${i} = meter~ at(${40 + i * 110}, 210)
+    amp_${i} -> meter_${i}
+  }
+}

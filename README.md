@@ -63,6 +63,20 @@ Compile:
 node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
 ```
 
+## Examples
+
+```bash
+# Basic hand-written synth patch
+npx maxforge compile examples/basic_synth.maxdsl -o basic_synth.maxpat
+
+# Repeated oscillator bank generated with for/if/arithmetic
+npx maxforge compile examples/voice_bank.maxdsl -o voice_bank.maxpat
+```
+
+`examples/voice_bank.maxdsl` shows the main reason to use maxforge instead of
+manual patching: generating many similar Max objects and connections from a
+small loop.
+
 ## CLI Reference
 
 After `npm run build`, local development can use `node dist/cli/index.js ...`.
@@ -239,6 +253,7 @@ tests/
   fixtures/            DSL fixture files for snapshot testing
 examples/
   basic_synth.maxdsl   Example patch
+  voice_bank.maxdsl    Repeated-object generation example
 ```
 
 ## Development

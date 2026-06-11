@@ -8,6 +8,7 @@ import dbData from "../data/objects.json" with { type: "json" };
 
 const db = dbData as ObjectDatabase;
 const fixturesDir = path.join(__dirname, "fixtures");
+const examplesDir = path.join(__dirname, "..", "examples");
 
 function loadFixture(name: string): string {
   return fs.readFileSync(path.join(fixturesDir, name), "utf-8");
@@ -36,6 +37,27 @@ describe("snapshot", () => {
       expect(result.output!.patcher).toMatchSnapshot(
         path.basename(name, ".maxdsl")
       );
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Public examples
+// ---------------------------------------------------------------------------
+describe("examples", () => {
+  const examples = fs
+    .readdirSync(examplesDir)
+    .filter((name) => name.endsWith(".maxdsl"))
+    .sort();
+
+  for (const name of examples) {
+    it(`compiles example: ${name}`, () => {
+      const source = fs.readFileSync(path.join(examplesDir, name), "utf-8");
+      const { ast, errors } = parse(source);
+      expect(errors).toHaveLength(0);
+
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
     });
   }
 });
