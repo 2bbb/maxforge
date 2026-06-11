@@ -1,12 +1,20 @@
 # maxforge
 
-Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches. Write compact text, get valid Max patch JSON.
+[![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
+
+Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
+Write compact text, get valid Max patch JSON.
 
 maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.
 
 ## Overview
 
-maxforge is a domain-specific language and compiler that lets you describe Max/MSP patches as concise text files (`.maxdsl`) instead of editing JSON by hand or clicking through the Max GUI. It supports:
+maxforge is for the boring part of Max patching: creating many similar objects,
+placing them, and wiring them consistently. Instead of duplicating objects by
+hand in the Max GUI, describe the patch as concise `.maxdsl` text and compile it
+to `.maxpat`.
+
+It supports:
 
 - **Forward compilation** — `.maxdsl` → `.maxpat` JSON
 - **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
@@ -19,19 +27,17 @@ maxforge is a domain-specific language and compiler that lets you describe Max/M
 
 ## Quickstart
 
-Run without installing globally after the package is published:
+Run without installing globally:
 
 ```bash
-npx maxforge compile input.maxdsl -o output.maxpat
-npx maxforge validate input.maxdsl
+npx maxforge@latest compile input.maxdsl -o output.maxpat
+npx maxforge@latest validate input.maxdsl
 ```
 
-For local package smoke testing before publishing:
+Try the generative example after cloning this repository:
 
 ```bash
-npm run build
-pkg="$(npm pack | tail -1)"
-npm exec --package "./$pkg" -- maxforge validate examples/basic_synth.maxdsl
+npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
 ```
 
 For repository development:
@@ -67,10 +73,10 @@ node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
 
 ```bash
 # Basic hand-written synth patch
-npx maxforge compile examples/basic_synth.maxdsl -o basic_synth.maxpat
+npx maxforge@latest compile examples/basic_synth.maxdsl -o basic_synth.maxpat
 
 # Repeated oscillator bank generated with for/if/arithmetic
-npx maxforge compile examples/voice_bank.maxdsl -o voice_bank.maxpat
+npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
 ```
 
 `examples/voice_bank.maxdsl` shows the main reason to use maxforge instead of

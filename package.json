@@ -1,7 +1,7 @@
 {
   "name": "maxforge",
-  "version": "0.1.1",
-  "description": "Unofficial text DSL compiler for generating Max/MSP .maxpat patches",
+  "version": "0.1.2",
+  "description": "Unofficial text-first DSL compiler for generating Max/MSP .maxpat patches",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,8 +21,13 @@
     "max",
     "maxmsp",
     "maxpat",
+    "cycling74",
     "dsl",
-    "compiler"
+    "compiler",
+    "patcher",
+    "max-patcher",
+    "generative",
+    "visual-programming"
   ],
   "author": "2bit",
   "license": "MIT",
@@ -46,5 +51,13 @@
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/2bbb/maxpat-dsl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/2bbb/maxpat-dsl/issues"
+  },
+  "homepage": "https://github.com/2bbb/maxpat-dsl#readme"
 }
