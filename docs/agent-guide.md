@@ -1,9 +1,4 @@
----
-name: maxdsl
-description: maxdsl DSLからMaxMSPパッチ(.maxpat/.maxhelp)を生成する
----
-
-# maxdsl — AI Agent Guide
+# maxforge / maxdsl — AI Agent Guide
 
 Max/MSPパッチを記述する非公式DSL。生JSONの代わりにコンパクトなテキストで記述し、`maxforge` CLIで `.maxpat` に変換する。
 
@@ -250,11 +245,11 @@ env -> mul[1]
 ### 詳細リファレンス
 
 オブジェクトの全仕様は以下を参照:
-- 音声: `.agents/skills/max-patgen/reference/objects_msp.md`
-- ロジック: `.agents/skills/max-patgen/reference/objects_logic.md`
-- MIDI: `.agents/skills/max-patgen/reference/objects_midi.md`
-- Jitter: `.agents/skills/max-patgen/reference/objects_jitter.md`
-- フォーマット: `.agents/skills/max-patgen/reference/format.md`
+- 音声: `docs/agent-guide.md` / bundled object database notes
+- ロジック: `docs/agent-guide.md` / bundled object database notes
+- MIDI: `docs/agent-guide.md` / bundled object database notes
+- Jitter: `docs/agent-guide.md` / bundled object database notes
+- フォーマット: `docs/dsl-spec.md`
 
 ## Error Messages
 

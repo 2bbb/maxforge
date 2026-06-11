@@ -1,6 +1,6 @@
 {
   "name": "maxforge",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Unofficial text-first DSL compiler for generating Max/MSP .maxpat patches",
   "type": "module",
   "main": "dist/index.js",
@@ -40,7 +40,9 @@
     "dist/",
     "data/objects.json",
     "README.md",
+    "SKILL.md",
     "docs/dsl-spec.md",
+    "docs/agent-guide.md",
     "examples/*.maxdsl"
   ],
   "exports": {
@@ -54,10 +56,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/2bbb/maxpat-dsl.git"
+    "url": "git+ssh://git@github.com/2bbb/maxforge.git"
   },
   "bugs": {
-    "url": "https://github.com/2bbb/maxpat-dsl/issues"
+    "url": "https://github.com/2bbb/maxforge/issues"
   },
-  "homepage": "https://github.com/2bbb/maxpat-dsl#readme"
+  "homepage": "https://github.com/2bbb/maxforge#readme"
 }

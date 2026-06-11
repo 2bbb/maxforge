@@ -83,6 +83,17 @@ npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
 manual patching: generating many similar Max objects and connections from a
 small loop.
 
+## AI agent skill
+
+Install the maxforge skill into supported agents with:
+
+```bash
+npx skills add 2bbb/maxforge --skill maxforge
+```
+
+Then ask the agent to use the `maxforge` skill when creating, validating, or
+compiling Max/MSP patches from `.maxdsl`.
+
 ## CLI Reference
 
 After `npm run build`, local development can use `node dist/cli/index.js ...`.
@@ -251,7 +262,7 @@ data/
   objects.json         374-object database
 docs/
   dsl-spec.md          Formal DSL specification (EBNF)
-  skill.md             AI agent documentation
+  agent-guide.md       AI agent documentation
 tests/
   compiler.test.ts     compiler/parser/decompiler test suite
   block.test.ts        brace block parsing regression tests
