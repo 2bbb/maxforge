@@ -198,6 +198,41 @@ osc -> gain
     expect(diffPatchGraphs(first, reordered).operations).toEqual([]);
   });
 
+  it("clones and freezes graph state so revisions cannot become stale", () => {
+    const patcher = {
+      boxes: [{
+        id: "obj-osc",
+        varName: "maxforge_voices_obj_osc",
+        maxclass: "newobj",
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: ["signal"],
+        patchingRect: [10, 20, 80, 22] as [number, number, number, number],
+        text: "cycle~ 440",
+        attributes: {},
+      }],
+      connections: [],
+    };
+    const graph = createPatchGraph("voices", patcher);
+    patcher.boxes[0].text = "cycle~ 880";
+
+    expect(graph.patcher.boxes[0].text).toBe("cycle~ 440");
+    expect(() => {
+      (graph.patcher.boxes as unknown as unknown[]).push({});
+    }).toThrow();
+  });
+
+  it("rejects unsupported protocol versions at the diff boundary", () => {
+    const current = {
+      ...createEmptyPatchGraph("voices"),
+      protocolVersion: 2,
+    } as unknown as PatchGraph;
+
+    expect(() => diffPatchGraphs(current, createEmptyPatchGraph("voices"))).toThrow(
+      "Unsupported patch graph protocol version: 2"
+    );
+  });
+
   it("ignores boxes outside the managed scope", () => {
     const current = createPatchGraph("voices", {
       boxes: [{

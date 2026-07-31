@@ -197,15 +197,18 @@ export function createPatchGraph(
   const scopeError = validateScope(scope);
   if (scopeError) throw new Error(scopeError.message);
 
-  return {
+  const immutablePatcher = cloneAndFreezePatcher(patcher);
+  return Object.freeze({
     protocolVersion: 1,
     scope,
-    revision: calculateRevision(scope, patcher),
-    patcher,
-  };
+    revision: calculateRevision(scope, immutablePatcher),
+    patcher: immutablePatcher,
+  });
 }
 
 export function diffPatchGraphs(current: PatchGraph, desired: PatchGraph): PatchPlan {
+  assertProtocolVersion(current);
+  assertProtocolVersion(desired);
   if (current.scope !== desired.scope) {
     throw new Error(
       `Cannot diff patch graphs with different scopes: "${current.scope}" and "${desired.scope}"`
@@ -602,6 +605,50 @@ function calculateRevision(scope: string, patcher: PatchGraphNode): string {
   return createHash("sha256")
     .update(stableStringify({ scope, patcher: canonicalPatcher(patcher) }))
     .digest("hex");
+}
+
+function cloneAndFreezePatcher(patcher: PatchGraphNode): PatchGraphNode {
+  const boxes = patcher.boxes.map((box) => Object.freeze({
+    ...box,
+    outlettype: Object.freeze([...box.outlettype]),
+    patchingRect: Object.freeze([...box.patchingRect]) as unknown as
+      readonly [number, number, number, number],
+    attributes: Object.freeze(clonePatchRecord(box.attributes)),
+    patcher: box.patcher ? cloneAndFreezePatcher(box.patcher) : undefined,
+  }));
+  const connections = patcher.connections.map((connection) => Object.freeze({
+    source: Object.freeze({ ...connection.source }),
+    destination: Object.freeze({ ...connection.destination }),
+  }));
+  return Object.freeze({
+    boxes: Object.freeze(boxes),
+    connections: Object.freeze(connections),
+  });
+}
+
+function clonePatchRecord(
+  value: Readonly<Record<string, PatchValue>>
+): Record<string, PatchValue> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, clonePatchValue(child)])
+  );
+}
+
+function clonePatchValue(value: PatchValue): PatchValue {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map(clonePatchValue));
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.freeze(clonePatchRecord(value as Readonly<Record<string, PatchValue>>));
+  }
+  return value;
+}
+
+function assertProtocolVersion(graph: PatchGraph): void {
+  const protocolVersion = (graph as { protocolVersion: number }).protocolVersion;
+  if (protocolVersion !== 1) {
+    throw new Error(`Unsupported patch graph protocol version: ${protocolVersion}`);
+  }
 }
 
 function canonicalPatcher(patcher: PatchGraphNode): PatchGraphNode {
