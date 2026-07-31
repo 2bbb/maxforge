@@ -10,23 +10,23 @@ MCP client
   | stdio
 maxforge-mcp (Node.js 20+)
   | ws://127.0.0.1:8766
-one or more bbb.agent.hub instances (native Max external)
-  | correlated request / compact JSON event
 one maxforge.sync per registered patch (native Max external)
   | Max SDK
 containing patcher
 ```
 
-The split is intentional:
+The boundary is intentional:
 
 - MCP, DSL compilation, diffing, and session state belong in Node.js.
-- The generic localhost transport belongs in `bbb.agent.hub`.
-- Patcher ownership validation and mutation belong in `maxforge.sync`.
+- Loopback transport, request routing, patcher ownership validation, and Max SDK
+  mutation belong in `maxforge.sync`.
+- The WebSocket implementation is not duplicated. `maxforge.sync` compiles the
+  reusable, Max-independent client source pinned by the `bbb.agent` submodule.
 
-Putting MCP or a WebSocket stack inside `maxforge.sync` would couple protocol
-churn and network threading to patch mutation. Duplicating `bbb.agent.hub`
-inside this repository would create a second transport implementation with no
-new capability.
+This makes the runtime boundary match the visible patch boundary: each patch
+needs one object, not a transport object, routers, prepends, startup messages,
+and patch cords. WebSocket callbacks enqueue events for Max's main thread;
+network threads never call the Max API directly.
 
 ## Start
 
@@ -60,7 +60,7 @@ Environment variables:
 | Name | Default | Meaning |
 |---|---:|---|
 | `MAXFORGE_WS_HOST` | `127.0.0.1` | WebSocket bind host |
-| `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `bbb.agent.hub` |
+| `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
 
 The host is rejected unless it is exactly `127.0.0.1` or `::1`. Hostnames are
@@ -106,9 +106,9 @@ Arguments:
 Exactly one registered patch must have controller capability. The distributed
 bridge example is that controller; generated patches are not controllers.
 Creation is implemented by `maxforge.sync` with
-`jpatcher_load_frombuffer`. The generated patch contains native
-`bbb.agent.hub` and `maxforge.sync` wiring and does not use JavaScript or
-`node.script`.
+`jpatcher_load_frombuffer`. The generated patch contains one configured
+`maxforge.sync` object and no bootstrap patch cords. It does not use JavaScript
+or `node.script`.
 
 ### `maxforge_inspect_patch`
 
@@ -171,36 +171,32 @@ that touches a managed box or one of its patch cords rejects mutation until the
 caller inspects and reconciles the state. Standalone unmanaged edits are
 reported but do not block managed mutation.
 
-## Max patch wiring
+## Max patch object
 
-Use `examples/mcp_bridge/maxforge_mcp_bridge.maxpat`. Its essential message
-flow is:
+Use `examples/mcp_bridge/maxforge_mcp_bridge.maxpat`. Its complete functional
+content is:
 
-```text
-bbb.agent.hub outlet 1
-  -> route data
-  -> prepend apply
-  -> maxforge.sync
-
-maxforge.sync
-  -> route event
-  -> prepend send
-  -> bbb.agent.hub
+```max
+maxforge.sync @host 127.0.0.1 @port 8766 @scope agent_demo @patcher_id maxforge_bridge @controller 1
 ```
 
-Before connecting, the patch explicitly configures `scope`, `patcher_id`, and
-`controller` on `maxforge.sync`. On `status connected`, it sends `register`.
-The resulting `maxforge.registered` event advertises identity, metadata,
-capability, and either the live revision or `null`.
+The checked-in `.maxdsl` expresses these as box attributes; the generated
+`.maxpat` contains exactly one box and zero patch cords. `maxforge.sync` waits
+until its containing top-level patcher has a visible view, connects, and
+registers automatically. The resulting `maxforge.registered` event advertises
+identity, metadata, capability, and either the live revision or `null`.
+
+Transport lifecycle can also be controlled with `connect`, `disconnect`, and
+`restart`. `status` reports the current connection state. Attributes
+`@reconnect` and `@reconnect_interval` control retry behavior.
 
 `maxforge_create_patch` sends a correlated creation request only to the
 registered controller. The generated patch connects independently and
 registers its own `patcherId`; subsequent apply and inspection requests go
 directly to that patch rather than through the controller.
 
-`bbb.agent.hub` comes from the separate
-[`bbb.agent`](https://github.com/2bbb/bbb.agent) package. Its helper service is
-not used for this flow.
+`bbb.agent` is a recursive build-time submodule only. Max users do not install
+`bbb.agent.hub` or run the `bbb.agent` helper for this flow.
 
 ## Restart and stale-state rule
 

@@ -3,26 +3,23 @@
 This patch lets an MCP client replace a managed Max subgraph without
 `node.script`, Max JavaScript, or raw `thispatcher` commands.
 
-The boundary is deliberately split:
+The boundary is deliberately narrow:
 
 1. `maxforge-mcp` exposes tools over MCP stdio and listens only on
    `127.0.0.1:8766`.
-2. The native `bbb.agent.hub` external carries raw plan JSON over localhost
-   WebSocket.
-3. The native `maxforge.sync` external validates and applies the plan through
-   the Max SDK.
-4. `maxforge.sync` sends revision acknowledgements and live structural patch
+2. The native `maxforge.sync` external owns the localhost WebSocket connection,
+   validates requests, and applies plans through the Max SDK.
+3. `maxforge.sync` sends revision acknowledgements and live structural patch
    snapshots back to the MCP process.
 
 ## Requirements
 
 - Node.js 20 or newer.
 - The built `maxforge.sync` external from this repository.
-- The built `bbb.agent.hub` external from the sibling
-  [bbb.agent](https://github.com/2bbb/bbb.agent) package.
 
-The `bbb.agent` helper process is not used. Only its generic native WebSocket
-transport external is required.
+The external compiles the reusable WebSocket client source pinned through the
+`bbb.agent` submodule. Neither the `bbb.agent.hub` external nor the
+`bbb.agent` helper process is a runtime dependency.
 
 ## Build the patch and external
 
@@ -38,8 +35,8 @@ maxforge compile examples/mcp_bridge/maxforge_mcp_bridge.maxdsl \
   -o examples/mcp_bridge/maxforge_mcp_bridge.maxpat
 ```
 
-Make both repositories visible to Max as packages, then restart Max after
-building or replacing an external.
+Make this repository visible to Max as a package, then restart Max after
+building or replacing the external.
 
 ## MCP configuration
 
@@ -128,7 +125,9 @@ To work in a separate window instead, call `maxforge_create_patch`:
 
 Wait for the tool to return the registered patch, then use
 `patcherId: generated_patch` and scope `generated` for compile, apply, and
-inspection. Do not identify a patch by its title.
+inspection. The generated window also starts with one configured
+`maxforge.sync` object and no bootstrap patch cords. Do not identify a patch by
+its title.
 
 After the MCP process restarts, it cannot reconstruct a graph from a revision
 hash. If Max already reports an initialized revision, pass the previous full

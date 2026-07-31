@@ -228,10 +228,12 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
 
-Max側は`examples/mcp_bridge/`の通り、native `bbb.agent.hub`と
-`maxforge.sync`を接続する。複数パッチをタイトルで推測せず、必ず
-`patcherId`で指定する。Max内でJavaScriptを追加したり、
-agentに生の`thispatcher`コマンドを生成させたりしない。
+Max側は`examples/mcp_bridge/`の通り、接続設定を持つnative
+`maxforge.sync`を1個だけ置く。接続、再接続、登録、request/eventの
+送受信はexternal内部で完結し、bootstrap用のpatch cordは不要。
+複数パッチをタイトルで推測せず、必ず`patcherId`で指定する。Max内で
+JavaScriptを追加したり、agentに生の`thispatcher`コマンドを生成させたり
+しない。
 
 詳細は`docs/mcp.md`を参照。
 

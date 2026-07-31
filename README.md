@@ -175,13 +175,13 @@ npx maxforge@latest plan next.maxdsl \
   -o plan.json
 ```
 
-This repository also contains the native `maxforge.sync` Max external. It
-accepts compact JSON with `apply <json>` or a named Max dictionary with
-`applydict <name>`, validates the complete plan, and mutates the containing
-patcher directly through the Max SDK. It does not route through JavaScript or
-`thispatcher`. Its `inspect` request walks the live containing patcher and emits
-a machine-readable structural snapshot, so an agent does not need the screen
-or a saved `.maxpat` to read patch state.
+This repository also contains the native `maxforge.sync` Max external. It owns
+the loopback WebSocket connection to `maxforge-mcp`, validates complete plans,
+and mutates the containing patcher directly through the Max SDK. It does not
+route through JavaScript, `thispatcher`, or a separate transport object. Its
+`inspect` request walks the live containing patcher and emits a
+machine-readable structural snapshot, so an agent does not need the screen or
+a saved `.maxpat` to read patch state.
 
 Build and install it for local development:
 
@@ -198,10 +198,11 @@ ln -s "$PWD" "$HOME/Documents/Max 9/Packages/maxforge"
 Open `examples/max_sync/maxforge_sync_demo.maxpat` for an end-to-end native
 example, including managed objects inside a generated subpatcher.
 
-`maxforge.sync` verifies `baseRevision` and never touches objects outside the
-exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does **not** provide
-rollback after a runtime mutation failure. Its status outlet emits
-`event <compact-json>` acknowledgements for native localhost transports. See
+`maxforge.sync` auto-connects and registers after its containing top-level
+patcher has a visible view. It verifies `baseRevision` and never touches objects
+outside the exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does
+**not** provide rollback after a runtime mutation failure. Its outlet remains
+available for human-readable status and local diagnostics. See
 [`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
 
 ### MCP live control
@@ -215,11 +216,10 @@ rollback after a runtime mutation failure. Its status outlet emits
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
 
-It listens for a native Max transport only on `127.0.0.1:8766`. The Max patch
-uses `bbb.agent.hub` as the generic WebSocket transport and `maxforge.sync` as
-the validating patch consumer. Each live patch registers a stable `patcherId`,
-so MCP can create and operate multiple independent Max windows without
-ambiguity. No JavaScript runs inside Max.
+It listens for native `maxforge.sync` clients only on `127.0.0.1:8766`. Each
+live patch contains one `maxforge.sync`, registers a stable `patcherId`, and can
+therefore be created or operated as an independent Max window without
+ambiguity. No JavaScript or helper patch wiring runs inside Max.
 
 ```json
 {
@@ -232,9 +232,10 @@ ambiguity. No JavaScript runs inside Max.
 }
 ```
 
-Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing both
-native externals. See [`docs/mcp.md`](docs/mcp.md) for wiring, state recovery,
-security boundaries, and the acknowledgement contract.
+Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing the
+native external. The patch contains exactly one configured object and no patch
+cords. See [`docs/mcp.md`](docs/mcp.md) for transport lifecycle, state
+recovery, security boundaries, and the acknowledgement contract.
 
 ## AI agent skill
 
@@ -422,6 +423,8 @@ src/
     thispatcher.ts     thispatcher command generation
 source/projects/
   maxforge.sync/       Native min-api PatchPlan consumer
+deps/
+  bbb.agent/           Pinned reusable WebSocket transport source
 data/
   objects.json         374-object database
 docs/

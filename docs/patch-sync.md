@@ -111,6 +111,10 @@ cmake --build build
 
 `maxforge.sync` supports:
 
+- automatic loopback WebSocket connection and patch registration after the
+  containing top-level patcher becomes visible;
+- `connect`, `disconnect`, and `restart` — control the native transport;
+- `status` — output the current transport state;
 - `apply <compact-json>` — validate and apply a serialized `PatchPlan`.
 - `validate <compact-json>` — validate without mutation.
 - `applydict <name>` — validate and apply a named Max dictionary.
@@ -123,9 +127,13 @@ cmake --build build
 - `@patcher_id <name>` — select the stable MCP routing identity.
 - `@controller 0|1` — allow or deny native top-level patch creation requests.
 - `@revision_state <hash>` — persisted optimistic concurrency state.
+- `@host 127.0.0.1|::1` — select the loopback MCP host.
+- `@port <1..65535>` — select the MCP WebSocket port.
+- `@reconnect 0|1` — enable or disable automatic reconnect.
+- `@reconnect_interval <100..60000>` — set reconnect delay in milliseconds.
 
-The status outlet also emits machine-readable transport events as
-`event <compact-json>`:
+The external sends machine-readable events directly over its WebSocket
+connection and mirrors them on the outlet as `event <compact-json>`:
 
 - `maxforge.registered` in response to `register`.
 - `maxforge.applied` after all operations succeed.
@@ -136,13 +144,13 @@ The status outlet also emits machine-readable transport events as
 - `maxforge.error` when parsing, validation, or mutation fails.
 - `maxforge.patch.created` after a requested top-level patch is loaded.
 
-These events are intended for a native transport object. Human-readable
-`applied`, `revision`, and `error` messages remain available on the same outlet.
-Failures are also sent through Max's error API, so they use error severity in
-the Max Console rather than appearing as ordinary posts.
+Human-readable `status`, `applied`, `revision`, and `error` messages remain
+available on the same outlet. Failures are also sent through Max's error API,
+so they use error severity in the Max Console rather than appearing as ordinary
+posts.
 
-The MCP transport sends inspection requests through the existing `apply`
-wiring:
+The MCP transport sends inspection requests directly to the registered
+external:
 
 ```json
 {
@@ -174,8 +182,9 @@ A controller can receive:
 
 The host must be loopback and the controller attribute must be enabled.
 `maxforge.sync` loads an unsaved top-level patch through the Max SDK, triggers
-its bootstrap loadbang, and acknowledges creation. The new patch then
-registers through its own native WebSocket connection.
+its bootstrap loadbang, and acknowledges creation. The generated patch
+contains one configured `maxforge.sync` object, then registers through that
+object's independent native WebSocket connection.
 
 The snapshot response contains root patcher metadata plus flattened boxes and
 connections. `targetPath` identifies nested patchers. Box records include
@@ -214,8 +223,6 @@ both root objects and objects inside `p generated_bank`.
 
 - MCP graph state is process-local. An initialized Max scope must be re-seeded
   with accurate `currentDsl` after the MCP process restarts.
-- MCP-to-Max transport currently requires the separate native `bbb.agent.hub`
-  external.
 - New patch creation requires exactly one registered controller patch.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
