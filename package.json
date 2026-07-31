@@ -43,6 +43,7 @@
     "SKILL.md",
     "docs/dsl-spec.md",
     "docs/agent-guide.md",
+    "docs/patch-sync.md",
     "examples/**/*.maxdsl",
     "examples/**/*.maxpat",
     "examples/**/*.cjs",

@@ -180,8 +180,25 @@ fx = p delay_fx at(200, 300) {
 - `inlet` / `inlet~` / `outlet` / `outlet~` は**サブパッチャー内でのみ使用可能**。
 - 親から見た `numinlets` / `numoutlets` は内部の inlet/outlet 数から自動計算。
 - `at(x, y)` は親側の subpatcher box の位置指定。
-- 内部のオブジェクトIDはスコープごとに独立採番。
+- 内部のオブジェクトIDはDSL名から決まり、同じスコープ内で安定する。
 - ネスト可能（subpatcher内にsubpatcher）。
+
+### Managed patch synchronization
+
+agents が同じパッチ領域を継続的に更新する場合は、`thispatcher` の全生成コマンドではなく
+desired graph APIを使う。
+
+```js
+const desired = compileDslToPatchGraph(source, database, "voices");
+const plan = diffPatchGraphs(currentGraph, desired.graph);
+```
+
+- `scope` は英字またはアンダースコアで始まる識別子にする。
+- managed graphでは`@varname`を指定しない。`maxforge_<scope>_obj_...`の形式で自動管理される。
+- `baseRevision`が現在のrevisionと一致しないplanは適用しない。
+- managed scope外のオブジェクトを削除・変更しない。
+- DSLはdesired stateとして扱い、`delete`などの命令型構文を追加しない。
+- 詳細は`docs/patch-sync.md`を参照。
 
 ### Full Example: MIDI Synth
 

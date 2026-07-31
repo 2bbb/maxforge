@@ -253,8 +253,14 @@ name = type [args...] [@attr val ...] [at(x, y)]
 - `=` — literal equals sign.
 - Everything after `=` (trimmed, excluding the optional attributes and `at(...)` suffix) is the **object text**.
 - The first token of the object text is resolved against the object database.
+- Generated box IDs are derived from the DSL name (`name` → `obj-name`) and stay
+  stable when unrelated statements are inserted or reordered.
 - Attributes are emitted as box JSON keys after structural keys are generated. Reserved structural keys are rejected.
 - `at(x, y)` — **Optional** position override. Pins the object to coordinate `(x, y)`. Objects without `at()` are positioned by auto-layout.
+
+When compiling to a managed patch graph, `@varname` is additionally reserved.
+The synchronization layer assigns a scope-owned scripting name for identity and
+ownership tracking.
 
 **Object text examples:**
 

@@ -24,6 +24,7 @@ It supports:
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
 - **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
+- **Desired-state diff plans** — stable managed IDs and ordered patch operations for live patch synchronization
 
 ## Quickstart
 
@@ -131,6 +132,37 @@ open examples/max_node_script/maxforge_node_script_demo.maxpat
 The harness patch itself is generated from
 `examples/max_node_script/maxforge_node_script_demo.maxdsl` with maxforge; the
 runtime payload is `examples/max_node_script/generated_patch.maxdsl`.
+
+## Managed patch synchronization (experimental)
+
+The library API can compile DSL into a scope-owned desired graph and diff it
+against the previously applied graph:
+
+```js
+import {
+  compileDslToPatchGraph,
+  createEmptyPatchGraph,
+  diffPatchGraphs,
+  loadDatabase,
+} from "maxforge";
+
+const db = await loadDatabase();
+const result = compileDslToPatchGraph(dsl, db, "voices");
+if (!result.success) throw new Error(JSON.stringify(result.errors));
+
+const current = createEmptyPatchGraph("voices");
+const plan = diffPatchGraphs(current, result.graph);
+```
+
+Plans contain ordered `disconnect`, `delete`, `create`, `set`, and `connect`
+operations. Objects use stable scripting names derived from the DSL name, so
+growing a `for` loop only creates the new instances instead of replacing the
+whole generated patch.
+
+The graph API only creates plans; it does not mutate Max or provide rollback by
+itself. A plan consumer must verify `baseRevision` before applying it and must
+keep non-`maxforge_<scope>_obj_...` objects outside the managed scope. See
+[`docs/patch-sync.md`](docs/patch-sync.md) for the protocol contract.
 
 ## AI agent skill
 
