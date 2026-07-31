@@ -68,6 +68,58 @@ describe("MaxforgeWebSocketBridge", () => {
     );
   });
 
+  it("requests and validates a correlated live patcher snapshot", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        type: string;
+        requestId: string;
+        scope: string;
+      };
+      expect(request).toMatchObject({
+        type: "maxforge.inspect.request",
+        scope: "voices",
+      });
+      client.send(JSON.stringify(snapshotEvent(request.requestId)));
+    });
+
+    await expect(bridge.inspect("voices")).resolves.toMatchObject({
+      type: "maxforge.snapshot",
+      scope: "voices",
+      revision: null,
+      patcher: {
+        dirty: true,
+        boxes: [{
+          runtimeId: "obj-1",
+          varName: "maxforge_voices_obj_osc",
+          text: "cycle~ 440",
+        }],
+      },
+    });
+    expect(bridge.getLiveRevision("voices")).toBeNull();
+  });
+
+  it("rejects an inspection when Max reports an error", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+
+    client.once("message", () => {
+      client.send(JSON.stringify({
+        type: "maxforge.error",
+        scope: "voices",
+        message: "inspection failed",
+      }));
+    });
+
+    await expect(bridge.inspect("voices")).rejects.toThrow(
+      'Max rejected inspection of scope "voices": inspection failed'
+    );
+  });
+
   it("serializes applies globally because error events have no request identifier", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
@@ -136,6 +188,21 @@ describe("parseBridgeEvent", () => {
     )).toBeUndefined();
     expect(parseBridgeEvent("not json")).toBeUndefined();
   });
+
+  it("rejects malformed structural snapshots", () => {
+    const malformed = snapshotEvent("request-1");
+    const value = {
+      ...malformed,
+      patcher: {
+        ...malformed.patcher,
+        boxes: [{
+          ...malformed.patcher.boxes[0],
+          patchingRect: [0, Number.NaN, 60, 20],
+        }],
+      },
+    };
+    expect(parseBridgeEvent(JSON.stringify(value))).toBeUndefined();
+  });
 });
 
 function createBridge(): MaxforgeWebSocketBridge {
@@ -155,4 +222,31 @@ async function connect(port: number): Promise<WebSocket> {
     client.once("error", reject);
   });
   return client;
+}
+
+function snapshotEvent(requestId: string) {
+  return {
+    type: "maxforge.snapshot",
+    requestId,
+    scope: "voices",
+    revision: null,
+    patcher: {
+      title: "inspection test",
+      filename: "inspection.maxpat",
+      filepath: "/tmp/inspection.maxpat",
+      dirty: true,
+      locked: false,
+      presentation: false,
+      boxes: [{
+        targetPath: [],
+        runtimeId: "obj-1",
+        varName: "maxforge_voices_obj_osc",
+        maxclass: "cycle~",
+        patchingRect: [10, 20, 60, 22],
+        managed: true,
+        text: "cycle~ 440",
+      }],
+      connections: [],
+    },
+  };
 }

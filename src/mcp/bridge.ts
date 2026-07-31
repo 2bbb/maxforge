@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import { PatchPlan } from "../max/patch-graph.js";
 
@@ -20,10 +21,52 @@ export interface MaxforgeErrorEvent {
   readonly message: string;
 }
 
+export interface MaxforgeSnapshotBox {
+  readonly targetPath: readonly string[];
+  readonly runtimeId: string;
+  readonly varName: string;
+  readonly maxclass: string;
+  readonly patchingRect: readonly [number, number, number, number];
+  readonly managed: boolean;
+  readonly text?: string;
+}
+
+export interface MaxforgeSnapshotEndpoint {
+  readonly runtimeId: string;
+  readonly varName: string;
+  readonly port: number;
+}
+
+export interface MaxforgeSnapshotConnection {
+  readonly targetPath: readonly string[];
+  readonly source: MaxforgeSnapshotEndpoint;
+  readonly destination: MaxforgeSnapshotEndpoint;
+}
+
+export interface MaxforgePatcherSnapshot {
+  readonly title: string;
+  readonly filename: string;
+  readonly filepath: string;
+  readonly dirty: boolean;
+  readonly locked: boolean;
+  readonly presentation: boolean;
+  readonly boxes: readonly MaxforgeSnapshotBox[];
+  readonly connections: readonly MaxforgeSnapshotConnection[];
+}
+
+export interface MaxforgeSnapshotEvent {
+  readonly type: "maxforge.snapshot";
+  readonly requestId: string;
+  readonly scope: string;
+  readonly revision: string | null;
+  readonly patcher: MaxforgePatcherSnapshot;
+}
+
 export type MaxforgeBridgeEvent =
   | MaxforgeAppliedEvent
   | MaxforgeRevisionEvent
-  | MaxforgeErrorEvent;
+  | MaxforgeErrorEvent
+  | MaxforgeSnapshotEvent;
 
 export interface MaxforgeBridgeStatus {
   readonly host: string;
@@ -34,6 +77,7 @@ export interface MaxforgeBridgeStatus {
 
 export interface PatchPlanTransport {
   apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent>;
+  inspect(scope: string): Promise<MaxforgeSnapshotEvent>;
   getLiveRevision(scope: string): string | null | undefined;
   getStatus(): MaxforgeBridgeStatus;
 }
@@ -52,7 +96,17 @@ interface PendingApply {
   readonly timeout: NodeJS.Timeout;
 }
 
+interface PendingInspection {
+  readonly client: WebSocket;
+  readonly requestId: string;
+  readonly scope: string;
+  readonly resolve: (event: MaxforgeSnapshotEvent) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout: NodeJS.Timeout;
+}
+
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
+const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 
 export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly host: string;
@@ -60,6 +114,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly applyTimeoutMs: number;
   private readonly clients = new Set<WebSocket>();
   private readonly pendingApplies = new Map<string, PendingApply>();
+  private pendingInspection: PendingInspection | undefined;
   private readonly liveRevisions = new Map<string, string | null>();
   private server: WebSocketServer | undefined;
   private listeningPort: number | undefined;
@@ -94,7 +149,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     const server = new WebSocketServer({
       host: this.host,
       port: this.requestedPort,
-      maxPayload: 64 * 1024,
+      maxPayload: MAX_MESSAGE_BYTES,
     });
     this.server = server;
     server.on("connection", (client) => this.addClient(client));
@@ -145,24 +200,8 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   }
 
   async apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent> {
-    if (!this.server || this.listeningPort === undefined) {
-      throw new Error("WebSocket bridge is not started");
-    }
-
-    const openClients = [...this.clients].filter(
-      (client) => client.readyState === WebSocket.OPEN
-    );
-    if (openClients.length !== 1) {
-      throw new Error(
-        `Exactly one Max client is required, connected: ${openClients.length}`
-      );
-    }
-    if (this.pendingApplies.size > 0) {
-      const [pendingScope] = this.pendingApplies.keys();
-      throw new Error(
-        `An apply is already pending for scope "${pendingScope}"`
-      );
-    }
+    const client = this.getSoleOpenClient();
+    this.assertNoPendingOperation();
 
     return new Promise<MaxforgeAppliedEvent>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -175,7 +214,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       }, this.applyTimeoutMs);
 
       const pending: PendingApply = {
-        client: openClients[0],
+        client,
         targetRevision: plan.targetRevision,
         resolve,
         reject,
@@ -183,9 +222,42 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       };
       this.pendingApplies.set(plan.scope, pending);
 
-      openClients[0].send(JSON.stringify(plan), (error) => {
+      client.send(JSON.stringify(plan), (error) => {
         if (!error) return;
         this.rejectPending(plan.scope, error);
+      });
+    });
+  }
+
+  async inspect(scope: string): Promise<MaxforgeSnapshotEvent> {
+    const client = this.getSoleOpenClient();
+    this.assertNoPendingOperation();
+    const requestId = randomUUID();
+
+    return new Promise<MaxforgeSnapshotEvent>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.rejectPendingInspection(
+          new Error(
+            `Timed out waiting for Max inspection of scope "${scope}"`
+          )
+        );
+      }, this.applyTimeoutMs);
+      this.pendingInspection = {
+        client,
+        requestId,
+        scope,
+        resolve,
+        reject,
+        timeout,
+      };
+
+      client.send(JSON.stringify({
+        type: "maxforge.inspect.request",
+        requestId,
+        scope,
+      }), (error) => {
+        if (!error) return;
+        this.rejectPendingInspection(error);
       });
     });
   }
@@ -213,7 +285,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private addClient(client: WebSocket): void {
     if (this.clients.size > 0) {
       this.rejectAllPending(
-        new Error("An additional Max client connected during apply")
+        new Error("An additional Max client connected during an operation")
       );
     }
     this.liveRevisions.clear();
@@ -237,6 +309,21 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
 
     if (event.type === "maxforge.revision") {
       this.liveRevisions.set(event.scope, event.revision);
+      return;
+    }
+
+    if (event.type === "maxforge.snapshot") {
+      this.handleSnapshot(client, event);
+      return;
+    }
+
+    if (event.type === "maxforge.error" && this.pendingInspection) {
+      this.rejectPendingInspection(
+        new Error(
+          `Max rejected inspection of scope ` +
+          `"${this.pendingInspection.scope}": ${event.message}`
+        )
+      );
       return;
     }
 
@@ -295,6 +382,71 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     pending.resolve(event);
   }
 
+  private handleSnapshot(
+    client: WebSocket,
+    event: MaxforgeSnapshotEvent
+  ): void {
+    const pending = this.pendingInspection;
+    if (!pending) return;
+    if (pending.client !== client) {
+      this.rejectPendingInspection(
+        new Error("Received inspection result from an unexpected Max client")
+      );
+      return;
+    }
+    if (pending.requestId !== event.requestId) {
+      this.rejectPendingInspection(
+        new Error(
+          `Max returned unexpected inspection request id "${event.requestId}"`
+        )
+      );
+      return;
+    }
+    if (pending.scope !== event.scope) {
+      this.rejectPendingInspection(
+        new Error(
+          `Max returned unexpected inspection scope "${event.scope}"`
+        )
+      );
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pendingInspection = undefined;
+    this.liveRevisions.set(event.scope, event.revision);
+    pending.resolve(event);
+  }
+
+  private getSoleOpenClient(): WebSocket {
+    if (!this.server || this.listeningPort === undefined) {
+      throw new Error("WebSocket bridge is not started");
+    }
+    const openClients = [...this.clients].filter(
+      (client) => client.readyState === WebSocket.OPEN
+    );
+    if (openClients.length !== 1) {
+      throw new Error(
+        `Exactly one Max client is required, connected: ${openClients.length}`
+      );
+    }
+    return openClients[0];
+  }
+
+  private assertNoPendingOperation(): void {
+    if (this.pendingApplies.size > 0) {
+      const [pendingScope] = this.pendingApplies.keys();
+      throw new Error(
+        `An apply is already pending for scope "${pendingScope}"`
+      );
+    }
+    if (this.pendingInspection) {
+      throw new Error(
+        `An inspection is already pending for scope ` +
+        `"${this.pendingInspection.scope}"`
+      );
+    }
+  }
+
   private rejectPending(scope: string, error: Error): void {
     const pending = this.pendingApplies.get(scope);
     if (!pending) return;
@@ -303,10 +455,19 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     pending.reject(error);
   }
 
+  private rejectPendingInspection(error: Error): void {
+    const pending = this.pendingInspection;
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingInspection = undefined;
+    pending.reject(error);
+  }
+
   private rejectAllPending(error: Error): void {
     for (const scope of this.pendingApplies.keys()) {
       this.rejectPending(scope, error);
     }
+    this.rejectPendingInspection(error);
   }
 }
 
@@ -362,7 +523,141 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
     };
   }
 
+  if (
+    value.type === "maxforge.snapshot" &&
+    typeof value.requestId === "string" &&
+    value.requestId.length > 0 &&
+    value.requestId.length <= 128 &&
+    (value.revision === null ||
+      (typeof value.revision === "string" &&
+        REVISION_PATTERN.test(value.revision)))
+  ) {
+    const patcher = parsePatcherSnapshot(value.patcher);
+    if (!patcher) return undefined;
+    return {
+      type: value.type,
+      requestId: value.requestId,
+      scope: value.scope,
+      revision: value.revision,
+      patcher,
+    };
+  }
+
   return undefined;
+}
+
+function parsePatcherSnapshot(
+  value: unknown
+): MaxforgePatcherSnapshot | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.title !== "string" ||
+    typeof value.filename !== "string" ||
+    typeof value.filepath !== "string" ||
+    typeof value.dirty !== "boolean" ||
+    typeof value.locked !== "boolean" ||
+    typeof value.presentation !== "boolean" ||
+    !Array.isArray(value.boxes) ||
+    !Array.isArray(value.connections)
+  ) {
+    return undefined;
+  }
+
+  const boxes: MaxforgeSnapshotBox[] = [];
+  for (const box of value.boxes) {
+    const parsed = parseSnapshotBox(box);
+    if (!parsed) return undefined;
+    boxes.push(parsed);
+  }
+  const connections: MaxforgeSnapshotConnection[] = [];
+  for (const connection of value.connections) {
+    const parsed = parseSnapshotConnection(connection);
+    if (!parsed) return undefined;
+    connections.push(parsed);
+  }
+  return {
+    title: value.title,
+    filename: value.filename,
+    filepath: value.filepath,
+    dirty: value.dirty,
+    locked: value.locked,
+    presentation: value.presentation,
+    boxes,
+    connections,
+  };
+}
+
+function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
+  if (
+    !isRecord(value) ||
+    !isStringArray(value.targetPath) ||
+    typeof value.runtimeId !== "string" ||
+    value.runtimeId.length === 0 ||
+    typeof value.varName !== "string" ||
+    typeof value.maxclass !== "string" ||
+    !isRectangle(value.patchingRect) ||
+    typeof value.managed !== "boolean" ||
+    (value.text !== undefined && typeof value.text !== "string")
+  ) {
+    return undefined;
+  }
+  return {
+    targetPath: value.targetPath,
+    runtimeId: value.runtimeId,
+    varName: value.varName,
+    maxclass: value.maxclass,
+    patchingRect: value.patchingRect,
+    managed: value.managed,
+    ...(value.text === undefined ? {} : { text: value.text }),
+  };
+}
+
+function parseSnapshotConnection(
+  value: unknown
+): MaxforgeSnapshotConnection | undefined {
+  if (!isRecord(value) || !isStringArray(value.targetPath)) return undefined;
+  const source = parseSnapshotEndpoint(value.source);
+  const destination = parseSnapshotEndpoint(value.destination);
+  if (!source || !destination) return undefined;
+  return {
+    targetPath: value.targetPath,
+    source,
+    destination,
+  };
+}
+
+function parseSnapshotEndpoint(
+  value: unknown
+): MaxforgeSnapshotEndpoint | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.runtimeId !== "string" ||
+    value.runtimeId.length === 0 ||
+    typeof value.varName !== "string" ||
+    typeof value.port !== "number" ||
+    !Number.isSafeInteger(value.port) ||
+    value.port < 0
+  ) {
+    return undefined;
+  }
+  return {
+    runtimeId: value.runtimeId,
+    varName: value.varName,
+    port: value.port,
+  };
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) &&
+    value.every((entry) => typeof entry === "string");
+}
+
+function isRectangle(
+  value: unknown
+): value is [number, number, number, number] {
+  return Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry));
 }
 
 function isLoopbackHost(host: string): boolean {
