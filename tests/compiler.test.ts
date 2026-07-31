@@ -309,6 +309,27 @@ vol[1] -> dac[1]
     expect(result.output!.patcher.lines).toHaveLength(6);
   });
 
+  it("compiles a button output connection", () => {
+    const source = `
+fire = button
+value = random 128
+display = number
+fire -> value -> display
+`;
+    const { ast, errors: parseErrors } = parse(source);
+    expect(parseErrors).toHaveLength(0);
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines).toHaveLength(2);
+
+    const button = result.output!.patcher.boxes.find(
+      ({ box }) => box.maxclass === "button"
+    )!.box;
+    expect(button.numoutlets).toBe(1);
+    expect(button.outlettype).toEqual(["bang"]);
+  });
+
   it("allows unknown objects with flag", () => {
     const source = `a = custom_object`;
     const { ast } = parse(source);

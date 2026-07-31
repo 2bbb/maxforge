@@ -202,7 +202,7 @@
   "number": { "maxclass": "number", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [50, 20], "category": "logic" },
   "flonum": { "maxclass": "flonum", "numinlets": 1, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [50, 20], "category": "logic" },
   "toggle": { "maxclass": "toggle", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [24, 24], "category": "logic" },
-  "button": { "maxclass": "button", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [24, 24], "category": "logic" },
+  "button": { "maxclass": "button", "numinlets": 1, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [24, 24], "category": "logic" },
   "slider": { "maxclass": "slider", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [20, 140], "category": "logic" },
   "rslider": { "maxclass": "rslider", "numinlets": 2, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [200, 25], "category": "logic" },
   "dial": { "maxclass": "dial", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [40, 40], "category": "logic" },
