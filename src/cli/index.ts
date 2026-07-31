@@ -1,11 +1,20 @@
 #!/usr/bin/env node
 
-import { parse, compile, serialize, decompile, loadDatabase } from "../index.js";
+import {
+  parse,
+  compile,
+  serialize,
+  decompile,
+  loadDatabase,
+  compileDslToPatchGraph,
+  createEmptyPatchGraph,
+  diffPatchGraphs,
+  patcherToPatchGraph,
+  PatchGraph,
+} from "../index.js";
 import { toClipboardText, fromClipboardText } from "../core/clipboard.js";
-import { createReadStream } from "fs";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
+import { dirname, extname, resolve } from "path";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -28,6 +37,11 @@ async function main() {
 
   if (command === "validate") {
     await validateCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "plan") {
+    await planCommand(args.slice(1));
     return;
   }
 
@@ -147,6 +161,90 @@ async function validateCommand(cmdArgs: string[]) {
   console.log("Validation passed.");
 }
 
+async function planCommand(cmdArgs: string[]) {
+  let inputFile = "";
+  let currentFile = "";
+  let outputFile = "";
+  let scope = "default";
+  let allowUnknown = false;
+  let compact = false;
+
+  for (let i = 0; i < cmdArgs.length; i++) {
+    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
+      outputFile = cmdArgs[i + 1];
+      i++;
+    } else if (cmdArgs[i] === "--scope" && cmdArgs[i + 1]) {
+      scope = cmdArgs[i + 1];
+      i++;
+    } else if (cmdArgs[i] === "--current" && cmdArgs[i + 1]) {
+      currentFile = cmdArgs[i + 1];
+      i++;
+    } else if (cmdArgs[i] === "--allow-unknown") {
+      allowUnknown = true;
+    } else if (cmdArgs[i] === "--compact") {
+      compact = true;
+    } else if (!inputFile) {
+      inputFile = cmdArgs[i];
+    }
+  }
+
+  if (!inputFile) {
+    console.error("Error: desired .maxdsl input file required");
+    process.exit(1);
+  }
+
+  const db = await loadDatabase();
+  const source = readFileSync(resolve(inputFile), "utf-8");
+  const desiredResult = compileDslToPatchGraph(source, db, scope, allowUnknown);
+  reportDiagnostics(desiredResult.errors, desiredResult.warnings);
+  if (!desiredResult.success || !desiredResult.graph) process.exit(1);
+
+  let current: PatchGraph;
+  if (!currentFile) {
+    current = createEmptyPatchGraph(scope);
+  } else if (extname(currentFile).toLowerCase() === ".maxdsl") {
+    const currentSource = readFileSync(resolve(currentFile), "utf-8");
+    const currentResult = compileDslToPatchGraph(
+      currentSource,
+      db,
+      scope,
+      allowUnknown
+    );
+    reportDiagnostics(currentResult.errors, currentResult.warnings);
+    if (!currentResult.success || !currentResult.graph) process.exit(1);
+    current = currentResult.graph;
+  } else {
+    const snapshot = JSON.parse(readFileSync(resolve(currentFile), "utf-8"));
+    current = patcherToPatchGraph(snapshot, scope);
+  }
+
+  const plan = diffPatchGraphs(current, desiredResult.graph);
+  const json = compact ? JSON.stringify(plan) : JSON.stringify(plan, null, 2);
+
+  if (outputFile) {
+    const outputPath = resolve(outputFile);
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, `${json}\n`, "utf-8");
+    console.log(`Written: ${outputPath}`);
+  } else {
+    console.log(json);
+  }
+}
+
+function reportDiagnostics(
+  errors: Array<{ line?: number; code: string; message: string }>,
+  warnings: Array<{ line?: number; code: string; message: string }>
+) {
+  for (const warning of warnings) {
+    const location = warning.line ? `Line ${warning.line}: ` : "";
+    console.warn(`${location}Warning [${warning.code}]: ${warning.message}`);
+  }
+  for (const error of errors) {
+    const location = error.line ? `Line ${error.line}: ` : "";
+    console.error(`${location}[${error.code}] ${error.message}`);
+  }
+}
+
 function decompileCommand(cmdArgs: string[]) {
   let inputFile = "";
   let outputFile = "";
@@ -218,17 +316,22 @@ Usage:
   maxforge decompile <input.maxpat> [-o output.maxdsl]
   maxforge from-clipboard [-o output.maxdsl]
   maxforge validate <input.maxdsl> [--allow-unknown]
+  maxforge plan <desired.maxdsl> [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
   decompile       Convert .maxpat JSON to .maxdsl text
   from-clipboard  Read compressed patcher from stdin, output .maxdsl
   validate        Validate .maxdsl without writing output
+  plan            Build a managed PatchPlan for maxforge.sync
 
 Options:
   -o <file>          Output file path
   --allow-unknown    Allow objects not in the database
   --clipboard        Output compressed text pasteable into Max
+  --scope <name>     Managed scope for plan generation (default: default)
+  --current <file>   Current managed .maxdsl or scoped .maxpat snapshot
+  --compact          Emit a single-line JSON plan
 `);
 }
 
