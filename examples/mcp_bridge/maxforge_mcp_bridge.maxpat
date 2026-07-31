@@ -79,7 +79,7 @@
             200,
             20
           ],
-          "text": "Requires maxforge.sync and bbb.agent.hub. Start maxforge-mcp before opening this patch."
+          "text": "Controller patch: creates and routes independent Max windows by patcherId."
         }
       },
       {
@@ -94,7 +94,7 @@
             200,
             20
           ],
-          "text": "Agents may only replace objects in the agent_demo managed scope."
+          "text": "This window is maxforge_bridge; its managed scope is agent_demo."
         }
       },
       {
@@ -149,6 +149,42 @@
             ""
           ],
           "text": "scope agent_demo"
+        }
+      },
+      {
+        "box": {
+          "id": "obj-set_patcher_id",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            275,
+            160,
+            80,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "patcher_id maxforge_bridge"
+        }
+      },
+      {
+        "box": {
+          "id": "obj-enable_controller",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            465,
+            160,
+            80,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "controller 1"
         }
       },
       {
@@ -246,7 +282,7 @@
       },
       {
         "box": {
-          "id": "obj-query_revision",
+          "id": "obj-register_patch",
           "maxclass": "message",
           "numinlets": 2,
           "numoutlets": 1,
@@ -259,7 +295,7 @@
           "outlettype": [
             ""
           ],
-          "text": "revision"
+          "text": "register"
         }
       },
       {
@@ -441,6 +477,54 @@
             0
           ],
           "destination": [
+            "obj-set_patcher_id",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-set_patcher_id",
+            0
+          ],
+          "destination": [
+            "obj-sync",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-load",
+            0
+          ],
+          "destination": [
+            "obj-enable_controller",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-enable_controller",
+            0
+          ],
+          "destination": [
+            "obj-sync",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-load",
+            0
+          ],
+          "destination": [
             "obj-connect_delay",
             0
           ]
@@ -501,7 +585,7 @@
             0
           ],
           "destination": [
-            "obj-query_revision",
+            "obj-register_patch",
             0
           ]
         }
@@ -509,7 +593,7 @@
       {
         "patchline": {
           "source": [
-            "obj-query_revision",
+            "obj-register_patch",
             0
           ],
           "destination": [

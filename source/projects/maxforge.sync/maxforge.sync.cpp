@@ -118,6 +118,18 @@ auto is_valid_scope(const std::string &scope) -> bool {
 	return true;
 }
 
+auto is_valid_patcher_id(const std::string &patcher_id) -> bool {
+	if(patcher_id.empty()) return false;
+	const auto first = static_cast<unsigned char>(patcher_id.front());
+	if(std::isalpha(first) == 0 && patcher_id.front() != '_') return false;
+
+	for(std::size_t index{1}; index < patcher_id.size(); index++) {
+		const auto character = patcher_id[index];
+		if(!is_word_character(character) && character != '-') return false;
+	}
+	return true;
+}
+
 auto json_string(const std::string &value) -> std::string {
 	constexpr char hexadecimal[]{"0123456789abcdef"};
 	std::string result{"\""};
@@ -159,11 +171,207 @@ auto json_string(const std::string &value) -> std::string {
 	return result;
 }
 
+auto json_number(double value) -> std::string;
+
+auto patch_box_json(
+	const std::string &id,
+	const std::string &max_class,
+	const std::string &text,
+	double x,
+	double y,
+	double width,
+	double height
+) -> std::string
+{
+	return
+		"{\"box\":{\"id\":" + json_string(id) +
+		",\"maxclass\":" + json_string(max_class) +
+		",\"patching_rect\":[" +
+		json_number(x) + "," +
+		json_number(y) + "," +
+		json_number(width) + "," +
+		json_number(height) + "]" +
+		(text.empty() ? "" : ",\"text\":" + json_string(text)) +
+		"}}";
+}
+
+auto patch_line_json(
+	const std::string &source,
+	long outlet,
+	const std::string &destination,
+	long inlet
+) -> std::string
+{
+	return
+		"{\"patchline\":{\"source\":[" +
+		json_string(source) + "," + std::to_string(outlet) +
+		"],\"destination\":[" +
+		json_string(destination) + "," + std::to_string(inlet) +
+		"]}}";
+}
+
+auto bridge_patch_json(
+	const std::string &patcher_id,
+	const std::string &scope,
+	const std::string &title,
+	const std::string &host,
+	long port
+) -> std::string
+{
+	const auto host_text =
+		"host " + host + ", port " + std::to_string(port);
+	const std::vector<std::string> boxes{
+		patch_box_json(
+			"obj-title",
+			"comment",
+			title + " — managed by maxforge",
+			30,
+			25,
+			420,
+			20
+		),
+		patch_box_json(
+			"obj-scope",
+			"comment",
+			"patcherId: " + patcher_id + " / scope: " + scope,
+			30,
+			50,
+			420,
+			20
+		),
+		patch_box_json("obj-load", "newobj", "loadbang", 30, 100, 70, 22),
+		patch_box_json("obj-host", "message", host_text, 125, 90, 190, 22),
+		patch_box_json("obj-delay", "newobj", "delay 250", 125, 125, 70, 22),
+		patch_box_json("obj-connect", "message", "connect", 220, 125, 60, 22),
+		patch_box_json(
+			"obj-set-scope",
+			"message",
+			"scope " + scope,
+			30,
+			160,
+			145,
+			22
+		),
+		patch_box_json(
+			"obj-set-id",
+			"message",
+			"patcher_id " + patcher_id,
+			30,
+			195,
+			230,
+			22
+		),
+		patch_box_json(
+			"obj-set-controller",
+			"message",
+			"controller 0",
+			30,
+			230,
+			95,
+			22
+		),
+		patch_box_json("obj-hub", "newobj", "bbb.agent.hub", 340, 125, 105, 22),
+		patch_box_json("obj-route-status", "newobj", "route status", 340, 175, 80, 22),
+		patch_box_json("obj-connected", "newobj", "sel connected", 340, 210, 85, 22),
+		patch_box_json("obj-register", "message", "register", 340, 245, 65, 22),
+		patch_box_json("obj-route-data", "newobj", "route data", 500, 175, 70, 22),
+		patch_box_json("obj-apply", "newobj", "prepend apply", 500, 210, 90, 22),
+		patch_box_json("obj-sync", "newobj", "maxforge.sync", 500, 245, 110, 22),
+		patch_box_json("obj-route-event", "newobj", "route event", 500, 295, 80, 22),
+		patch_box_json("obj-send", "newobj", "prepend send", 500, 330, 90, 22)
+	};
+	const std::vector<std::string> lines{
+		patch_line_json("obj-load", 0, "obj-host", 0),
+		patch_line_json("obj-host", 0, "obj-hub", 0),
+		patch_line_json("obj-load", 0, "obj-delay", 0),
+		patch_line_json("obj-delay", 0, "obj-connect", 0),
+		patch_line_json("obj-connect", 0, "obj-hub", 0),
+		patch_line_json("obj-load", 0, "obj-set-scope", 0),
+		patch_line_json("obj-set-scope", 0, "obj-sync", 0),
+		patch_line_json("obj-load", 0, "obj-set-id", 0),
+		patch_line_json("obj-set-id", 0, "obj-sync", 0),
+		patch_line_json("obj-load", 0, "obj-set-controller", 0),
+		patch_line_json("obj-set-controller", 0, "obj-sync", 0),
+		patch_line_json("obj-hub", 0, "obj-route-status", 0),
+		patch_line_json("obj-route-status", 0, "obj-connected", 0),
+		patch_line_json("obj-connected", 0, "obj-register", 0),
+		patch_line_json("obj-register", 0, "obj-sync", 0),
+		patch_line_json("obj-hub", 1, "obj-route-data", 0),
+		patch_line_json("obj-route-data", 0, "obj-apply", 0),
+		patch_line_json("obj-apply", 0, "obj-sync", 0),
+		patch_line_json("obj-sync", 0, "obj-route-event", 0),
+		patch_line_json("obj-route-event", 0, "obj-send", 0),
+		patch_line_json("obj-send", 0, "obj-hub", 0)
+	};
+
+	std::string result{
+		"{\"patcher\":{\"fileversion\":1,\"classnamespace\":\"box\"," +
+		std::string{"\"rect\":[120,120,900,560],"} +
+		"\"bglocked\":0,\"openinpresentation\":0," +
+		"\"default_fontsize\":12,\"default_fontface\":0," +
+		"\"default_fontname\":\"Arial\",\"gridonopen\":1," +
+		"\"gridsize\":[15,15],\"gridsnaponopen\":1," +
+		"\"objectsnaponopen\":1,\"toolbarvisible\":1,\"boxes\":["
+	};
+	for(std::size_t index{}; index < boxes.size(); index++) {
+		if(0 < index) result += ",";
+		result += boxes[index];
+	}
+	result += "],\"lines\":[";
+	for(std::size_t index{}; index < lines.size(); index++) {
+		if(0 < index) result += ",";
+		result += lines[index];
+	}
+	result += "]}}";
+	return result;
+}
+
 auto json_number(double value) -> std::string {
 	if(!std::isfinite(value)) return "null";
 	std::ostringstream stream;
 	stream << std::setprecision(17) << value;
 	return stream.str();
+}
+
+auto create_bridge_patch(
+	const std::string &patcher_id,
+	const std::string &scope,
+	const std::string &title,
+	const std::string &host,
+	long port
+) -> c74::max::t_object *
+{
+	const auto json = bridge_patch_json(
+		patcher_id,
+		scope,
+		title,
+		host,
+		port
+	);
+	std::string buffer_name{patcher_id + ".maxpat"};
+	auto *patcher = reinterpret_cast<c74::max::t_object *>(
+		c74::max::jpatcher_load_frombuffer(
+			buffer_name.data(),
+			0,
+			json.c_str(),
+			static_cast<long>(json.size()),
+			0,
+			nullptr
+		)
+	);
+	if(!patcher) {
+		throw std::runtime_error("Max could not create the top-level patch");
+	}
+	c74::max::jpatcher_set_title(
+		patcher,
+		c74::max::gensym(title.c_str())
+	);
+	c74::max::jpatcher_set_dirty(patcher, 1);
+	c74::max::object_method(
+		patcher,
+		c74::max::gensym("loadbang")
+	);
+	return patcher;
 }
 
 auto json_string_array(const std::vector<std::string> &values) -> std::string {
@@ -1252,7 +1460,7 @@ public:
 
 	c74::min::inlet<> input{
 		this,
-		"(anything) apply, applydict, validate, inspect, revision"
+		"(anything) apply, applydict, validate, inspect, register, revision"
 	};
 	c74::min::outlet<> status_output{this, "(anything) status and errors"};
 
@@ -1261,6 +1469,20 @@ public:
 		"scope",
 		"default",
 		c74::min::description{"Managed maxforge scope"}
+	};
+
+	c74::min::attribute<c74::min::symbol> patcher_id{
+		this,
+		"patcher_id",
+		"default",
+		c74::min::description{"Stable MCP routing ID for the containing patcher"}
+	};
+
+	c74::min::attribute<long> controller{
+		this,
+		"controller",
+		0,
+		c74::min::description{"Allow this patcher to create top-level patches"}
 	};
 
 	c74::min::attribute<c74::min::symbol> revision_state{
@@ -1327,6 +1549,16 @@ public:
 		}
 	};
 
+	c74::min::message<> register_message{
+		this,
+		"register",
+		"Register the containing patcher with the MCP bridge",
+		MIN_FUNCTION {
+			send_registration_event();
+			return {};
+		}
+	};
+
 	c74::min::message<> inspect_message{
 		this,
 		"inspect",
@@ -1343,6 +1575,37 @@ public:
 	};
 
 private:
+	auto configured_patcher_id() const -> std::string {
+		const c74::min::symbol value_symbol = patcher_id;
+		const std::string value{value_symbol.c_str()};
+		if(!is_valid_patcher_id(value)) {
+			throw std::runtime_error("invalid @patcher_id: " + value);
+		}
+		return value;
+	}
+
+	auto configured_scope() const -> std::string {
+		const c74::min::symbol value_symbol = scope;
+		const std::string value{value_symbol.c_str()};
+		if(!is_valid_scope(value)) {
+			throw std::runtime_error("invalid @scope: " + value);
+		}
+		return value;
+	}
+
+	auto containing_patcher() -> c74::max::t_object * {
+		c74::max::t_object *root_patcher{};
+		const auto patcher_error = c74::max::object_obex_lookup(
+			maxobj(),
+			c74::max::gensym("#P"),
+			&root_patcher
+		);
+		if(patcher_error != c74::max::MAX_ERR_NONE || !root_patcher) {
+			throw std::runtime_error("could not access the containing patcher");
+		}
+		return root_patcher;
+	}
+
 	void process_atoms(const c74::min::atoms &arguments, bool should_apply) {
 		c74::max::t_dictionary *dictionary{};
 		try {
@@ -1362,55 +1625,103 @@ private:
 		c74::max::t_dictionary *dictionary,
 		bool should_apply
 	) {
+		std::string request_id{"local"};
+		std::string event_patcher_id;
+		std::string event_scope;
 		try {
 			std::string message_type;
 			if(dictionary_optional_string(dictionary, "type", message_type)) {
-				if(message_type != "maxforge.inspect.request") {
+				request_id = dictionary_string(dictionary, "requestId");
+				if(request_id.empty() || 128 < request_id.size()) {
+					throw std::runtime_error("invalid MCP request id");
+				}
+				event_patcher_id = dictionary_string(dictionary, "patcherId");
+				if(!is_valid_patcher_id(event_patcher_id)) {
+					throw std::runtime_error("invalid request patcherId");
+				}
+
+				if(message_type == "maxforge.create_patch.request") {
+					event_scope = dictionary_string(dictionary, "scope");
+					if(!is_valid_scope(event_scope)) {
+						throw std::runtime_error("invalid requested patch scope");
+					}
+					const long is_controller = controller;
+					if(is_controller == 0) {
+						throw std::runtime_error(
+							"this maxforge.sync is not a patch-creation controller"
+						);
+					}
+					const auto title = dictionary_string(dictionary, "title");
+					if(title.empty() || 256 < title.size()) {
+						throw std::runtime_error(
+							"patch title must contain between 1 and 256 characters"
+						);
+					}
+					const auto host = dictionary_string(dictionary, "host");
+					if(host != "127.0.0.1" && host != "::1") {
+						throw std::runtime_error(
+							"new patch WebSocket host must be loopback-only"
+						);
+					}
+					const auto port = dictionary_long(dictionary, "port");
+					if(port < 1 || 65535 < port) {
+						throw std::runtime_error("invalid new patch WebSocket port");
+					}
+					create_bridge_patch(
+						event_patcher_id,
+						event_scope,
+						title,
+						host,
+						port
+					);
+					send_patch_created_event(
+						request_id,
+						event_patcher_id,
+						event_scope
+					);
+					return;
+				}
+
+				if(event_patcher_id != configured_patcher_id()) {
+					throw std::runtime_error(
+						"request patcherId \"" + event_patcher_id +
+						"\" does not match @patcher_id \"" +
+						configured_patcher_id() + "\""
+					);
+				}
+
+				if(message_type == "maxforge.inspect.request") {
+					event_scope = dictionary_string(dictionary, "scope");
+					if(event_scope != configured_scope()) {
+						throw std::runtime_error(
+							"inspection scope \"" + event_scope +
+							"\" does not match @scope \"" +
+							configured_scope() + "\""
+						);
+					}
+					send_patch_snapshot(request_id);
+					return;
+				}
+
+				if(message_type == "maxforge.apply.request") {
+					dictionary = dictionary_child(dictionary, "plan");
+				} else {
 					throw std::runtime_error(
 						"unsupported maxforge request type: " + message_type
 					);
 				}
-				const auto request_id = dictionary_string(dictionary, "requestId");
-				const auto requested_scope = dictionary_string(dictionary, "scope");
-				if(request_id.empty() || 128 < request_id.size()) {
-					throw std::runtime_error("invalid inspection request id");
-				}
-				const c74::min::symbol configured_scope_symbol = scope;
-				const std::string configured_scope{
-					configured_scope_symbol.c_str()
-				};
-				if(requested_scope != configured_scope) {
-					throw std::runtime_error(
-						"inspection scope \"" + requested_scope +
-						"\" does not match @scope \"" + configured_scope + "\""
-					);
-				}
-				send_patch_snapshot(request_id);
-				return;
 			}
 
 			const auto plan = parse_plan(dictionary);
-			c74::max::t_object *root_patcher{};
-			const auto patcher_error = c74::max::object_obex_lookup(
-				maxobj(),
-				c74::max::gensym("#P"),
-				&root_patcher
-			);
-			if(patcher_error != c74::max::MAX_ERR_NONE || !root_patcher) {
-				throw std::runtime_error("could not access the containing patcher");
-			}
-
-			const c74::min::symbol configured_scope_symbol = scope;
-			const std::string configured_scope{configured_scope_symbol.c_str()};
-			if(!is_valid_scope(configured_scope)) {
-				throw std::runtime_error("invalid @scope: " + configured_scope);
-			}
+			event_scope = plan.scope;
+			auto *root_patcher = containing_patcher();
+			const auto current_scope = configured_scope();
 			const c74::min::symbol revision_symbol = revision_state;
 			const std::string current_revision{revision_symbol.c_str()};
 			validate_plan_against_patch(
 				plan,
 				root_patcher,
-				configured_scope,
+				current_scope,
 				current_revision
 			);
 
@@ -1424,7 +1735,10 @@ private:
 			}
 
 			for(std::size_t index{}; index < plan.operations.size(); index++) {
-				if(!apply_operation(root_patcher, plan.operations[index])) {
+				if(!apply_operation(
+					root_patcher,
+					plan.operations[index]
+				)) {
 					throw std::runtime_error(
 						"operation " + std::to_string(index) +
 						" failed; the patch may be partially modified"
@@ -1438,44 +1752,42 @@ private:
 				plan.target_revision,
 				static_cast<long>(plan.operations.size())
 			);
-			send_applied_event(plan);
+			send_applied_event(plan, request_id);
 		} catch(const std::exception &exception) {
-			send_error(exception.what());
+			send_error(
+				exception.what(),
+				request_id,
+				event_patcher_id,
+				event_scope
+			);
 		} catch(...) {
-			send_error("unknown plan processing error");
+			send_error(
+				"unknown plan processing error",
+				request_id,
+				event_patcher_id,
+				event_scope
+			);
 		}
 	}
 
 	void send_patch_snapshot(const std::string &request_id) {
 		try {
-			c74::max::t_object *root_patcher{};
-			const auto patcher_error = c74::max::object_obex_lookup(
-				maxobj(),
-				c74::max::gensym("#P"),
-				&root_patcher
-			);
-			if(patcher_error != c74::max::MAX_ERR_NONE || !root_patcher) {
-				throw std::runtime_error("could not access the containing patcher");
-			}
-
-			const c74::min::symbol configured_scope_symbol = scope;
-			const std::string configured_scope{
-				configured_scope_symbol.c_str()
-			};
-			if(!is_valid_scope(configured_scope)) {
-				throw std::runtime_error("invalid @scope: " + configured_scope);
-			}
+			auto *root_patcher = containing_patcher();
+			const auto current_scope = configured_scope();
+			const auto current_patcher_id = configured_patcher_id();
 			const c74::min::symbol revision_symbol = revision_state;
 			const std::string revision{revision_symbol.c_str()};
 			const auto snapshot = make_patch_snapshot(
 				root_patcher,
-				configured_scope
+				current_scope
 			);
 			send_event(
 				"{\"type\":\"maxforge.snapshot\",\"requestId\":" +
 				json_string(request_id) +
+				",\"patcherId\":" +
+				json_string(current_patcher_id) +
 				",\"scope\":" +
-				json_string(configured_scope) +
+				json_string(current_scope) +
 				",\"revision\":" +
 				(revision.empty() ? "null" : json_string(revision)) +
 				",\"patcher\":" +
@@ -1483,29 +1795,112 @@ private:
 				"}"
 			);
 		} catch(const std::exception &exception) {
-			send_error(exception.what());
+			send_error(exception.what(), request_id);
 		} catch(...) {
-			send_error("unknown patch inspection error");
+			send_error("unknown patch inspection error", request_id);
 		}
 	}
 
-	void send_error(const std::string &message) {
+	void send_registration_event() {
+		try {
+			auto *root_patcher = containing_patcher();
+			const auto current_patcher_id = configured_patcher_id();
+			const auto current_scope = configured_scope();
+			const c74::min::symbol revision_symbol = revision_state;
+			const std::string revision{revision_symbol.c_str()};
+			const long is_controller = controller;
+			const auto filename = symbol_string(
+				c74::max::jpatcher_get_filename(root_patcher)
+			);
+			auto title = symbol_string(
+				c74::max::jpatcher_get_title(root_patcher)
+			);
+			if(title.empty()) title = filename;
+			send_event(
+				"{\"type\":\"maxforge.registered\",\"patcherId\":" +
+				json_string(current_patcher_id) +
+				",\"scope\":" +
+				json_string(current_scope) +
+				",\"revision\":" +
+				(revision.empty() ? "null" : json_string(revision)) +
+				",\"controller\":" +
+				(is_controller == 0 ? "false" : "true") +
+				",\"title\":" +
+				json_string(title) +
+				",\"filename\":" +
+				json_string(filename) +
+				",\"filepath\":" +
+				json_string(symbol_string(c74::max::jpatcher_get_filepath(root_patcher))) +
+				"}"
+			);
+		} catch(const std::exception &exception) {
+			send_error(exception.what(), "register");
+		} catch(...) {
+			send_error("unknown patch registration error", "register");
+		}
+	}
+
+	void send_error(
+		const std::string &message,
+		const std::string &request_id = "local",
+		const std::string &event_patcher_id = "",
+		const std::string &event_scope = ""
+	) {
 		cerr << message << c74::min::endl;
 		status_output.send("error", message);
-		const c74::min::symbol configured_scope_symbol = scope;
-		const std::string configured_scope{configured_scope_symbol.c_str()};
+		std::string resolved_patcher_id{event_patcher_id};
+		std::string resolved_scope{event_scope};
+		if(!is_valid_patcher_id(resolved_patcher_id)) {
+			const c74::min::symbol value_symbol = patcher_id;
+			resolved_patcher_id = value_symbol.c_str();
+		}
+		if(!is_valid_patcher_id(resolved_patcher_id)) {
+			resolved_patcher_id = "default";
+		}
+		if(!is_valid_scope(resolved_scope)) {
+			const c74::min::symbol value_symbol = scope;
+			resolved_scope = value_symbol.c_str();
+		}
+		if(!is_valid_scope(resolved_scope)) resolved_scope = "default";
 		send_event(
-			"{\"type\":\"maxforge.error\",\"scope\":" +
-			json_string(configured_scope) +
+			"{\"type\":\"maxforge.error\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(resolved_patcher_id) +
+			",\"scope\":" +
+			json_string(resolved_scope) +
 			",\"message\":" +
 			json_string(message) +
 			"}"
 		);
 	}
 
-	void send_applied_event(const patch_plan &plan) {
+	void send_patch_created_event(
+		const std::string &request_id,
+		const std::string &created_patcher_id,
+		const std::string &created_scope
+	) {
 		send_event(
-			"{\"type\":\"maxforge.applied\",\"scope\":" +
+			"{\"type\":\"maxforge.patch.created\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(created_patcher_id) +
+			",\"scope\":" +
+			json_string(created_scope) +
+			"}"
+		);
+	}
+
+	void send_applied_event(
+		const patch_plan &plan,
+		const std::string &request_id
+	) {
+		send_event(
+			"{\"type\":\"maxforge.applied\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(configured_patcher_id()) +
+			",\"scope\":" +
 			json_string(plan.scope) +
 			",\"revision\":\"" +
 			plan.target_revision +
@@ -1516,11 +1911,11 @@ private:
 	}
 
 	void send_revision_event(const std::string &revision) {
-		const c74::min::symbol configured_scope_symbol = scope;
-		const std::string configured_scope{configured_scope_symbol.c_str()};
 		send_event(
-			"{\"type\":\"maxforge.revision\",\"scope\":" +
-			json_string(configured_scope) +
+			"{\"type\":\"maxforge.revision\",\"patcherId\":" +
+			json_string(configured_patcher_id()) +
+			",\"scope\":" +
+			json_string(configured_scope()) +
 			",\"revision\":" +
 			(revision.empty() ? "null" : "\"" + revision + "\"") +
 			"}"

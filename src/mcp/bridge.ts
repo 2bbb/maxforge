@@ -396,11 +396,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
 
     return new Promise<MaxforgePatchInfo>((resolve, reject) => {
       const timeout = setTimeout(() => {
+        const pending = this.pendingCreates.get(requestId);
+        const missing = pending?.created
+          ? "registration"
+          : "creation acknowledgement and registration";
         this.rejectCreate(
           requestId,
           new Error(
             `Timed out waiting for Max patch "${request.patcherId}" to be ` +
-            "created and registered"
+            `created and registered; missing ${missing}`
           )
         );
       }, this.applyTimeoutMs);
