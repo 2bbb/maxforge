@@ -37,9 +37,10 @@ export function createMaxforgeMcpServer(
     },
     {
       instructions:
-        "Use maxforge_status before mutation. Use maxforge_compile_plan to " +
-        "inspect a diff and maxforge_apply_dsl to apply complete desired DSL. " +
-        "Only maxforge-managed objects in the selected scope may be changed.",
+        "Use maxforge_status and maxforge_inspect_patch before mutation. Use " +
+        "maxforge_compile_plan to inspect a DSL diff and maxforge_apply_dsl " +
+        "to apply complete desired DSL. Only maxforge-managed objects in the " +
+        "selected scope may be changed.",
     }
   );
 
@@ -60,8 +61,41 @@ export function createMaxforgeMcpServer(
       const result = {
         bridge: options.transport.getStatus(),
         managedRevisions: options.service.getManagedRevisions(),
+        inspectionBaselineScopes: options.service.getBaselineScopes(),
       };
       return toolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "maxforge_inspect_patch",
+    {
+      title: "Inspect live Max patch",
+      description:
+        "Read the live patcher graph without using the screen and report structural changes since the last acknowledged maxforge apply.",
+      inputSchema: z.object({
+        scope: scopeSchema.describe("Managed patch scope to inspect"),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ scope }) => {
+      try {
+        const result = await options.service.inspectPatch(scope);
+        return toolResult({
+          scope,
+          comparisonAvailable: result.comparisonAvailable,
+          managedChangeCount: result.managedChangeCount,
+          unmanagedChangeCount: result.unmanagedChangeCount,
+          changes: result.changes,
+          snapshot: result.snapshot,
+        });
+      } catch (error) {
+        return toolError(error);
+      }
     }
   );
 
@@ -114,6 +148,10 @@ export function createMaxforgeMcpServer(
           targetRevision: result.plan.targetRevision,
           operationCount: result.plan.operations.length,
           acknowledgement: result.acknowledgement,
+          baselineCaptured: result.baselineCaptured,
+          ...(result.baselineWarning
+            ? { baselineWarning: result.baselineWarning }
+            : {}),
           warnings: result.warnings,
         });
       } catch (error) {

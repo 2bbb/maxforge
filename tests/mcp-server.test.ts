@@ -9,6 +9,7 @@ import { ObjectDatabase } from "../src/core/types.js";
 import {
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgeSnapshotEvent,
   PatchPlanTransport,
 } from "../src/mcp/bridge.js";
 import { createMaxforgeMcpServer } from "../src/mcp/mcp-server.js";
@@ -33,6 +34,7 @@ describe("maxforge MCP protocol surface", () => {
       const tools = await client.request(2, "tools/list", {});
       expect(toolNames(tools)).toEqual([
         "maxforge_status",
+        "maxforge_inspect_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
@@ -51,6 +53,23 @@ describe("maxforge MCP protocol surface", () => {
             plan: {
               scope: "voices",
               operations: [{ op: "create" }],
+            },
+          },
+        },
+      });
+
+      const inspection = await client.request(4, "tools/call", {
+        name: "maxforge_inspect_patch",
+        arguments: { scope: "voices" },
+      });
+      expect(inspection).toMatchObject({
+        result: {
+          structuredContent: {
+            comparisonAvailable: false,
+            managedChangeCount: 0,
+            snapshot: {
+              type: "maxforge.snapshot",
+              scope: "voices",
             },
           },
         },
@@ -135,6 +154,25 @@ class FakeTransport implements PatchPlanTransport {
       scope: plan.scope,
       revision: plan.targetRevision,
       operations: plan.operations.length,
+    };
+  }
+
+  async inspect(scope: string): Promise<MaxforgeSnapshotEvent> {
+    return {
+      type: "maxforge.snapshot",
+      requestId: "mcp-test",
+      scope,
+      revision: null,
+      patcher: {
+        title: "MCP test",
+        filename: "test.maxpat",
+        filepath: "/tmp/test.maxpat",
+        dirty: false,
+        locked: false,
+        presentation: false,
+        boxes: [],
+        connections: [],
+      },
     };
   }
 
