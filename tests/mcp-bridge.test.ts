@@ -64,8 +64,39 @@ describe("MaxforgeWebSocketBridge", () => {
     });
 
     await expect(bridge.apply(plan)).rejects.toThrow(
-      'Max rejected scope "voices": base revision does not match current revision'
+      'Max rejected scope "voices" while applying "voices": base revision does not match current revision'
     );
+  });
+
+  it("serializes applies globally because error events have no request identifier", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+    const firstPlan = diffPatchGraphs(
+      createEmptyPatchGraph("voices"),
+      createEmptyPatchGraph("voices")
+    );
+    const secondPlan = diffPatchGraphs(
+      createEmptyPatchGraph("meters"),
+      createEmptyPatchGraph("meters")
+    );
+    const firstApply = bridge.apply(firstPlan);
+    await new Promise<void>((resolve) => client.once("message", () => resolve()));
+
+    await expect(bridge.apply(secondPlan)).rejects.toThrow(
+      'An apply is already pending for scope "voices"'
+    );
+
+    client.send(JSON.stringify({
+      type: "maxforge.applied",
+      scope: firstPlan.scope,
+      revision: firstPlan.targetRevision,
+      operations: 0,
+    }));
+    await expect(firstApply).resolves.toMatchObject({
+      scope: "voices",
+      revision: firstPlan.targetRevision,
+    });
   });
 
   it("refuses mutation unless exactly one Max client is connected", async () => {
@@ -85,6 +116,9 @@ describe("MaxforgeWebSocketBridge", () => {
     expect(
       () => new MaxforgeWebSocketBridge({ host: "0.0.0.0" })
     ).toThrow('WebSocket host must be loopback-only, received "0.0.0.0"');
+    expect(
+      () => new MaxforgeWebSocketBridge({ host: "localhost" })
+    ).toThrow('WebSocket host must be loopback-only, received "localhost"');
   });
 });
 

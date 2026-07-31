@@ -63,8 +63,9 @@ Environment variables:
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `bbb.agent.hub` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max acknowledgement timeout |
 
-The host is rejected unless it is exactly `127.0.0.1`, `::1`, or `localhost`.
-There is no supported public-network mode.
+The host is rejected unless it is exactly `127.0.0.1` or `::1`. Hostnames are
+not accepted because a hostname is not itself proof of a loopback bind. There
+is no supported public-network mode.
 
 ## Tools
 
@@ -87,8 +88,9 @@ Arguments:
 
 - `scope` — managed namespace.
 - `desiredDsl` — complete desired state, not an imperative edit.
-- `currentDsl` — optional current desired state; omitted means empty for this
-  read-only tool.
+- `currentDsl` — optional current desired state. When omitted, the tool uses
+  the graph remembered by this MCP process; it uses empty state only when the
+  scope is not initialized.
 
 ### `maxforge_apply_dsl`
 

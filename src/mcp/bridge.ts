@@ -45,6 +45,7 @@ export interface MaxforgeBridgeOptions {
 }
 
 interface PendingApply {
+  readonly client: WebSocket;
   readonly targetRevision: string;
   readonly resolve: (event: MaxforgeAppliedEvent) => void;
   readonly reject: (error: Error) => void;
@@ -93,6 +94,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     const server = new WebSocketServer({
       host: this.host,
       port: this.requestedPort,
+      maxPayload: 64 * 1024,
     });
     this.server = server;
     server.on("connection", (client) => this.addClient(client));
@@ -131,6 +133,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       client.terminate();
     }
     this.clients.clear();
+    this.liveRevisions.clear();
 
     if (!server) return;
     await new Promise<void>((resolve, reject) => {
@@ -154,8 +157,11 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         `Exactly one Max client is required, connected: ${openClients.length}`
       );
     }
-    if (this.pendingApplies.has(plan.scope)) {
-      throw new Error(`An apply is already pending for scope "${plan.scope}"`);
+    if (this.pendingApplies.size > 0) {
+      const [pendingScope] = this.pendingApplies.keys();
+      throw new Error(
+        `An apply is already pending for scope "${pendingScope}"`
+      );
     }
 
     return new Promise<MaxforgeAppliedEvent>((resolve, reject) => {
@@ -169,6 +175,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       }, this.applyTimeoutMs);
 
       const pending: PendingApply = {
+        client: openClients[0],
         targetRevision: plan.targetRevision,
         resolve,
         reject,
@@ -204,10 +211,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   }
 
   private addClient(client: WebSocket): void {
+    if (this.clients.size > 0) {
+      this.rejectAllPending(
+        new Error("An additional Max client connected during apply")
+      );
+    }
+    this.liveRevisions.clear();
     this.clients.add(client);
-    client.on("message", (data) => this.handleMessage(data.toString()));
+    client.on("message", (data) => this.handleMessage(client, data.toString()));
     client.on("close", () => {
       this.clients.delete(client);
+      this.liveRevisions.clear();
       if (this.clients.size === 0) {
         this.rejectAllPending(new Error("Max client disconnected"));
       }
@@ -217,7 +231,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     });
   }
 
-  private handleMessage(raw: string): void {
+  private handleMessage(client: WebSocket, raw: string): void {
     const event = parseBridgeEvent(raw);
     if (!event) return;
 
@@ -226,20 +240,49 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       return;
     }
 
+    const pendingEntry = this.pendingApplies.entries().next().value as
+      | [string, PendingApply]
+      | undefined;
+    if (!pendingEntry) {
+      if (event.type === "maxforge.applied") {
+        this.liveRevisions.set(event.scope, event.revision);
+      }
+      return;
+    }
+    const [pendingScope, pending] = pendingEntry;
+    if (pending.client !== client) {
+      this.rejectPending(
+        pendingScope,
+        new Error("Received acknowledgement from an unexpected Max client")
+      );
+      return;
+    }
+
     if (event.type === "maxforge.error") {
       this.rejectPending(
-        event.scope,
-        new Error(`Max rejected scope "${event.scope}": ${event.message}`)
+        pendingScope,
+        new Error(
+          `Max rejected scope "${event.scope}" while applying ` +
+          `"${pendingScope}": ${event.message}`
+        )
       );
       return;
     }
 
     this.liveRevisions.set(event.scope, event.revision);
-    const pending = this.pendingApplies.get(event.scope);
-    if (!pending) return;
+    if (pendingScope !== event.scope) {
+      this.rejectPending(
+        pendingScope,
+        new Error(
+          `Max acknowledged unexpected scope "${event.scope}" while applying ` +
+          `"${pendingScope}"`
+        )
+      );
+      return;
+    }
     if (pending.targetRevision !== event.revision) {
       this.rejectPending(
-        event.scope,
+        pendingScope,
         new Error(
           `Max acknowledged unexpected revision "${event.revision}" for scope "${event.scope}"`
         )
@@ -248,7 +291,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
 
     clearTimeout(pending.timeout);
-    this.pendingApplies.delete(event.scope);
+    this.pendingApplies.delete(pendingScope);
     pending.resolve(event);
   }
 
@@ -323,7 +366,7 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
 }
 
 function isLoopbackHost(host: string): boolean {
-  return host === "127.0.0.1" || host === "::1" || host === "localhost";
+  return host === "127.0.0.1" || host === "::1";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

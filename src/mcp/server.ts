@@ -10,17 +10,26 @@ import { createMaxforgeMcpServer } from "./mcp-server.js";
 import { MaxforgePatchService } from "./service.js";
 
 export async function main(): Promise<void> {
+  const [database, version] = await Promise.all([
+    loadDatabase(),
+    packageVersion(),
+  ]);
   const bridge = new MaxforgeWebSocketBridge({
     host: process.env.MAXFORGE_WS_HOST ?? "127.0.0.1",
     port: integerEnvironment("MAXFORGE_WS_PORT", 8766),
     applyTimeoutMs: integerEnvironment("MAXFORGE_APPLY_TIMEOUT_MS", 5000),
   });
   const status = await bridge.start();
-  const service = new MaxforgePatchService(await loadDatabase(), bridge);
-  const version = await packageVersion();
-  const handle = serveStdio(() =>
-    createMaxforgeMcpServer({ service, transport: bridge, version })
-  );
+  const service = new MaxforgePatchService(database, bridge);
+  let handle;
+  try {
+    handle = serveStdio(() =>
+      createMaxforgeMcpServer({ service, transport: bridge, version })
+    );
+  } catch (error) {
+    await bridge.close();
+    throw error;
+  }
 
   console.error(
     `maxforge MCP listening for Max on ws://${status.host}:${status.port}`

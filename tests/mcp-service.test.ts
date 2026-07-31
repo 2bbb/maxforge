@@ -40,6 +40,26 @@ describe("MaxforgePatchService", () => {
     });
   });
 
+  it("compiles read-only plans against the same remembered state used by apply", async () => {
+    const transport = new FakeTransport();
+    const service = new MaxforgePatchService(database, transport);
+    await service.applyDsl({
+      scope: "voices",
+      desiredDsl: "osc_0 = cycle~ 440",
+    });
+
+    const preview = service.compilePlan({
+      scope: "voices",
+      desiredDsl: "osc_0 = cycle~ 440\nosc_1 = cycle~ 660",
+    });
+
+    expect(preview.plan.operations).toHaveLength(1);
+    expect(preview.plan.operations[0]).toMatchObject({
+      op: "create",
+      box: { id: "obj-osc_1" },
+    });
+  });
+
   it("does not advance remembered state when Max rejects the plan", async () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(database, transport);

@@ -42,9 +42,8 @@ export class MaxforgePatchService {
 
   compilePlan(request: CompilePlanRequest): CompilePlanResult {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
-    const current = request.currentDsl === undefined
-      ? { graph: createEmptyPatchGraph(request.scope), warnings: [] }
-      : this.compileGraph(request.currentDsl, request.scope);
+    const current = this.resolveCurrentGraph(request);
+    this.assertLiveRevision(request.scope, current.graph);
     return {
       plan: diffPatchGraphs(current.graph, desired.graph),
       desiredGraph: desired.graph,
