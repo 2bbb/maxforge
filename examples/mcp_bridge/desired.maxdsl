@@ -1,0 +1,7 @@
+patch "agent managed objects" | "Desired state sent through maxforge MCP" | 900x520
+
+for i in 0..7 {
+  toggle_${i} = toggle at(${40 + i * 100}, 100)
+  value_${i} = number at(${40 + i * 100}, 160)
+  toggle_${i} -> value_${i}
+}

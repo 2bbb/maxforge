@@ -202,6 +202,33 @@ rollback after a runtime mutation failure. Its status outlet emits
 `event <compact-json>` acknowledgements for native localhost transports. See
 [`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
 
+### MCP live control
+
+`maxforge-mcp` exposes the managed workflow to MCP clients over stdio:
+
+- `maxforge_status`
+- `maxforge_compile_plan`
+- `maxforge_apply_dsl`
+
+It listens for a native Max transport only on `127.0.0.1:8766`. The Max patch
+uses `bbb.agent.hub` as the generic WebSocket transport and `maxforge.sync` as
+the validating patch consumer. No JavaScript runs inside Max.
+
+```json
+{
+  "mcpServers": {
+    "maxforge": {
+      "command": "npx",
+      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"]
+    }
+  }
+}
+```
+
+Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing both
+native externals. See [`docs/mcp.md`](docs/mcp.md) for wiring, state recovery,
+security boundaries, and the acknowledgement contract.
+
 ## AI agent skill
 
 Install the maxforge skill into supported agents with:

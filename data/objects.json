@@ -363,6 +363,9 @@
   "closebang": { "maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic" },
   "thispatcher": { "maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic" },
   "patcherargs": { "maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["", "bang"], "defaultSize": [80, 22], "category": "logic" },
+  "print": { "maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic" },
+  "maxforge.sync": { "maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [100, 22], "category": "external" },
+  "bbb.agent.hub": { "maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [100, 22], "category": "external" },
 
   "split": { "maxclass": "newobj", "numinlets": 3, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "logic" },
   "past": { "maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["bang", ""], "defaultSize": [80, 22], "category": "logic" },

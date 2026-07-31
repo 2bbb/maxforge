@@ -154,7 +154,10 @@ both root objects and objects inside `p generated_bank`.
 
 ## Current limitations
 
-- There is no network transport or MCP server in this package yet.
+- MCP graph state is process-local. An initialized Max scope must be re-seeded
+  with accurate `currentDsl` after the MCP process restarts.
+- MCP-to-Max transport currently requires the separate native `bbb.agent.hub`
+  external.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
 - Manual edits to managed objects require a fresh snapshot before the next diff.

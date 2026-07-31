@@ -1,0 +1,37 @@
+patch "maxforge MCP bridge" | "Agent-driven native Max patch replacement without JavaScript" | 1080x620
+
+title = comment "maxforge MCP bridge: stdio MCP -> localhost WebSocket -> native Max SDK" at(40, 30)
+requirement = comment "Requires maxforge.sync and bbb.agent.hub. Start maxforge-mcp before opening this patch." at(40, 58)
+ownership = comment "Agents may only replace objects in the agent_demo managed scope." at(40, 82)
+
+load = loadbang at(40, 135)
+configure_hub = message "host 127.0.0.1, port 8766" at(145, 125)
+set_scope = message "scope agent_demo" at(145, 160)
+connect_delay = delay 500 at(145, 195)
+connect = message "connect" at(260, 195)
+
+hub = bbb.agent.hub at(390, 195)
+route_status = route status at(390, 250)
+is_connected = sel connected at(390, 290)
+query_revision = message "revision" at(390, 330)
+
+route_data = route data at(610, 250)
+prepend_apply = prepend apply at(610, 290)
+sync = maxforge.sync at(610, 330)
+
+route_event = route event at(610, 385)
+prepend_send = prepend send at(610, 425)
+
+bridge_status = print maxforge-bridge at(290, 250)
+sync_status = print maxforge-sync at(805, 330)
+
+load -> configure_hub -> hub
+load -> set_scope -> sync
+load -> connect_delay -> connect -> hub
+
+hub[0] -> route_status -> is_connected -> query_revision -> sync
+hub[0] -> bridge_status
+hub[1] -> route_data -> prepend_apply -> sync
+
+sync -> route_event -> prepend_send -> hub
+sync -> sync_status

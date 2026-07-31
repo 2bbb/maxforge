@@ -211,6 +211,24 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 - protocol v1はruntime failure時のrollbackを保証しない。
 - 詳細は`docs/patch-sync.md`を参照。
 
+### MCP経由のlive managed patch
+
+MCPクライアントからMaxを変更する場合は、次の順序を崩さない。
+
+1. `maxforge_status`でMaxクライアントがちょうど1つ接続されていることを確認する。
+2. `maxforge_compile_plan`で完全なdesired DSLから差分を確認する。
+3. `maxforge_apply_dsl`へ同じ完全なdesired DSLを渡す。
+4. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した結果だけを成功扱いする。
+
+MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
+`currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
+
+Max側は`examples/mcp_bridge/`の通り、native `bbb.agent.hub`と
+`maxforge.sync`を接続する。Max内でJavaScriptを追加したり、
+agentに生の`thispatcher`コマンドを生成させたりしない。
+
+詳細は`docs/mcp.md`を参照。
+
 ### Full Example: MIDI Synth
 
 ```

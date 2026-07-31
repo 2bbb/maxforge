@@ -74,6 +74,12 @@ for i in 0..7 {
 6. For live managed patching, generate a plan with `maxforge plan` and apply it
    to the native `maxforge.sync` external. Do not invent raw thispatcher commands
    when the target contains nested patchers.
+7. When MCP tools are available, call `maxforge_status`, inspect
+   `maxforge_compile_plan`, then apply the complete desired state with
+   `maxforge_apply_dsl`. Never treat a timeout as success.
+8. After an MCP process restart, provide the previous complete DSL as
+   `currentDsl` when Max reports an initialized scope. A revision hash is not a
+   recoverable graph.
 
 ## Syntax reminders
 
@@ -89,5 +95,7 @@ for i in 0..7 {
 - Full DSL spec: `docs/dsl-spec.md`
 - Public examples: `examples/basic_synth.maxdsl`, `examples/voice_bank.maxdsl`
 - Native live-sync example: `examples/max_sync/`
+- MCP-to-native-Max example: `examples/mcp_bridge/`
 - Managed synchronization protocol: `docs/patch-sync.md`
+- MCP control and restart contract: `docs/mcp.md`
 - Object database used by the compiler: `data/objects.json`
