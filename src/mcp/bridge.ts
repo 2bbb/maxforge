@@ -2,8 +2,24 @@ import { randomUUID } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import { PatchPlan } from "../max/patch-graph.js";
 
+export interface MaxforgePatchInfo {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly revision: string | null;
+  readonly controller: boolean;
+  readonly title: string;
+  readonly filename: string;
+  readonly filepath: string;
+}
+
+export interface MaxforgePatchRegistration extends MaxforgePatchInfo {
+  readonly type: "maxforge.registered";
+}
+
 export interface MaxforgeAppliedEvent {
   readonly type: "maxforge.applied";
+  readonly requestId: string;
+  readonly patcherId: string;
   readonly scope: string;
   readonly revision: string;
   readonly operations: number;
@@ -11,14 +27,24 @@ export interface MaxforgeAppliedEvent {
 
 export interface MaxforgeRevisionEvent {
   readonly type: "maxforge.revision";
+  readonly patcherId: string;
   readonly scope: string;
   readonly revision: string | null;
 }
 
 export interface MaxforgeErrorEvent {
   readonly type: "maxforge.error";
+  readonly requestId?: string;
+  readonly patcherId: string;
   readonly scope: string;
   readonly message: string;
+}
+
+export interface MaxforgePatchCreatedEvent {
+  readonly type: "maxforge.patch.created";
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
 }
 
 export interface MaxforgeSnapshotBox {
@@ -57,28 +83,49 @@ export interface MaxforgePatcherSnapshot {
 export interface MaxforgeSnapshotEvent {
   readonly type: "maxforge.snapshot";
   readonly requestId: string;
+  readonly patcherId: string;
   readonly scope: string;
   readonly revision: string | null;
   readonly patcher: MaxforgePatcherSnapshot;
 }
 
 export type MaxforgeBridgeEvent =
+  | MaxforgePatchRegistration
   | MaxforgeAppliedEvent
   | MaxforgeRevisionEvent
   | MaxforgeErrorEvent
+  | MaxforgePatchCreatedEvent
   | MaxforgeSnapshotEvent;
 
 export interface MaxforgeBridgeStatus {
   readonly host: string;
   readonly port: number;
   readonly connectedClients: number;
+  readonly registeredPatches: readonly MaxforgePatchInfo[];
   readonly liveRevisions: Readonly<Record<string, string | null>>;
 }
 
+export interface CreateMaxPatchRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly title: string;
+}
+
 export interface PatchPlanTransport {
-  apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent>;
-  inspect(scope: string): Promise<MaxforgeSnapshotEvent>;
-  getLiveRevision(scope: string): string | null | undefined;
+  apply(
+    patcherId: string,
+    plan: PatchPlan
+  ): Promise<MaxforgeAppliedEvent>;
+  inspect(
+    patcherId: string,
+    scope: string
+  ): Promise<MaxforgeSnapshotEvent>;
+  createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo>;
+  listPatches(): readonly MaxforgePatchInfo[];
+  getLiveRevision(
+    patcherId: string,
+    scope: string
+  ): string | null | undefined;
   getStatus(): MaxforgeBridgeStatus;
 }
 
@@ -88,8 +135,17 @@ export interface MaxforgeBridgeOptions {
   readonly applyTimeoutMs?: number;
 }
 
-interface PendingApply {
+interface RegisteredClient {
   readonly client: WebSocket;
+  info: MaxforgePatchInfo;
+}
+
+interface PendingApply {
+  readonly kind: "apply";
+  readonly client: WebSocket;
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
   readonly targetRevision: string;
   readonly resolve: (event: MaxforgeAppliedEvent) => void;
   readonly reject: (error: Error) => void;
@@ -97,15 +153,30 @@ interface PendingApply {
 }
 
 interface PendingInspection {
+  readonly kind: "inspection";
   readonly client: WebSocket;
   readonly requestId: string;
+  readonly patcherId: string;
   readonly scope: string;
   readonly resolve: (event: MaxforgeSnapshotEvent) => void;
   readonly reject: (error: Error) => void;
   readonly timeout: NodeJS.Timeout;
 }
 
+interface PendingCreate {
+  readonly client: WebSocket;
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly resolve: (patch: MaxforgePatchInfo) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout: NodeJS.Timeout;
+  created: boolean;
+  registration?: MaxforgePatchInfo;
+}
+
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
+const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 
 export class MaxforgeWebSocketBridge implements PatchPlanTransport {
@@ -113,9 +184,12 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly requestedPort: number;
   private readonly applyTimeoutMs: number;
   private readonly clients = new Set<WebSocket>();
+  private readonly registrations = new Map<string, RegisteredClient>();
+  private readonly clientPatcherIds = new Map<WebSocket, string>();
   private readonly pendingApplies = new Map<string, PendingApply>();
-  private pendingInspection: PendingInspection | undefined;
-  private readonly liveRevisions = new Map<string, string | null>();
+  private readonly pendingInspections = new Map<string, PendingInspection>();
+  private readonly pendingCreates = new Map<string, PendingCreate>();
+  private readonly pendingOperations = new Map<string, string>();
   private server: WebSocketServer | undefined;
   private listeningPort: number | undefined;
 
@@ -184,11 +258,10 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     this.listeningPort = undefined;
     this.rejectAllPending(new Error("WebSocket bridge closed"));
 
-    for (const client of this.clients) {
-      client.terminate();
-    }
+    for (const client of this.clients) client.terminate();
     this.clients.clear();
-    this.liveRevisions.clear();
+    this.registrations.clear();
+    this.clientPatcherIds.clear();
 
     if (!server) return;
     await new Promise<void>((resolve, reject) => {
@@ -199,186 +272,305 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     });
   }
 
-  async apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent> {
-    const client = this.getSoleOpenClient();
-    this.assertNoPendingOperation();
+  async apply(
+    patcherId: string,
+    plan: PatchPlan
+  ): Promise<MaxforgeAppliedEvent> {
+    const registration = this.getRegisteredClient(patcherId, plan.scope);
+    this.assertPatchIsIdle(patcherId);
+    const requestId = randomUUID();
 
     return new Promise<MaxforgeAppliedEvent>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.pendingApplies.delete(plan.scope);
-        reject(
+        this.rejectApply(
+          requestId,
           new Error(
-            `Timed out waiting for Max acknowledgement for scope "${plan.scope}"`
+            `Timed out waiting for Max patch "${patcherId}" to acknowledge ` +
+            `scope "${plan.scope}"`
           )
         );
       }, this.applyTimeoutMs);
-
       const pending: PendingApply = {
-        client,
+        kind: "apply",
+        client: registration.client,
+        requestId,
+        patcherId,
+        scope: plan.scope,
         targetRevision: plan.targetRevision,
         resolve,
         reject,
         timeout,
       };
-      this.pendingApplies.set(plan.scope, pending);
+      this.pendingApplies.set(requestId, pending);
+      this.pendingOperations.set(patcherId, requestId);
 
-      client.send(JSON.stringify(plan), (error) => {
-        if (!error) return;
-        this.rejectPending(plan.scope, error);
+      registration.client.send(JSON.stringify({
+        type: "maxforge.apply.request",
+        requestId,
+        patcherId,
+        plan,
+      }), (error) => {
+        if (error) this.rejectApply(requestId, error);
       });
     });
   }
 
-  async inspect(scope: string): Promise<MaxforgeSnapshotEvent> {
-    const client = this.getSoleOpenClient();
-    this.assertNoPendingOperation();
+  async inspect(
+    patcherId: string,
+    scope: string
+  ): Promise<MaxforgeSnapshotEvent> {
+    const registration = this.getRegisteredClient(patcherId, scope);
+    this.assertPatchIsIdle(patcherId);
     const requestId = randomUUID();
 
     return new Promise<MaxforgeSnapshotEvent>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.rejectPendingInspection(
+        this.rejectInspection(
+          requestId,
           new Error(
-            `Timed out waiting for Max inspection of scope "${scope}"`
+            `Timed out waiting for Max patch "${patcherId}" to inspect ` +
+            `scope "${scope}"`
           )
         );
       }, this.applyTimeoutMs);
-      this.pendingInspection = {
-        client,
+      const pending: PendingInspection = {
+        kind: "inspection",
+        client: registration.client,
         requestId,
+        patcherId,
         scope,
         resolve,
         reject,
         timeout,
       };
+      this.pendingInspections.set(requestId, pending);
+      this.pendingOperations.set(patcherId, requestId);
 
-      client.send(JSON.stringify({
+      registration.client.send(JSON.stringify({
         type: "maxforge.inspect.request",
         requestId,
+        patcherId,
         scope,
       }), (error) => {
-        if (!error) return;
-        this.rejectPendingInspection(error);
+        if (error) this.rejectInspection(requestId, error);
       });
     });
   }
 
-  getLiveRevision(scope: string): string | null | undefined {
-    return this.liveRevisions.get(scope);
+  async createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo> {
+    this.assertStarted();
+    if (!IDENTIFIER_PATTERN.test(request.patcherId)) {
+      throw new Error(`Invalid patcherId: "${request.patcherId}"`);
+    }
+    if (!IDENTIFIER_PATTERN.test(request.scope)) {
+      throw new Error(`Invalid scope: "${request.scope}"`);
+    }
+    if (request.title.length === 0 || 256 < request.title.length) {
+      throw new Error("Patch title must contain between 1 and 256 characters");
+    }
+    if (this.registrations.has(request.patcherId)) {
+      throw new Error(`Max patch "${request.patcherId}" is already registered`);
+    }
+    if (
+      [...this.pendingCreates.values()].some(
+        (pending) => pending.patcherId === request.patcherId
+      )
+    ) {
+      throw new Error(
+        `Creation of Max patch "${request.patcherId}" is already pending`
+      );
+    }
+
+    const controllers = [...this.registrations.values()].filter(
+      ({ client, info }) =>
+        info.controller && client.readyState === WebSocket.OPEN
+    );
+    if (controllers.length !== 1) {
+      throw new Error(
+        "Exactly one patch-creation controller is required, " +
+        `registered: ${controllers.length}`
+      );
+    }
+    const controller = controllers[0];
+    const requestId = randomUUID();
+
+    return new Promise<MaxforgePatchInfo>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.rejectCreate(
+          requestId,
+          new Error(
+            `Timed out waiting for Max patch "${request.patcherId}" to be ` +
+            "created and registered"
+          )
+        );
+      }, this.applyTimeoutMs);
+      this.pendingCreates.set(requestId, {
+        client: controller.client,
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        resolve,
+        reject,
+        timeout,
+        created: false,
+      });
+
+      controller.client.send(JSON.stringify({
+        type: "maxforge.create_patch.request",
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        title: request.title,
+        host: this.host,
+        port: this.listeningPort,
+      }), (error) => {
+        if (error) this.rejectCreate(requestId, error);
+      });
+    });
+  }
+
+  listPatches(): readonly MaxforgePatchInfo[] {
+    return [...this.registrations.values()]
+      .filter(({ client }) => client.readyState === WebSocket.OPEN)
+      .map(({ info }) => ({ ...info }))
+      .sort((left, right) => left.patcherId.localeCompare(right.patcherId));
+  }
+
+  getLiveRevision(
+    patcherId: string,
+    scope: string
+  ): string | null | undefined {
+    const registration = this.registrations.get(patcherId);
+    if (!registration || registration.info.scope !== scope) return undefined;
+    return registration.info.revision;
   }
 
   getStatus(): MaxforgeBridgeStatus {
-    const liveRevisions = Object.fromEntries(
-      [...this.liveRevisions.entries()].sort(([left], [right]) =>
-        left.localeCompare(right)
-      )
-    );
+    const registeredPatches = this.listPatches();
     return {
       host: this.host,
       port: this.listeningPort ?? this.requestedPort,
       connectedClients: [...this.clients].filter(
         (client) => client.readyState === WebSocket.OPEN
       ).length,
-      liveRevisions,
+      registeredPatches,
+      liveRevisions: Object.fromEntries(
+        registeredPatches.map((patch) => [
+          `${patch.patcherId}:${patch.scope}`,
+          patch.revision,
+        ])
+      ),
     };
   }
 
   private addClient(client: WebSocket): void {
-    if (this.clients.size > 0) {
-      this.rejectAllPending(
-        new Error("An additional Max client connected during an operation")
-      );
-    }
-    this.liveRevisions.clear();
     this.clients.add(client);
     client.on("message", (data) => this.handleMessage(client, data.toString()));
-    client.on("close", () => {
-      this.clients.delete(client);
-      this.liveRevisions.clear();
-      if (this.clients.size === 0) {
-        this.rejectAllPending(new Error("Max client disconnected"));
-      }
-    });
-    client.on("error", (error) => {
-      if (this.clients.size <= 1) this.rejectAllPending(error);
-    });
+    client.on("close", () => this.removeClient(client));
+    client.on("error", (error) => this.rejectPendingForClient(client, error));
+  }
+
+  private removeClient(client: WebSocket): void {
+    this.clients.delete(client);
+    const patcherId = this.clientPatcherIds.get(client);
+    this.clientPatcherIds.delete(client);
+    if (patcherId) {
+      const registration = this.registrations.get(patcherId);
+      if (registration?.client === client) this.registrations.delete(patcherId);
+    }
+    this.rejectPendingForClient(client, new Error("Max client disconnected"));
   }
 
   private handleMessage(client: WebSocket, raw: string): void {
     const event = parseBridgeEvent(raw);
     if (!event) return;
 
-    if (event.type === "maxforge.revision") {
-      this.liveRevisions.set(event.scope, event.revision);
+    switch (event.type) {
+      case "maxforge.registered":
+        this.handleRegistration(client, event);
+        return;
+      case "maxforge.revision":
+        this.updateRevision(client, event.patcherId, event.scope, event.revision);
+        return;
+      case "maxforge.snapshot":
+        this.handleSnapshot(client, event);
+        return;
+      case "maxforge.applied":
+        this.handleApplied(client, event);
+        return;
+      case "maxforge.patch.created":
+        this.handlePatchCreated(client, event);
+        return;
+      case "maxforge.error":
+        this.handleError(client, event);
+        return;
+    }
+  }
+
+  private handleRegistration(
+    client: WebSocket,
+    event: MaxforgePatchRegistration
+  ): void {
+    const existing = this.registrations.get(event.patcherId);
+    if (
+      existing &&
+      existing.client !== client &&
+      existing.client.readyState === WebSocket.OPEN
+    ) {
+      client.close(1008, `duplicate patcherId: ${event.patcherId}`);
       return;
     }
 
-    if (event.type === "maxforge.snapshot") {
-      this.handleSnapshot(client, event);
-      return;
+    const previousPatcherId = this.clientPatcherIds.get(client);
+    if (previousPatcherId && previousPatcherId !== event.patcherId) {
+      this.registrations.delete(previousPatcherId);
     }
+    const info = patchInfo(event);
+    this.clientPatcherIds.set(client, event.patcherId);
+    this.registrations.set(event.patcherId, { client, info });
 
-    if (event.type === "maxforge.error" && this.pendingInspection) {
-      this.rejectPendingInspection(
-        new Error(
-          `Max rejected inspection of scope ` +
-          `"${this.pendingInspection.scope}": ${event.message}`
-        )
-      );
-      return;
-    }
-
-    const pendingEntry = this.pendingApplies.entries().next().value as
-      | [string, PendingApply]
-      | undefined;
-    if (!pendingEntry) {
-      if (event.type === "maxforge.applied") {
-        this.liveRevisions.set(event.scope, event.revision);
+    for (const pending of this.pendingCreates.values()) {
+      if (
+        pending.patcherId === event.patcherId &&
+        pending.scope === event.scope
+      ) {
+        pending.registration = info;
+        this.resolveCreateIfReady(pending);
       }
-      return;
     }
-    const [pendingScope, pending] = pendingEntry;
-    if (pending.client !== client) {
-      this.rejectPending(
-        pendingScope,
-        new Error("Received acknowledgement from an unexpected Max client")
-      );
-      return;
-    }
+  }
 
-    if (event.type === "maxforge.error") {
-      this.rejectPending(
-        pendingScope,
-        new Error(
-          `Max rejected scope "${event.scope}" while applying ` +
-          `"${pendingScope}": ${event.message}`
-        )
-      );
-      return;
-    }
-
-    this.liveRevisions.set(event.scope, event.revision);
-    if (pendingScope !== event.scope) {
-      this.rejectPending(
-        pendingScope,
-        new Error(
-          `Max acknowledged unexpected scope "${event.scope}" while applying ` +
-          `"${pendingScope}"`
-        )
-      );
+  private handleApplied(
+    client: WebSocket,
+    event: MaxforgeAppliedEvent
+  ): void {
+    const pending = this.pendingApplies.get(event.requestId);
+    if (!pending) return;
+    const mismatch = validatePendingResponse(pending, client, event);
+    if (mismatch) {
+      this.rejectApply(event.requestId, new Error(mismatch));
       return;
     }
     if (pending.targetRevision !== event.revision) {
-      this.rejectPending(
-        pendingScope,
+      this.rejectApply(
+        event.requestId,
         new Error(
-          `Max acknowledged unexpected revision "${event.revision}" for scope "${event.scope}"`
+          `Max patch "${event.patcherId}" acknowledged unexpected revision ` +
+          `"${event.revision}"`
         )
       );
       return;
     }
 
     clearTimeout(pending.timeout);
-    this.pendingApplies.delete(pendingScope);
+    this.pendingApplies.delete(event.requestId);
+    this.pendingOperations.delete(event.patcherId);
+    this.updateRevision(
+      client,
+      event.patcherId,
+      event.scope,
+      event.revision
+    );
     pending.resolve(event);
   }
 
@@ -386,88 +578,195 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     client: WebSocket,
     event: MaxforgeSnapshotEvent
   ): void {
-    const pending = this.pendingInspection;
+    const pending = this.pendingInspections.get(event.requestId);
     if (!pending) return;
-    if (pending.client !== client) {
-      this.rejectPendingInspection(
-        new Error("Received inspection result from an unexpected Max client")
-      );
-      return;
-    }
-    if (pending.requestId !== event.requestId) {
-      this.rejectPendingInspection(
-        new Error(
-          `Max returned unexpected inspection request id "${event.requestId}"`
-        )
-      );
-      return;
-    }
-    if (pending.scope !== event.scope) {
-      this.rejectPendingInspection(
-        new Error(
-          `Max returned unexpected inspection scope "${event.scope}"`
-        )
-      );
+    const mismatch = validatePendingResponse(pending, client, event);
+    if (mismatch) {
+      this.rejectInspection(event.requestId, new Error(mismatch));
       return;
     }
 
     clearTimeout(pending.timeout);
-    this.pendingInspection = undefined;
-    this.liveRevisions.set(event.scope, event.revision);
+    this.pendingInspections.delete(event.requestId);
+    this.pendingOperations.delete(event.patcherId);
+    this.updateRevision(
+      client,
+      event.patcherId,
+      event.scope,
+      event.revision
+    );
     pending.resolve(event);
   }
 
-  private getSoleOpenClient(): WebSocket {
+  private handlePatchCreated(
+    client: WebSocket,
+    event: MaxforgePatchCreatedEvent
+  ): void {
+    const pending = this.pendingCreates.get(event.requestId);
+    if (!pending) return;
+    if (
+      pending.client !== client ||
+      pending.patcherId !== event.patcherId ||
+      pending.scope !== event.scope
+    ) {
+      this.rejectCreate(
+        event.requestId,
+        new Error("Max returned a mismatched patch creation acknowledgement")
+      );
+      return;
+    }
+    pending.created = true;
+    this.resolveCreateIfReady(pending);
+  }
+
+  private handleError(client: WebSocket, event: MaxforgeErrorEvent): void {
+    if (!event.requestId) return;
+    const pendingApply = this.pendingApplies.get(event.requestId);
+    if (pendingApply) {
+      if (pendingApply.client !== client) return;
+      this.rejectApply(
+        event.requestId,
+        new Error(
+          `Max patch "${event.patcherId}" rejected request ` +
+          `"${event.requestId}": ${event.message}`
+        )
+      );
+      return;
+    }
+    const pendingInspection = this.pendingInspections.get(event.requestId);
+    if (pendingInspection) {
+      if (pendingInspection.client !== client) return;
+      this.rejectInspection(
+        event.requestId,
+        new Error(
+          `Max patch "${event.patcherId}" rejected request ` +
+          `"${event.requestId}": ${event.message}`
+        )
+      );
+      return;
+    }
+    const pendingCreate = this.pendingCreates.get(event.requestId);
+    if (pendingCreate?.client === client) {
+      this.rejectCreate(
+        event.requestId,
+        new Error(
+          `Max controller rejected patch creation for ` +
+          `"${pendingCreate.patcherId}": ${event.message}`
+        )
+      );
+    }
+  }
+
+  private updateRevision(
+    client: WebSocket,
+    patcherId: string,
+    scope: string,
+    revision: string | null
+  ): void {
+    const registration = this.registrations.get(patcherId);
+    if (
+      !registration ||
+      registration.client !== client ||
+      registration.info.scope !== scope
+    ) {
+      return;
+    }
+    registration.info = { ...registration.info, revision };
+  }
+
+  private getRegisteredClient(
+    patcherId: string,
+    scope: string
+  ): RegisteredClient {
+    this.assertStarted();
+    const registration = this.registrations.get(patcherId);
+    if (
+      !registration ||
+      registration.client.readyState !== WebSocket.OPEN
+    ) {
+      throw new Error(`Max patch "${patcherId}" is not registered`);
+    }
+    if (registration.info.scope !== scope) {
+      throw new Error(
+        `Max patch "${patcherId}" manages scope ` +
+        `"${registration.info.scope}", not "${scope}"`
+      );
+    }
+    return registration;
+  }
+
+  private assertStarted(): void {
     if (!this.server || this.listeningPort === undefined) {
       throw new Error("WebSocket bridge is not started");
     }
-    const openClients = [...this.clients].filter(
-      (client) => client.readyState === WebSocket.OPEN
-    );
-    if (openClients.length !== 1) {
-      throw new Error(
-        `Exactly one Max client is required, connected: ${openClients.length}`
-      );
-    }
-    return openClients[0];
   }
 
-  private assertNoPendingOperation(): void {
-    if (this.pendingApplies.size > 0) {
-      const [pendingScope] = this.pendingApplies.keys();
+  private assertPatchIsIdle(patcherId: string): void {
+    const requestId = this.pendingOperations.get(patcherId);
+    if (requestId) {
       throw new Error(
-        `An apply is already pending for scope "${pendingScope}"`
-      );
-    }
-    if (this.pendingInspection) {
-      throw new Error(
-        `An inspection is already pending for scope ` +
-        `"${this.pendingInspection.scope}"`
+        `Max patch "${patcherId}" already has pending request "${requestId}"`
       );
     }
   }
 
-  private rejectPending(scope: string, error: Error): void {
-    const pending = this.pendingApplies.get(scope);
+  private resolveCreateIfReady(pending: PendingCreate): void {
+    if (!pending.created || !pending.registration) return;
+    clearTimeout(pending.timeout);
+    this.pendingCreates.delete(pending.requestId);
+    pending.resolve(pending.registration);
+  }
+
+  private rejectApply(requestId: string, error: Error): void {
+    const pending = this.pendingApplies.get(requestId);
     if (!pending) return;
     clearTimeout(pending.timeout);
-    this.pendingApplies.delete(scope);
+    this.pendingApplies.delete(requestId);
+    this.pendingOperations.delete(pending.patcherId);
     pending.reject(error);
   }
 
-  private rejectPendingInspection(error: Error): void {
-    const pending = this.pendingInspection;
+  private rejectInspection(requestId: string, error: Error): void {
+    const pending = this.pendingInspections.get(requestId);
     if (!pending) return;
     clearTimeout(pending.timeout);
-    this.pendingInspection = undefined;
+    this.pendingInspections.delete(requestId);
+    this.pendingOperations.delete(pending.patcherId);
     pending.reject(error);
+  }
+
+  private rejectCreate(requestId: string, error: Error): void {
+    const pending = this.pendingCreates.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingCreates.delete(requestId);
+    pending.reject(error);
+  }
+
+  private rejectPendingForClient(client: WebSocket, error: Error): void {
+    for (const pending of [...this.pendingApplies.values()]) {
+      if (pending.client === client) this.rejectApply(pending.requestId, error);
+    }
+    for (const pending of [...this.pendingInspections.values()]) {
+      if (pending.client === client) {
+        this.rejectInspection(pending.requestId, error);
+      }
+    }
+    for (const pending of [...this.pendingCreates.values()]) {
+      if (pending.client === client) this.rejectCreate(pending.requestId, error);
+    }
   }
 
   private rejectAllPending(error: Error): void {
-    for (const scope of this.pendingApplies.keys()) {
-      this.rejectPending(scope, error);
+    for (const requestId of [...this.pendingApplies.keys()]) {
+      this.rejectApply(requestId, error);
     }
-    this.rejectPendingInspection(error);
+    for (const requestId of [...this.pendingInspections.keys()]) {
+      this.rejectInspection(requestId, error);
+    }
+    for (const requestId of [...this.pendingCreates.keys()]) {
+      this.rejectCreate(requestId, error);
+    }
   }
 }
 
@@ -478,13 +777,38 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   } catch {
     return undefined;
   }
-  if (!isRecord(value) || typeof value.type !== "string") return undefined;
-  if (typeof value.scope !== "string" || value.scope.length === 0) {
+  if (
+    !isRecord(value) ||
+    typeof value.type !== "string" ||
+    !isIdentifier(value.patcherId) ||
+    !isIdentifier(value.scope)
+  ) {
     return undefined;
   }
 
   if (
+    value.type === "maxforge.registered" &&
+    isRevisionOrNull(value.revision) &&
+    typeof value.controller === "boolean" &&
+    typeof value.title === "string" &&
+    typeof value.filename === "string" &&
+    typeof value.filepath === "string"
+  ) {
+    return {
+      type: value.type,
+      patcherId: value.patcherId,
+      scope: value.scope,
+      revision: value.revision,
+      controller: value.controller,
+      title: value.title,
+      filename: value.filename,
+      filepath: value.filepath,
+    };
+  }
+
+  if (
     value.type === "maxforge.applied" &&
+    isRequestId(value.requestId) &&
     typeof value.revision === "string" &&
     REVISION_PATTERN.test(value.revision) &&
     typeof value.operations === "number" &&
@@ -493,6 +817,8 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   ) {
     return {
       type: value.type,
+      requestId: value.requestId,
+      patcherId: value.patcherId,
       scope: value.scope,
       revision: value.revision,
       operations: value.operations,
@@ -501,12 +827,11 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
 
   if (
     value.type === "maxforge.revision" &&
-    (value.revision === null ||
-      (typeof value.revision === "string" &&
-        REVISION_PATTERN.test(value.revision)))
+    isRevisionOrNull(value.revision)
   ) {
     return {
       type: value.type,
+      patcherId: value.patcherId,
       scope: value.scope,
       revision: value.revision,
     };
@@ -514,29 +839,43 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
 
   if (
     value.type === "maxforge.error" &&
-    typeof value.message === "string"
+    typeof value.message === "string" &&
+    (value.requestId === undefined || isRequestId(value.requestId))
   ) {
     return {
       type: value.type,
+      patcherId: value.patcherId,
       scope: value.scope,
       message: value.message,
+      ...(value.requestId === undefined
+        ? {}
+        : { requestId: value.requestId }),
+    };
+  }
+
+  if (
+    value.type === "maxforge.patch.created" &&
+    isRequestId(value.requestId)
+  ) {
+    return {
+      type: value.type,
+      requestId: value.requestId,
+      patcherId: value.patcherId,
+      scope: value.scope,
     };
   }
 
   if (
     value.type === "maxforge.snapshot" &&
-    typeof value.requestId === "string" &&
-    value.requestId.length > 0 &&
-    value.requestId.length <= 128 &&
-    (value.revision === null ||
-      (typeof value.revision === "string" &&
-        REVISION_PATTERN.test(value.revision)))
+    isRequestId(value.requestId) &&
+    isRevisionOrNull(value.revision)
   ) {
     const patcher = parsePatcherSnapshot(value.patcher);
     if (!patcher) return undefined;
     return {
       type: value.type,
       requestId: value.requestId,
+      patcherId: value.patcherId,
       scope: value.scope,
       revision: value.revision,
       patcher,
@@ -544,6 +883,38 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   }
 
   return undefined;
+}
+
+function validatePendingResponse(
+  pending: PendingApply | PendingInspection,
+  client: WebSocket,
+  event: MaxforgeAppliedEvent | MaxforgeSnapshotEvent
+): string | undefined {
+  if (pending.client !== client) {
+    return "Received a response from an unexpected Max client";
+  }
+  if (
+    pending.patcherId !== event.patcherId ||
+    pending.scope !== event.scope
+  ) {
+    return (
+      `Max returned patch "${event.patcherId}" scope "${event.scope}" for ` +
+      `request targeting patch "${pending.patcherId}" scope "${pending.scope}"`
+    );
+  }
+  return undefined;
+}
+
+function patchInfo(event: MaxforgePatchRegistration): MaxforgePatchInfo {
+  return {
+    patcherId: event.patcherId,
+    scope: event.scope,
+    revision: event.revision,
+    controller: event.controller,
+    title: event.title,
+    filename: event.filename,
+    filepath: event.filepath,
+  };
 }
 
 function parsePatcherSnapshot(
@@ -658,6 +1029,19 @@ function isRectangle(
   return Array.isArray(value) &&
     value.length === 4 &&
     value.every((entry) => typeof entry === "number" && Number.isFinite(entry));
+}
+
+function isRevisionOrNull(value: unknown): value is string | null {
+  return value === null ||
+    (typeof value === "string" && REVISION_PATTERN.test(value));
+}
+
+function isRequestId(value: unknown): value is string {
+  return typeof value === "string" && 0 < value.length && value.length <= 128;
+}
+
+function isIdentifier(value: unknown): value is string {
+  return typeof value === "string" && IDENTIFIER_PATTERN.test(value);
 }
 
 function isLoopbackHost(host: string): boolean {

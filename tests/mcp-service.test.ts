@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
+  CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgePatchInfo,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
@@ -19,10 +21,12 @@ describe("MaxforgePatchService", () => {
     const service = new MaxforgePatchService(database, transport);
 
     const first = await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc_0 = cycle~ 440",
     });
     const second = await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc_0 = cycle~ 440\nosc_1 = cycle~ 660",
     });
@@ -38,7 +42,7 @@ describe("MaxforgePatchService", () => {
       box: { id: "obj-osc_1" },
     });
     expect(service.getManagedRevisions()).toEqual({
-      voices: second.plan.targetRevision,
+      "patch-a:voices": second.plan.targetRevision,
     });
   });
 
@@ -46,11 +50,13 @@ describe("MaxforgePatchService", () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(database, transport);
     await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc_0 = cycle~ 440",
     });
 
     const preview = service.compilePlan({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc_0 = cycle~ 440\nosc_1 = cycle~ 660",
     });
@@ -68,6 +74,7 @@ describe("MaxforgePatchService", () => {
     transport.failure = new Error("rejected");
 
     await expect(service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     })).rejects.toThrow("rejected");
@@ -77,10 +84,11 @@ describe("MaxforgePatchService", () => {
 
   it("requires current DSL after MCP restarts against initialized Max state", async () => {
     const transport = new FakeTransport();
-    transport.liveRevisions.set("voices", "a".repeat(64));
+    transport.liveRevisions.set("patch-a:voices", "a".repeat(64));
     const service = new MaxforgePatchService(database, transport);
 
     await expect(service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     })).rejects.toThrow("this MCP process has no graph state");
@@ -89,14 +97,15 @@ describe("MaxforgePatchService", () => {
 
   it("rejects caller-provided current DSL when its revision differs from Max", async () => {
     const transport = new FakeTransport();
-    transport.liveRevisions.set("voices", "b".repeat(64));
+    transport.liveRevisions.set("patch-a:voices", "b".repeat(64));
     const service = new MaxforgePatchService(database, transport);
 
     await expect(service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       currentDsl: "osc = cycle~ 440",
       desiredDsl: "osc = cycle~ 880",
-    })).rejects.toThrow("does not match Max scope");
+    })).rejects.toThrow("does not match Max patch");
     expect(transport.plans).toHaveLength(0);
   });
 
@@ -105,6 +114,7 @@ describe("MaxforgePatchService", () => {
     const service = new MaxforgePatchService(database, transport);
 
     await expect(service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = object_that_does_not_exist",
     })).rejects.toThrow("[E003]");
@@ -115,6 +125,7 @@ describe("MaxforgePatchService", () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(database, transport);
     await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     });
@@ -126,7 +137,7 @@ describe("MaxforgePatchService", () => {
       })),
     };
 
-    const result = await service.inspectPatch("voices");
+    const result = await service.inspectPatch("patch-a", "voices");
 
     expect(result).toMatchObject({
       comparisonAvailable: true,
@@ -146,6 +157,7 @@ describe("MaxforgePatchService", () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(database, transport);
     await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     });
@@ -158,6 +170,7 @@ describe("MaxforgePatchService", () => {
     };
 
     await expect(service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 660",
     })).rejects.toThrow("has 1 managed manual change");
@@ -170,6 +183,7 @@ describe("MaxforgePatchService", () => {
     transport.inspectionFailure = new Error("snapshot timeout");
 
     const result = await service.applyDsl({
+      patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     });
@@ -179,7 +193,7 @@ describe("MaxforgePatchService", () => {
       "Max applied the patch"
     );
     expect(service.getManagedRevisions()).toEqual({
-      voices: result.plan.targetRevision,
+      "patch-a:voices": result.plan.targetRevision,
     });
   });
 });
@@ -191,31 +205,62 @@ class FakeTransport implements PatchPlanTransport {
   inspectionFailure: Error | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
 
-  async apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent> {
+  async apply(
+    patcherId: string,
+    plan: PatchPlan
+  ): Promise<MaxforgeAppliedEvent> {
     this.plans.push(plan);
     if (this.failure) throw this.failure;
-    this.liveRevisions.set(plan.scope, plan.targetRevision);
+    this.liveRevisions.set(
+      `${patcherId}:${plan.scope}`,
+      plan.targetRevision
+    );
     return {
       type: "maxforge.applied",
+      requestId: "fake-apply",
+      patcherId,
       scope: plan.scope,
       revision: plan.targetRevision,
       operations: plan.operations.length,
     };
   }
 
-  async inspect(scope: string): Promise<MaxforgeSnapshotEvent> {
+  async inspect(
+    patcherId: string,
+    scope: string
+  ): Promise<MaxforgeSnapshotEvent> {
     if (this.inspectionFailure) throw this.inspectionFailure;
     return {
       type: "maxforge.snapshot",
       requestId: "fake-request",
+      patcherId,
       scope,
-      revision: this.liveRevisions.get(scope) ?? null,
+      revision: this.liveRevisions.get(`${patcherId}:${scope}`) ?? null,
       patcher: this.snapshot,
     };
   }
 
-  getLiveRevision(scope: string): string | null | undefined {
-    return this.liveRevisions.get(scope);
+  async createPatch(
+    request: CreateMaxPatchRequest
+  ): Promise<MaxforgePatchInfo> {
+    return {
+      ...request,
+      revision: null,
+      controller: false,
+      filename: "",
+      filepath: "",
+    };
+  }
+
+  listPatches(): readonly MaxforgePatchInfo[] {
+    return [];
+  }
+
+  getLiveRevision(
+    patcherId: string,
+    scope: string
+  ): string | null | undefined {
+    return this.liveRevisions.get(`${patcherId}:${scope}`);
   }
 
   getStatus(): MaxforgeBridgeStatus {
@@ -223,6 +268,7 @@ class FakeTransport implements PatchPlanTransport {
       host: "127.0.0.1",
       port: 8766,
       connectedClients: 1,
+      registeredPatches: [],
       liveRevisions: Object.fromEntries(this.liveRevisions),
     };
   }

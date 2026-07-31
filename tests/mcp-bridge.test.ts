@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import {
+  MaxforgePatchRegistration,
   MaxforgeWebSocketBridge,
   parseBridgeEvent,
 } from "../src/mcp/bridge.js";
@@ -18,140 +19,185 @@ afterEach(async () => {
 });
 
 describe("MaxforgeWebSocketBridge", () => {
-  it("sends a raw PatchPlan and resolves only after the matching Max acknowledgement", async () => {
+  it("registers multiple patches and routes apply to the selected patcherId", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
-    const client = await connect(status.port);
+    const first = await connect(status.port);
+    const second = await connect(status.port);
+    await register(bridge, first, registration("patch-a", "voices", true));
+    await register(bridge, second, registration("patch-b", "meters", false));
     const plan = diffPatchGraphs(
-      createEmptyPatchGraph("voices"),
-      createEmptyPatchGraph("voices")
+      createEmptyPatchGraph("meters"),
+      createEmptyPatchGraph("meters")
     );
 
-    client.once("message", (data) => {
-      expect(JSON.parse(data.toString())).toEqual(plan);
-      client.send(JSON.stringify({
+    const unexpected = new Promise<never>((_, reject) => {
+      first.once("message", () => reject(new Error("apply reached patch-a")));
+    });
+    second.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        type: string;
+        requestId: string;
+        patcherId: string;
+        plan: unknown;
+      };
+      expect(request).toMatchObject({
+        type: "maxforge.apply.request",
+        patcherId: "patch-b",
+        plan,
+      });
+      second.send(JSON.stringify({
         type: "maxforge.applied",
+        requestId: request.requestId,
+        patcherId: "patch-b",
         scope: plan.scope,
         revision: plan.targetRevision,
         operations: plan.operations.length,
       }));
     });
 
-    await expect(bridge.apply(plan)).resolves.toEqual({
+    await expect(Promise.race([
+      bridge.apply("patch-b", plan),
+      unexpected,
+    ])).resolves.toMatchObject({
       type: "maxforge.applied",
-      scope: "voices",
+      patcherId: "patch-b",
+      scope: "meters",
       revision: plan.targetRevision,
-      operations: 0,
     });
-    expect(bridge.getLiveRevision("voices")).toBe(plan.targetRevision);
+    expect(bridge.getLiveRevision("patch-b", "meters"))
+      .toBe(plan.targetRevision);
+    expect(bridge.listPatches().map((patch) => patch.patcherId))
+      .toEqual(["patch-a", "patch-b"]);
   });
 
-  it("rejects a pending apply immediately when Max reports an error", async () => {
+  it("correlates errors and inspections per patch", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
     const client = await connect(status.port);
+    await register(bridge, client, registration("patch-a", "voices", true));
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        requestId: string;
+      };
+      client.send(JSON.stringify({
+        type: "maxforge.snapshot",
+        requestId: request.requestId,
+        patcherId: "patch-a",
+        scope: "voices",
+        revision: null,
+        patcher: snapshotEvent("unused").patcher,
+      }));
+    });
+
+    await expect(bridge.inspect("patch-a", "voices")).resolves.toMatchObject({
+      type: "maxforge.snapshot",
+      patcherId: "patch-a",
+      scope: "voices",
+      patcher: {
+        boxes: [{ text: "cycle~ 440" }],
+      },
+    });
+
     const plan = diffPatchGraphs(
       createEmptyPatchGraph("voices"),
       createEmptyPatchGraph("voices")
     );
-
-    client.once("message", () => {
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        requestId: string;
+      };
       client.send(JSON.stringify({
         type: "maxforge.error",
+        requestId: request.requestId,
+        patcherId: "patch-a",
         scope: "voices",
         message: "base revision does not match current revision",
       }));
     });
 
-    await expect(bridge.apply(plan)).rejects.toThrow(
-      'Max rejected scope "voices" while applying "voices": base revision does not match current revision'
+    await expect(bridge.apply("patch-a", plan)).rejects.toThrow(
+      'Max patch "patch-a" rejected request'
     );
   });
 
-  it("requests and validates a correlated live patcher snapshot", async () => {
+  it("creates a top-level patch through the controller and waits for registration", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
-    const client = await connect(status.port);
+    const controller = await connect(status.port);
+    await register(
+      bridge,
+      controller,
+      registration("bridge", "bootstrap", true)
+    );
 
-    client.once("message", (data) => {
+    controller.once("message", async (data) => {
       const request = JSON.parse(data.toString()) as {
         type: string;
         requestId: string;
+        patcherId: string;
         scope: string;
+        title: string;
+        host: string;
+        port: number;
       };
       expect(request).toMatchObject({
-        type: "maxforge.inspect.request",
+        type: "maxforge.create_patch.request",
+        patcherId: "generated-a",
         scope: "voices",
+        title: "Generated voices",
+        host: "127.0.0.1",
+        port: status.port,
       });
-      client.send(JSON.stringify(snapshotEvent(request.requestId)));
-    });
-
-    await expect(bridge.inspect("voices")).resolves.toMatchObject({
-      type: "maxforge.snapshot",
-      scope: "voices",
-      revision: null,
-      patcher: {
-        dirty: true,
-        boxes: [{
-          runtimeId: "obj-1",
-          varName: "maxforge_voices_obj_osc",
-          text: "cycle~ 440",
-        }],
-      },
-    });
-    expect(bridge.getLiveRevision("voices")).toBeNull();
-  });
-
-  it("rejects an inspection when Max reports an error", async () => {
-    const bridge = createBridge();
-    const status = await bridge.start();
-    const client = await connect(status.port);
-
-    client.once("message", () => {
-      client.send(JSON.stringify({
-        type: "maxforge.error",
-        scope: "voices",
-        message: "inspection failed",
+      controller.send(JSON.stringify({
+        type: "maxforge.patch.created",
+        requestId: request.requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
       }));
+
+      const generated = await connect(status.port);
+      await register(
+        bridge,
+        generated,
+        registration("generated-a", "voices", false, "Generated voices")
+      );
     });
 
-    await expect(bridge.inspect("voices")).rejects.toThrow(
-      'Max rejected inspection of scope "voices": inspection failed'
-    );
+    await expect(bridge.createPatch({
+      patcherId: "generated-a",
+      scope: "voices",
+      title: "Generated voices",
+    })).resolves.toMatchObject({
+      patcherId: "generated-a",
+      scope: "voices",
+      title: "Generated voices",
+      controller: false,
+    });
   });
 
-  it("serializes applies globally because error events have no request identifier", async () => {
+  it("removes only the disconnected patch registration", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
-    const client = await connect(status.port);
-    const firstPlan = diffPatchGraphs(
-      createEmptyPatchGraph("voices"),
-      createEmptyPatchGraph("voices")
-    );
-    const secondPlan = diffPatchGraphs(
-      createEmptyPatchGraph("meters"),
-      createEmptyPatchGraph("meters")
-    );
-    const firstApply = bridge.apply(firstPlan);
-    await new Promise<void>((resolve) => client.once("message", () => resolve()));
+    const first = await connect(status.port);
+    const second = await connect(status.port);
+    await register(bridge, first, registration("patch-a", "voices", true));
+    await register(bridge, second, registration("patch-b", "meters", false));
 
-    await expect(bridge.apply(secondPlan)).rejects.toThrow(
-      'An apply is already pending for scope "voices"'
-    );
+    second.close();
+    await waitFor(() => bridge.listPatches().length === 1);
 
-    client.send(JSON.stringify({
-      type: "maxforge.applied",
-      scope: firstPlan.scope,
-      revision: firstPlan.targetRevision,
-      operations: 0,
-    }));
-    await expect(firstApply).resolves.toMatchObject({
-      scope: "voices",
-      revision: firstPlan.targetRevision,
+    expect(bridge.listPatches()).toMatchObject([
+      { patcherId: "patch-a", scope: "voices" },
+    ]);
+    expect(bridge.getStatus()).toMatchObject({
+      connectedClients: 1,
+      registeredPatches: [{ patcherId: "patch-a" }],
     });
   });
 
-  it("refuses mutation unless exactly one Max client is connected", async () => {
+  it("refuses unknown targets and creation without one controller", async () => {
     const bridge = createBridge();
     await bridge.start();
     const plan = diffPatchGraphs(
@@ -159,9 +205,14 @@ describe("MaxforgeWebSocketBridge", () => {
       createEmptyPatchGraph("voices")
     );
 
-    await expect(bridge.apply(plan)).rejects.toThrow(
-      "Exactly one Max client is required, connected: 0"
+    await expect(bridge.apply("missing", plan)).rejects.toThrow(
+      'Max patch "missing" is not registered'
     );
+    await expect(bridge.createPatch({
+      patcherId: "generated-a",
+      scope: "voices",
+      title: "Generated voices",
+    })).rejects.toThrow("Exactly one patch-creation controller is required");
   });
 
   it("rejects non-loopback binding", () => {
@@ -175,16 +226,11 @@ describe("MaxforgeWebSocketBridge", () => {
 });
 
 describe("parseBridgeEvent", () => {
-  it("accepts revision events and rejects malformed protocol data", () => {
+  it("accepts registrations and rejects malformed protocol data", () => {
+    const value = registration("patch-a", "voices", true);
+    expect(parseBridgeEvent(JSON.stringify(value))).toEqual(value);
     expect(parseBridgeEvent(
-      '{"type":"maxforge.revision","scope":"voices","revision":null}'
-    )).toEqual({
-      type: "maxforge.revision",
-      scope: "voices",
-      revision: null,
-    });
-    expect(parseBridgeEvent(
-      '{"type":"maxforge.applied","scope":"voices","revision":"bad","operations":1}'
+      '{"type":"maxforge.applied","patcherId":"patch-a","scope":"voices","revision":"bad","operations":1,"requestId":"r"}'
     )).toBeUndefined();
     expect(parseBridgeEvent("not json")).toBeUndefined();
   });
@@ -224,10 +270,48 @@ async function connect(port: number): Promise<WebSocket> {
   return client;
 }
 
+async function register(
+  bridge: MaxforgeWebSocketBridge,
+  client: WebSocket,
+  event: MaxforgePatchRegistration
+): Promise<void> {
+  client.send(JSON.stringify(event));
+  await waitFor(() =>
+    bridge.listPatches().some((patch) => patch.patcherId === event.patcherId)
+  );
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (!predicate()) {
+    if (deadline < Date.now()) throw new Error("condition timed out");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+function registration(
+  patcherId: string,
+  scope: string,
+  controller: boolean,
+  title = patcherId
+): MaxforgePatchRegistration {
+  return {
+    type: "maxforge.registered",
+    patcherId,
+    scope,
+    revision: null,
+    controller,
+    title,
+    filename: "",
+    filepath: "",
+  };
+}
+
 function snapshotEvent(requestId: string) {
   return {
     type: "maxforge.snapshot",
     requestId,
+    patcherId: "patch-a",
     scope: "voices",
     revision: null,
     patcher: {

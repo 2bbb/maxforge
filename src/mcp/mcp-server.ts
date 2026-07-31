@@ -10,7 +10,15 @@ const scopeSchema = z
     "scope must start with a letter or underscore and contain only word characters"
   );
 
+const patcherIdSchema = z
+  .string()
+  .regex(
+    /^[A-Za-z_][A-Za-z0-9_-]*$/,
+    "patcherId must start with a letter or underscore and contain only letters, digits, underscores, and hyphens"
+  );
+
 const dslRequestSchema = z.object({
+  patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
   desiredDsl: z.string().min(1).describe("Complete desired maxforge DSL source"),
   scope: scopeSchema.describe("Managed patch scope"),
   currentDsl: z
@@ -37,10 +45,11 @@ export function createMaxforgeMcpServer(
     },
     {
       instructions:
-        "Use maxforge_status and maxforge_inspect_patch before mutation. Use " +
+        "Use maxforge_list_patches and maxforge_inspect_patch before " +
+        "mutation. Create a new isolated patch with maxforge_create_patch. Use " +
         "maxforge_compile_plan to inspect a DSL diff and maxforge_apply_dsl " +
-        "to apply complete desired DSL. Only maxforge-managed objects in the " +
-        "selected scope may be changed.",
+        "to apply complete desired DSL to an explicit patcherId. Only " +
+        "maxforge-managed objects in the selected scope may be changed.",
     }
   );
 
@@ -68,12 +77,58 @@ export function createMaxforgeMcpServer(
   );
 
   server.registerTool(
+    "maxforge_list_patches",
+    {
+      title: "List live Max patches",
+      description:
+        "List registered Max patch windows and their stable patcherId targets.",
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async () => toolResult({ patches: options.transport.listPatches() })
+  );
+
+  server.registerTool(
+    "maxforge_create_patch",
+    {
+      title: "Create Max patch",
+      description:
+        "Create a new top-level Max patch window with a native maxforge bridge and wait until it is registered.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe(
+          "Unique stable ID for the new patch"
+        ),
+        scope: scopeSchema.describe("Managed scope in the new patch"),
+        title: z.string().min(1).max(256).describe("Visible patch window title"),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const patch = await options.transport.createPatch(request);
+        return toolResult({ patch });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
     "maxforge_inspect_patch",
     {
       title: "Inspect live Max patch",
       description:
         "Read the live patcher graph without using the screen and report structural changes since the last acknowledged maxforge apply.",
       inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Managed patch scope to inspect"),
       }),
       annotations: {
@@ -82,10 +137,11 @@ export function createMaxforgeMcpServer(
         idempotentHint: true,
       },
     },
-    async ({ scope }) => {
+    async ({ patcherId, scope }) => {
       try {
-        const result = await options.service.inspectPatch(scope);
+        const result = await options.service.inspectPatch(patcherId, scope);
         return toolResult({
+          patcherId,
           scope,
           comparisonAvailable: result.comparisonAvailable,
           managedChangeCount: result.managedChangeCount,
@@ -131,7 +187,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Apply desired maxforge DSL",
       description:
-        "Compile complete desired DSL, send its managed diff to one connected Max client, and wait for maxforge.sync acknowledgement.",
+        "Compile complete desired DSL, send its managed diff to the selected Max patch, and wait for maxforge.sync acknowledgement.",
       inputSchema: dslRequestSchema,
       annotations: {
         readOnlyHint: false,
@@ -143,6 +199,7 @@ export function createMaxforgeMcpServer(
       try {
         const result = await options.service.applyDsl(request);
         return toolResult({
+          patcherId: request.patcherId,
           scope: result.plan.scope,
           baseRevision: result.plan.baseRevision,
           targetRevision: result.plan.targetRevision,

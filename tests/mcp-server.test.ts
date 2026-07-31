@@ -7,8 +7,10 @@ import {
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
+  CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgePatchInfo,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
 } from "../src/mcp/bridge.js";
@@ -34,6 +36,8 @@ describe("maxforge MCP protocol surface", () => {
       const tools = await client.request(2, "tools/list", {});
       expect(toolNames(tools)).toEqual([
         "maxforge_status",
+        "maxforge_list_patches",
+        "maxforge_create_patch",
         "maxforge_inspect_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
@@ -42,6 +46,7 @@ describe("maxforge MCP protocol surface", () => {
       const result = await client.request(3, "tools/call", {
         name: "maxforge_compile_plan",
         arguments: {
+          patcherId: "patch_a",
           scope: "voices",
           desiredDsl: "osc = cycle~ 440",
         },
@@ -60,7 +65,7 @@ describe("maxforge MCP protocol surface", () => {
 
       const inspection = await client.request(4, "tools/call", {
         name: "maxforge_inspect_patch",
-        arguments: { scope: "voices" },
+        arguments: { patcherId: "patch_a", scope: "voices" },
       });
       expect(inspection).toMatchObject({
         result: {
@@ -69,6 +74,7 @@ describe("maxforge MCP protocol surface", () => {
             managedChangeCount: 0,
             snapshot: {
               type: "maxforge.snapshot",
+              patcherId: "patch_a",
               scope: "voices",
             },
           },
@@ -148,19 +154,28 @@ function toolNames(message: JSONRPCMessage): string[] {
 }
 
 class FakeTransport implements PatchPlanTransport {
-  async apply(plan: PatchPlan): Promise<MaxforgeAppliedEvent> {
+  async apply(
+    patcherId: string,
+    plan: PatchPlan
+  ): Promise<MaxforgeAppliedEvent> {
     return {
       type: "maxforge.applied",
+      requestId: "mcp-apply",
+      patcherId,
       scope: plan.scope,
       revision: plan.targetRevision,
       operations: plan.operations.length,
     };
   }
 
-  async inspect(scope: string): Promise<MaxforgeSnapshotEvent> {
+  async inspect(
+    patcherId: string,
+    scope: string
+  ): Promise<MaxforgeSnapshotEvent> {
     return {
       type: "maxforge.snapshot",
       requestId: "mcp-test",
+      patcherId,
       scope,
       revision: null,
       patcher: {
@@ -176,6 +191,22 @@ class FakeTransport implements PatchPlanTransport {
     };
   }
 
+  async createPatch(
+    request: CreateMaxPatchRequest
+  ): Promise<MaxforgePatchInfo> {
+    return {
+      ...request,
+      revision: null,
+      controller: false,
+      filename: "",
+      filepath: "",
+    };
+  }
+
+  listPatches(): readonly MaxforgePatchInfo[] {
+    return [];
+  }
+
   getLiveRevision(): string | null | undefined {
     return undefined;
   }
@@ -185,6 +216,7 @@ class FakeTransport implements PatchPlanTransport {
       host: "127.0.0.1",
       port: 8766,
       connectedClients: 0,
+      registeredPatches: [],
       liveRevisions: {},
     };
   }

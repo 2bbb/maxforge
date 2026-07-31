@@ -19,6 +19,7 @@ import {
 } from "./bridge.js";
 
 export interface CompilePlanRequest {
+  readonly patcherId: string;
   readonly desiredDsl: string;
   readonly scope: string;
   readonly currentDsl?: string;
@@ -94,7 +95,7 @@ export class MaxforgePatchService {
   compilePlan(request: CompilePlanRequest): CompilePlanResult {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
-    this.assertLiveRevision(request.scope, current.graph);
+    this.assertLiveRevision(request.patcherId, request.scope, current.graph);
     return {
       plan: diffPatchGraphs(current.graph, desired.graph),
       desiredGraph: desired.graph,
@@ -105,13 +106,20 @@ export class MaxforgePatchService {
   async applyDsl(request: CompilePlanRequest): Promise<ApplyDslResult> {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
-    this.assertLiveRevision(request.scope, current.graph);
-    await this.assertNoManagedDrift(request.scope);
+    this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+    await this.assertNoManagedDrift(request.patcherId, request.scope);
 
     const plan = diffPatchGraphs(current.graph, desired.graph);
-    const acknowledgement = await this.transport.apply(plan);
-    this.managedGraphs.set(request.scope, desired.graph);
+    const acknowledgement = await this.transport.apply(
+      request.patcherId,
+      plan
+    );
+    this.managedGraphs.set(
+      targetKey(request.patcherId, request.scope),
+      desired.graph
+    );
     const baseline = await this.captureBaseline(
+      request.patcherId,
       request.scope,
       acknowledgement.revision
     );
@@ -125,9 +133,12 @@ export class MaxforgePatchService {
     };
   }
 
-  async inspectPatch(scope: string): Promise<InspectPatchResult> {
-    const snapshot = await this.transport.inspect(scope);
-    const baseline = this.baselineSnapshots.get(scope);
+  async inspectPatch(
+    patcherId: string,
+    scope: string
+  ): Promise<InspectPatchResult> {
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    const baseline = this.baselineSnapshots.get(targetKey(patcherId, scope));
     const changes = baseline
       ? diffPatcherSnapshots(baseline, snapshot.patcher)
       : [];
@@ -144,7 +155,7 @@ export class MaxforgePatchService {
     return Object.fromEntries(
       [...this.managedGraphs.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([scope, graph]) => [scope, graph.revision])
+        .map(([target, graph]) => [target, graph.revision])
     );
   }
 
@@ -152,36 +163,42 @@ export class MaxforgePatchService {
     return [...this.baselineSnapshots.keys()].sort();
   }
 
-  private async assertNoManagedDrift(scope: string): Promise<void> {
-    if (!this.baselineSnapshots.has(scope)) return;
-    const inspection = await this.inspectPatch(scope);
+  private async assertNoManagedDrift(
+    patcherId: string,
+    scope: string
+  ): Promise<void> {
+    if (!this.baselineSnapshots.has(targetKey(patcherId, scope))) return;
+    const inspection = await this.inspectPatch(patcherId, scope);
     if (inspection.managedChangeCount === 0) return;
     throw new Error(
-      `Max scope "${scope}" has ${inspection.managedChangeCount} managed ` +
+      `Max patch "${patcherId}" scope "${scope}" has ` +
+      `${inspection.managedChangeCount} managed ` +
       "manual change(s) since the last acknowledged apply. Inspect the live " +
       "patch and reconcile it before applying new DSL."
     );
   }
 
   private async captureBaseline(
+    patcherId: string,
     scope: string,
     expectedRevision: string
   ): Promise<{
     captured: boolean;
     warning?: string;
   }> {
+    const key = targetKey(patcherId, scope);
     try {
-      const snapshot = await this.transport.inspect(scope);
+      const snapshot = await this.transport.inspect(patcherId, scope);
       if (snapshot.revision !== expectedRevision) {
         throw new Error(
           `inspection revision ${snapshot.revision ?? "uninitialized"} does ` +
           `not match acknowledged revision ${expectedRevision}`
         );
       }
-      this.baselineSnapshots.set(scope, snapshot.patcher);
+      this.baselineSnapshots.set(key, snapshot.patcher);
       return { captured: true };
     } catch (error) {
-      this.baselineSnapshots.delete(scope);
+      this.baselineSnapshots.delete(key);
       const message = error instanceof Error ? error.message : String(error);
       return {
         captured: false,
@@ -200,13 +217,19 @@ export class MaxforgePatchService {
       return this.compileGraph(request.currentDsl, request.scope);
     }
 
-    const managed = this.managedGraphs.get(request.scope);
+    const managed = this.managedGraphs.get(
+      targetKey(request.patcherId, request.scope)
+    );
     if (managed) return { graph: managed, warnings: [] };
 
-    const liveRevision = this.transport.getLiveRevision(request.scope);
+    const liveRevision = this.transport.getLiveRevision(
+      request.patcherId,
+      request.scope
+    );
     if (typeof liveRevision === "string") {
       throw new Error(
-        `Max scope "${request.scope}" is already initialized at revision ` +
+        `Max patch "${request.patcherId}" scope "${request.scope}" is ` +
+        `already initialized at revision ` +
         `${liveRevision}, but this MCP process has no graph state. Provide ` +
         "currentDsl once to seed the diff."
       );
@@ -218,15 +241,20 @@ export class MaxforgePatchService {
     };
   }
 
-  private assertLiveRevision(scope: string, current: PatchGraph): void {
-    const liveRevision = this.transport.getLiveRevision(scope);
+  private assertLiveRevision(
+    patcherId: string,
+    scope: string,
+    current: PatchGraph
+  ): void {
+    const liveRevision = this.transport.getLiveRevision(patcherId, scope);
     if (liveRevision === undefined) return;
 
     const expectedRevision = liveRevision ?? createEmptyPatchGraph(scope).revision;
     if (current.revision !== expectedRevision) {
       throw new Error(
-        `Current DSL revision ${current.revision} does not match Max scope ` +
-        `"${scope}" revision ${liveRevision ?? "uninitialized"}`
+        `Current DSL revision ${current.revision} does not match Max patch ` +
+        `"${patcherId}" scope "${scope}" revision ` +
+        `${liveRevision ?? "uninitialized"}`
       );
     }
   }
@@ -248,6 +276,10 @@ export class MaxforgePatchService {
       warnings: result.warnings,
     };
   }
+}
+
+function targetKey(patcherId: string, scope: string): string {
+  return `${patcherId}:${scope}`;
 }
 
 export function diffPatcherSnapshots(
