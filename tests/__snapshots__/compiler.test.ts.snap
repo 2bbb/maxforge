@@ -16,7 +16,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-freq",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -33,7 +33,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-mt",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 1,
@@ -51,7 +51,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-osc",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -69,7 +69,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-4",
+        "id": "obj-mul",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -87,7 +87,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-5",
+        "id": "obj-vol",
         "maxclass": "gain~",
         "numinlets": 2,
         "numoutlets": 2,
@@ -105,7 +105,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-6",
+        "id": "obj-dac",
         "maxclass": "ezdac~",
         "numinlets": 2,
         "numoutlets": 0,
@@ -139,11 +139,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-2",
+          "obj-mt",
           0,
         ],
         "source": [
-          "obj-1",
+          "obj-freq",
           0,
         ],
       },
@@ -151,11 +151,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-osc",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-mt",
           0,
         ],
       },
@@ -163,11 +163,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-4",
+          "obj-mul",
           0,
         ],
         "source": [
-          "obj-3",
+          "obj-osc",
           0,
         ],
       },
@@ -175,11 +175,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-5",
+          "obj-vol",
           0,
         ],
         "source": [
-          "obj-4",
+          "obj-mul",
           0,
         ],
       },
@@ -187,11 +187,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-6",
+          "obj-dac",
           0,
         ],
         "source": [
-          "obj-5",
+          "obj-vol",
           0,
         ],
       },
@@ -199,11 +199,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-6",
+          "obj-dac",
           1,
         ],
         "source": [
-          "obj-5",
+          "obj-vol",
           1,
         ],
       },
@@ -251,7 +251,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-cmt",
         "maxclass": "comment",
         "numinlets": 1,
         "numoutlets": 0,
@@ -266,7 +266,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-mul",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -284,7 +284,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-add",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -302,7 +302,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-4",
+        "id": "obj-pinned",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -319,7 +319,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-5",
+        "id": "obj-snd",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 0,
@@ -334,7 +334,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-6",
+        "id": "obj-rcv",
         "maxclass": "newobj",
         "numinlets": 0,
         "numoutlets": 1,
@@ -352,7 +352,7 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     },
     {
       "box": {
-        "id": "obj-7",
+        "id": "obj-msg",
         "maxclass": "message",
         "numinlets": 2,
         "numoutlets": 1,
@@ -390,11 +390,11 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-add",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-mul",
           0,
         ],
       },
@@ -442,7 +442,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-note",
         "maxclass": "newobj",
         "numinlets": 0,
         "numoutlets": 3,
@@ -462,7 +462,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-parse",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 8,
@@ -487,7 +487,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-mtof_obj",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 1,
@@ -505,7 +505,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-4",
+        "id": "obj-osc",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -523,7 +523,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-5",
+        "id": "obj-env",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 2,
@@ -542,7 +542,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-6",
+        "id": "obj-mul",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -560,7 +560,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-7",
+        "id": "obj-vol",
         "maxclass": "gain~",
         "numinlets": 2,
         "numoutlets": 2,
@@ -578,7 +578,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     },
     {
       "box": {
-        "id": "obj-8",
+        "id": "obj-dac",
         "maxclass": "ezdac~",
         "numinlets": 2,
         "numoutlets": 0,
@@ -612,11 +612,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-2",
+          "obj-parse",
           0,
         ],
         "source": [
-          "obj-1",
+          "obj-note",
           0,
         ],
       },
@@ -624,11 +624,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-mtof_obj",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-parse",
           0,
         ],
       },
@@ -636,11 +636,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-4",
+          "obj-osc",
           0,
         ],
         "source": [
-          "obj-3",
+          "obj-mtof_obj",
           0,
         ],
       },
@@ -648,11 +648,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-6",
+          "obj-mul",
           0,
         ],
         "source": [
-          "obj-4",
+          "obj-osc",
           0,
         ],
       },
@@ -660,11 +660,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-7",
+          "obj-vol",
           0,
         ],
         "source": [
-          "obj-6",
+          "obj-mul",
           0,
         ],
       },
@@ -672,11 +672,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-8",
+          "obj-dac",
           0,
         ],
         "source": [
-          "obj-7",
+          "obj-vol",
           0,
         ],
       },
@@ -684,23 +684,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-8",
+          "obj-dac",
           1,
         ],
         "source": [
-          "obj-7",
-          1,
-        ],
-      },
-    },
-    {
-      "patchline": {
-        "destination": [
-          "obj-5",
-          0,
-        ],
-        "source": [
-          "obj-2",
+          "obj-vol",
           1,
         ],
       },
@@ -708,11 +696,23 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-6",
+          "obj-env",
+          0,
+        ],
+        "source": [
+          "obj-parse",
+          1,
+        ],
+      },
+    },
+    {
+      "patchline": {
+        "destination": [
+          "obj-mul",
           1,
         ],
         "source": [
-          "obj-5",
+          "obj-env",
           0,
         ],
       },
@@ -760,7 +760,7 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-cmt",
         "maxclass": "comment",
         "numinlets": 1,
         "numoutlets": 0,
@@ -775,7 +775,7 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-freq",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -792,7 +792,7 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-osc",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -810,7 +810,7 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     },
     {
       "box": {
-        "id": "obj-4",
+        "id": "obj-filt",
         "maxclass": "newobj",
         "numinlets": 3,
         "numoutlets": 1,
@@ -828,7 +828,7 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     },
     {
       "box": {
-        "id": "obj-5",
+        "id": "obj-dac",
         "maxclass": "ezdac~",
         "numinlets": 2,
         "numoutlets": 0,
@@ -862,11 +862,11 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-osc",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-freq",
           0,
         ],
       },
@@ -874,11 +874,11 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     {
       "patchline": {
         "destination": [
-          "obj-4",
+          "obj-filt",
           0,
         ],
         "source": [
-          "obj-3",
+          "obj-osc",
           0,
         ],
       },
@@ -886,11 +886,11 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
     {
       "patchline": {
         "destination": [
-          "obj-5",
+          "obj-dac",
           0,
         ],
         "source": [
-          "obj-4",
+          "obj-filt",
           0,
         ],
       },
@@ -938,7 +938,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-fx",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 2,
@@ -962,7 +962,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "box": {
                 "comment": "audio input",
-                "id": "obj-1",
+                "id": "obj-in",
                 "maxclass": "inlet~",
                 "numinlets": 0,
                 "numoutlets": 1,
@@ -980,7 +980,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "box": {
                 "comment": "audio left",
-                "id": "obj-2",
+                "id": "obj-out_l",
                 "maxclass": "outlet~",
                 "numinlets": 1,
                 "numoutlets": 0,
@@ -995,7 +995,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "box": {
                 "comment": "audio right",
-                "id": "obj-3",
+                "id": "obj-out_r",
                 "maxclass": "outlet~",
                 "numinlets": 1,
                 "numoutlets": 0,
@@ -1009,7 +1009,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             },
             {
               "box": {
-                "id": "obj-4",
+                "id": "obj-buf",
                 "maxclass": "newobj",
                 "numinlets": 1,
                 "numoutlets": 1,
@@ -1027,7 +1027,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             },
             {
               "box": {
-                "id": "obj-5",
+                "id": "obj-tap",
                 "maxclass": "newobj",
                 "numinlets": 1,
                 "numoutlets": 1,
@@ -1045,7 +1045,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             },
             {
               "box": {
-                "id": "obj-6",
+                "id": "obj-fb",
                 "maxclass": "newobj",
                 "numinlets": 2,
                 "numoutlets": 1,
@@ -1083,11 +1083,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-4",
+                  "obj-buf",
                   0,
                 ],
                 "source": [
-                  "obj-1",
+                  "obj-in",
                   0,
                 ],
               },
@@ -1095,11 +1095,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-5",
+                  "obj-tap",
                   0,
                 ],
                 "source": [
-                  "obj-4",
+                  "obj-buf",
                   0,
                 ],
               },
@@ -1107,11 +1107,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-6",
+                  "obj-fb",
                   0,
                 ],
                 "source": [
-                  "obj-5",
+                  "obj-tap",
                   0,
                 ],
               },
@@ -1119,11 +1119,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-4",
+                  "obj-buf",
                   0,
                 ],
                 "source": [
-                  "obj-6",
+                  "obj-fb",
                   0,
                 ],
               },
@@ -1131,11 +1131,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-2",
+                  "obj-out_l",
                   0,
                 ],
                 "source": [
-                  "obj-5",
+                  "obj-tap",
                   0,
                 ],
               },
@@ -1143,11 +1143,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
             {
               "patchline": {
                 "destination": [
-                  "obj-3",
+                  "obj-out_r",
                   0,
                 ],
                 "source": [
-                  "obj-5",
+                  "obj-tap",
                   0,
                 ],
               },
@@ -1188,7 +1188,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-osc",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 1,
@@ -1206,7 +1206,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-dac",
         "maxclass": "ezdac~",
         "numinlets": 2,
         "numoutlets": 0,
@@ -1240,11 +1240,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-1",
+          "obj-fx",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-osc",
           0,
         ],
       },
@@ -1252,11 +1252,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-dac",
           0,
         ],
         "source": [
-          "obj-1",
+          "obj-fx",
           0,
         ],
       },
@@ -1264,11 +1264,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-dac",
           1,
         ],
         "source": [
-          "obj-1",
+          "obj-fx",
           1,
         ],
       },
@@ -1316,7 +1316,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
   "boxes": [
     {
       "box": {
-        "id": "obj-1",
+        "id": "obj-lb",
         "maxclass": "newobj",
         "numinlets": 0,
         "numoutlets": 1,
@@ -1334,7 +1334,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-2",
+        "id": "obj-t1",
         "maxclass": "newobj",
         "numinlets": 1,
         "numoutlets": 3,
@@ -1354,7 +1354,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-3",
+        "id": "obj-met",
         "maxclass": "newobj",
         "numinlets": 3,
         "numoutlets": 1,
@@ -1372,7 +1372,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-4",
+        "id": "obj-cnt",
         "maxclass": "newobj",
         "numinlets": 4,
         "numoutlets": 1,
@@ -1390,7 +1390,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-5",
+        "id": "obj-num",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -1407,7 +1407,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-6",
+        "id": "obj-g",
         "maxclass": "newobj",
         "numinlets": 2,
         "numoutlets": 2,
@@ -1426,7 +1426,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-7",
+        "id": "obj-tog",
         "maxclass": "toggle",
         "numinlets": 1,
         "numoutlets": 1,
@@ -1443,7 +1443,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-8",
+        "id": "obj-a",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -1460,7 +1460,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     },
     {
       "box": {
-        "id": "obj-9",
+        "id": "obj-b",
         "maxclass": "number",
         "numinlets": 1,
         "numoutlets": 1,
@@ -1497,11 +1497,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-2",
+          "obj-t1",
           0,
         ],
         "source": [
-          "obj-1",
+          "obj-lb",
           0,
         ],
       },
@@ -1509,11 +1509,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-3",
+          "obj-met",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-t1",
           0,
         ],
       },
@@ -1521,11 +1521,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-4",
+          "obj-cnt",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-t1",
           1,
         ],
       },
@@ -1533,11 +1533,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-5",
+          "obj-num",
           0,
         ],
         "source": [
-          "obj-2",
+          "obj-t1",
           2,
         ],
       },
@@ -1545,11 +1545,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-6",
+          "obj-g",
           0,
         ],
         "source": [
-          "obj-7",
+          "obj-tog",
           0,
         ],
       },
@@ -1557,11 +1557,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-8",
+          "obj-a",
           0,
         ],
         "source": [
-          "obj-6",
+          "obj-g",
           0,
         ],
       },
@@ -1569,11 +1569,11 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
     {
       "patchline": {
         "destination": [
-          "obj-9",
+          "obj-b",
           0,
         ],
         "source": [
-          "obj-6",
+          "obj-g",
           1,
         ],
       },

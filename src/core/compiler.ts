@@ -36,10 +36,9 @@ export function compile(
   const boxes: CompiledBox[] = [];
   const lines: CompiledLine[] = [];
   const nameMap = new Map<string, CompiledBox>();
-  let idCounter = 1;
 
-  function nextId(): string {
-    return `obj-${idCounter++}`;
+  function boxId(name: string): string {
+    return `obj-${name}`;
   }
 
   function compileStatements(stmts: Statement[], isSubpatcher: boolean) {
@@ -89,7 +88,7 @@ export function compile(
 
     const isPortObject = isPortObjectToken(firstToken);
     const box: CompiledBox = {
-      id: nextId(),
+      id: boxId(stmt.name),
       name: stmt.name,
       maxclass: result.maxclass,
       numinlets: result.def.numinlets,
@@ -175,7 +174,7 @@ export function compile(
     }
 
     const box: CompiledBox = {
-      id: nextId(),
+      id: boxId(stmt.name),
       name: stmt.name,
       maxclass: "newobj",
       numinlets: inlets.length,

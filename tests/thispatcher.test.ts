@@ -29,7 +29,7 @@ osc -> dac
           "newobject",
           "newobj",
           "@varname",
-          "maxforge_obj_1",
+          "maxforge_obj_osc",
           "@patching_position",
           10,
           20,
@@ -48,7 +48,7 @@ osc -> dac
           "newobject",
           "ezdac~",
           "@varname",
-          "maxforge_obj_2",
+          "maxforge_obj_dac",
           "@patching_position",
           100,
           20,
@@ -62,9 +62,9 @@ osc -> dac
         message: [
           "script",
           "connect",
-          "maxforge_obj_1",
+          "maxforge_obj_osc",
           0,
-          "maxforge_obj_2",
+          "maxforge_obj_dac",
           0,
         ],
       },
@@ -118,7 +118,7 @@ fx = p passthrough at(40, 50) {
     expect(result.success).toBe(true);
     const nested = result.commands?.filter((c) => c.targetPath.length > 0) ?? [];
     expect(nested.length).toBeGreaterThan(0);
-    expect(nested.every((c) => c.targetPath[0] === "maxforge_obj_1")).toBe(true);
+    expect(nested.every((c) => c.targetPath[0] === "maxforge_obj_fx")).toBe(true);
   });
 
   it("formats target paths for logs or text output", () => {

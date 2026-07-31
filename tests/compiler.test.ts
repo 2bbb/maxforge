@@ -260,6 +260,29 @@ fx = p delay {
   });
 });
 
+describe("stable object ids", () => {
+  it("derives ids from DSL names instead of statement order", () => {
+    const compileIds = (source: string) => {
+      const { ast, errors } = parse(source);
+      expect(errors).toHaveLength(0);
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
+      return result.output!.patcher.boxes.map(({ box }) => box.id);
+    };
+
+    expect(compileIds("osc = cycle~ 440\ndac = ezdac~")).toEqual([
+      "obj-osc",
+      "obj-dac",
+    ]);
+    expect(compileIds("gain = *~ 0.5\nosc = cycle~ 440\ndac = ezdac~")).toEqual([
+      "obj-gain",
+      "obj-osc",
+      "obj-dac",
+    ]);
+  });
+
+});
+
 // ---------------------------------------------------------------------------
 // Compiler
 // ---------------------------------------------------------------------------
