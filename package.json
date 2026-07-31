@@ -6,12 +6,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "maxforge": "dist/cli/index.js"
+    "maxforge": "dist/cli/index.js",
+    "maxforge-mcp": "dist/mcp/server.js"
   },
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
     "dev": "tsc --watch",
+    "mcp": "node dist/mcp/server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
     "cli": "node --loader ts-node/esm src/cli/index.ts",
@@ -32,9 +34,10 @@
   "author": "2bit",
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.0.0"
   },
   "files": [
     "dist/",
@@ -54,10 +57,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
     }
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "repository": {
     "type": "git",
@@ -66,5 +73,10 @@
   "bugs": {
     "url": "https://github.com/2bbb/maxforge/issues"
   },
-  "homepage": "https://github.com/2bbb/maxforge#readme"
+  "homepage": "https://github.com/2bbb/maxforge#readme",
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "ws": "^8.21.1",
+    "zod": "^4.4.3"
+  }
 }
