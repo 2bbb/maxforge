@@ -1,7 +1,11 @@
 #include "c74_min.h"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -61,6 +65,40 @@ struct patch_plan {
 	std::vector<patch_operation> operations;
 };
 
+struct snapshot_box {
+	std::vector<std::string> target_path;
+	std::string runtime_id;
+	std::string variable_name;
+	std::string max_class;
+	std::array<double, 4> patching_rectangle{};
+	bool managed{};
+	bool has_text{};
+	std::string text;
+};
+
+struct snapshot_endpoint {
+	std::string runtime_id;
+	std::string variable_name;
+	long port{};
+};
+
+struct snapshot_connection {
+	std::vector<std::string> target_path;
+	snapshot_endpoint source;
+	snapshot_endpoint destination;
+};
+
+struct patch_snapshot {
+	std::string title;
+	std::string filename;
+	std::string filepath;
+	bool dirty{};
+	bool locked{};
+	bool presentation{};
+	std::vector<snapshot_box> boxes;
+	std::vector<snapshot_connection> connections;
+};
+
 using virtual_patcher = std::unordered_set<std::string>;
 using virtual_patch = std::unordered_map<std::string, virtual_patcher>;
 
@@ -118,6 +156,23 @@ auto json_string(const std::string &value) -> std::string {
 		}
 	}
 	result += '"';
+	return result;
+}
+
+auto json_number(double value) -> std::string {
+	if(!std::isfinite(value)) return "null";
+	std::ostringstream stream;
+	stream << std::setprecision(17) << value;
+	return stream.str();
+}
+
+auto json_string_array(const std::vector<std::string> &values) -> std::string {
+	std::string result{"["};
+	for(std::size_t index{}; index < values.size(); index++) {
+		if(0 < index) result += ",";
+		result += json_string(values[index]);
+	}
+	result += "]";
 	return result;
 }
 
@@ -540,6 +595,273 @@ auto child_patcher(c74::max::t_object *box) -> c74::max::t_object * {
 	);
 }
 
+auto symbol_string(const c74::max::t_symbol *symbol) -> std::string {
+	return symbol && symbol->s_name ? symbol->s_name : "";
+}
+
+auto box_runtime_id(c74::max::t_object *box) -> std::string {
+	const auto id = symbol_string(c74::max::jbox_get_id(box));
+	if(!id.empty()) return id;
+
+	std::ostringstream stream;
+	stream << "box@" << box;
+	return stream.str();
+}
+
+auto box_text(c74::max::t_object *box, bool &has_text) -> std::string {
+	has_text = false;
+	const auto text_symbol = c74::max::gensym("text");
+	if(!c74::max::object_attr_get(box, text_symbol)) return {};
+
+	long count{};
+	c74::max::t_atom *values{};
+	const auto value_error = c74::max::object_attr_getvalueof(
+		box,
+		text_symbol,
+		&count,
+		&values
+	);
+	if(value_error != c74::max::MAX_ERR_NONE || count <= 0 || !values) {
+		if(values) c74::max::sysmem_freeptr(values);
+		return {};
+	}
+
+	long text_size{};
+	char *text{};
+	const auto text_error = c74::max::atom_gettext(
+		count,
+		values,
+		&text_size,
+		&text,
+		c74::max::OBEX_UTIL_ATOM_GETTEXT_SYM_NO_QUOTE |
+			c74::max::OBEX_UTIL_ATOM_GETTEXT_TRUNCATE_ZEROS
+	);
+	c74::max::sysmem_freeptr(values);
+	if(text_error != c74::max::MAX_ERR_NONE || !text) {
+		if(text) c74::max::sysmem_freeptr(text);
+		return {};
+	}
+
+	const std::string result{text};
+	c74::max::sysmem_freeptr(text);
+	has_text = true;
+	return result;
+}
+
+auto snapshot_path_component(const snapshot_box &box) -> std::string {
+	return box.variable_name.empty() ? box.runtime_id : box.variable_name;
+}
+
+auto snapshot_box_from_object(
+	c74::max::t_object *box,
+	const std::string &scope,
+	const std::vector<std::string> &target_path
+) -> snapshot_box
+{
+	snapshot_box result;
+	result.target_path = target_path;
+	result.runtime_id = box_runtime_id(box);
+	result.variable_name = symbol_string(c74::max::jbox_get_varname(box));
+	result.max_class = symbol_string(c74::max::jbox_get_maxclass(box));
+	result.managed = !managed_id_from_variable_name(
+		scope,
+		result.variable_name
+	).empty();
+
+	c74::max::t_rect rectangle{};
+	if(
+		c74::max::jbox_get_patching_rect(box, &rectangle) ==
+		c74::max::MAX_ERR_NONE
+	) {
+		result.patching_rectangle = {
+			rectangle.x,
+			rectangle.y,
+			rectangle.width,
+			rectangle.height
+		};
+	}
+	result.text = box_text(box, result.has_text);
+	return result;
+}
+
+auto snapshot_endpoint_from_box(
+	c74::max::t_object *box,
+	long port
+) -> snapshot_endpoint
+{
+	if(!box) throw std::runtime_error("patch cord has a missing endpoint");
+	return {
+		box_runtime_id(box),
+		symbol_string(c74::max::jbox_get_varname(box)),
+		port
+	};
+}
+
+void collect_patch_snapshot(
+	c74::max::t_object *patcher,
+	const std::string &scope,
+	const std::vector<std::string> &target_path,
+	std::unordered_set<c74::max::t_object *> &ancestors,
+	patch_snapshot &snapshot
+) {
+	if(!patcher) return;
+	if(ancestors.count(patcher) != 0) {
+		throw std::runtime_error("cyclic subpatcher hierarchy detected");
+	}
+	if(32 <= target_path.size()) {
+		throw std::runtime_error("subpatcher hierarchy exceeds inspection depth");
+	}
+	ancestors.insert(patcher);
+
+	std::vector<std::pair<c74::max::t_object *, snapshot_box>> boxes;
+	for(
+		auto *box = c74::max::jpatcher_get_firstobject(patcher);
+		box;
+		box = c74::max::jbox_get_nextobject(box)
+	) {
+		auto box_snapshot = snapshot_box_from_object(box, scope, target_path);
+		boxes.emplace_back(box, box_snapshot);
+		snapshot.boxes.push_back(std::move(box_snapshot));
+	}
+
+	for(
+		auto *line = c74::max::jpatcher_get_firstline(patcher);
+		line;
+		line = c74::max::jpatchline_get_nextline(line)
+	) {
+		snapshot.connections.push_back({
+			target_path,
+			snapshot_endpoint_from_box(
+				c74::max::jpatchline_get_box1(line),
+				c74::max::jpatchline_get_outletnum(line)
+			),
+			snapshot_endpoint_from_box(
+				c74::max::jpatchline_get_box2(line),
+				c74::max::jpatchline_get_inletnum(line)
+			)
+		});
+	}
+
+	for(const auto &[box, box_snapshot] : boxes) {
+		auto *nested_patcher = child_patcher(box);
+		if(!nested_patcher) continue;
+		auto nested_path = target_path;
+		nested_path.push_back(snapshot_path_component(box_snapshot));
+		collect_patch_snapshot(
+			nested_patcher,
+			scope,
+			nested_path,
+			ancestors,
+			snapshot
+		);
+	}
+	ancestors.erase(patcher);
+}
+
+auto make_patch_snapshot(
+	c74::max::t_object *root_patcher,
+	const std::string &scope
+) -> patch_snapshot
+{
+	patch_snapshot result;
+	result.title = symbol_string(c74::max::jpatcher_get_title(root_patcher));
+	result.filename = symbol_string(c74::max::jpatcher_get_filename(root_patcher));
+	result.filepath = symbol_string(c74::max::jpatcher_get_filepath(root_patcher));
+	result.dirty = c74::max::jpatcher_get_dirty(root_patcher) != 0;
+	result.locked = c74::max::object_attr_getchar(
+		root_patcher,
+		c74::max::gensym("locked")
+	) != 0;
+	result.presentation = c74::max::jpatcher_get_presentation(root_patcher) != 0;
+
+	std::unordered_set<c74::max::t_object *> ancestors;
+	collect_patch_snapshot(root_patcher, scope, {}, ancestors, result);
+	std::sort(
+		result.boxes.begin(),
+		result.boxes.end(),
+		[](const snapshot_box &left, const snapshot_box &right) {
+			const auto left_path = path_key(left.target_path);
+			const auto right_path = path_key(right.target_path);
+			if(left_path != right_path) return left_path < right_path;
+			return left.runtime_id < right.runtime_id;
+		}
+	);
+	std::sort(
+		result.connections.begin(),
+		result.connections.end(),
+		[](const snapshot_connection &left, const snapshot_connection &right) {
+			const auto left_path = path_key(left.target_path);
+			const auto right_path = path_key(right.target_path);
+			if(left_path != right_path) return left_path < right_path;
+			if(left.source.runtime_id != right.source.runtime_id) {
+				return left.source.runtime_id < right.source.runtime_id;
+			}
+			if(left.source.port != right.source.port) {
+				return left.source.port < right.source.port;
+			}
+			if(left.destination.runtime_id != right.destination.runtime_id) {
+				return left.destination.runtime_id < right.destination.runtime_id;
+			}
+			return left.destination.port < right.destination.port;
+		}
+	);
+	return result;
+}
+
+auto snapshot_endpoint_json(const snapshot_endpoint &endpoint) -> std::string {
+	return "{\"runtimeId\":" +
+		json_string(endpoint.runtime_id) +
+		",\"varName\":" +
+		json_string(endpoint.variable_name) +
+		",\"port\":" +
+		std::to_string(endpoint.port) +
+		"}";
+}
+
+auto patch_snapshot_json(const patch_snapshot &snapshot) -> std::string {
+	std::string result{
+		"{\"title\":" + json_string(snapshot.title) +
+		",\"filename\":" + json_string(snapshot.filename) +
+		",\"filepath\":" + json_string(snapshot.filepath) +
+		",\"dirty\":" + (snapshot.dirty ? "true" : "false") +
+		",\"locked\":" + (snapshot.locked ? "true" : "false") +
+		",\"presentation\":" + (snapshot.presentation ? "true" : "false") +
+		",\"boxes\":["
+	};
+	for(std::size_t index{}; index < snapshot.boxes.size(); index++) {
+		if(0 < index) result += ",";
+		const auto &box = snapshot.boxes[index];
+		result +=
+			"{\"targetPath\":" + json_string_array(box.target_path) +
+			",\"runtimeId\":" + json_string(box.runtime_id) +
+			",\"varName\":" + json_string(box.variable_name) +
+			",\"maxclass\":" + json_string(box.max_class) +
+			",\"patchingRect\":[" +
+			json_number(box.patching_rectangle[0]) + "," +
+			json_number(box.patching_rectangle[1]) + "," +
+			json_number(box.patching_rectangle[2]) + "," +
+			json_number(box.patching_rectangle[3]) + "]" +
+			",\"managed\":" + (box.managed ? "true" : "false");
+		if(box.has_text) result += ",\"text\":" + json_string(box.text);
+		result += "}";
+	}
+	result += "],\"connections\":[";
+	for(std::size_t index{}; index < snapshot.connections.size(); index++) {
+		if(0 < index) result += ",";
+		const auto &connection = snapshot.connections[index];
+		result +=
+			"{\"targetPath\":" +
+			json_string_array(connection.target_path) +
+			",\"source\":" +
+			snapshot_endpoint_json(connection.source) +
+			",\"destination\":" +
+			snapshot_endpoint_json(connection.destination) +
+			"}";
+	}
+	result += "]}";
+	return result;
+}
+
 auto find_named_box(
 	c74::max::t_object *patcher,
 	const std::string &variable_name
@@ -889,7 +1211,10 @@ public:
 	MIN_TAGS{"patcher, scripting, agent"};
 	MIN_AUTHOR{"2bit"};
 
-	c74::min::inlet<> input{this, "(anything) apply, applydict, validate, revision"};
+	c74::min::inlet<> input{
+		this,
+		"(anything) apply, applydict, validate, inspect, revision"
+	};
 	c74::min::outlet<> status_output{this, "(anything) status and errors"};
 
 	c74::min::attribute<c74::min::symbol> scope{
@@ -963,6 +1288,21 @@ public:
 		}
 	};
 
+	c74::min::message<> inspect_message{
+		this,
+		"inspect",
+		"Output a structural snapshot of the containing patcher",
+		MIN_FUNCTION {
+			std::string request_id{"local"};
+			if(!args.empty()) {
+				const c74::min::symbol request_symbol = args.front();
+				request_id = request_symbol.c_str();
+			}
+			send_patch_snapshot(request_id);
+			return {};
+		}
+	};
+
 private:
 	void process_atoms(const c74::min::atoms &arguments, bool should_apply) {
 		c74::max::t_dictionary *dictionary{};
@@ -984,6 +1324,32 @@ private:
 		bool should_apply
 	) {
 		try {
+			std::string message_type;
+			if(dictionary_optional_string(dictionary, "type", message_type)) {
+				if(message_type != "maxforge.inspect.request") {
+					throw std::runtime_error(
+						"unsupported maxforge request type: " + message_type
+					);
+				}
+				const auto request_id = dictionary_string(dictionary, "requestId");
+				const auto requested_scope = dictionary_string(dictionary, "scope");
+				if(request_id.empty() || 128 < request_id.size()) {
+					throw std::runtime_error("invalid inspection request id");
+				}
+				const c74::min::symbol configured_scope_symbol = scope;
+				const std::string configured_scope{
+					configured_scope_symbol.c_str()
+				};
+				if(requested_scope != configured_scope) {
+					throw std::runtime_error(
+						"inspection scope \"" + requested_scope +
+						"\" does not match @scope \"" + configured_scope + "\""
+					);
+				}
+				send_patch_snapshot(request_id);
+				return;
+			}
+
 			const auto plan = parse_plan(dictionary);
 			c74::max::t_object *root_patcher{};
 			const auto patcher_error = c74::max::object_obex_lookup(
@@ -1038,6 +1404,49 @@ private:
 			send_error(exception.what());
 		} catch(...) {
 			send_error("unknown plan processing error");
+		}
+	}
+
+	void send_patch_snapshot(const std::string &request_id) {
+		try {
+			c74::max::t_object *root_patcher{};
+			const auto patcher_error = c74::max::object_obex_lookup(
+				maxobj(),
+				c74::max::gensym("#P"),
+				&root_patcher
+			);
+			if(patcher_error != c74::max::MAX_ERR_NONE || !root_patcher) {
+				throw std::runtime_error("could not access the containing patcher");
+			}
+
+			const c74::min::symbol configured_scope_symbol = scope;
+			const std::string configured_scope{
+				configured_scope_symbol.c_str()
+			};
+			if(!is_valid_scope(configured_scope)) {
+				throw std::runtime_error("invalid @scope: " + configured_scope);
+			}
+			const c74::min::symbol revision_symbol = revision_state;
+			const std::string revision{revision_symbol.c_str()};
+			const auto snapshot = make_patch_snapshot(
+				root_patcher,
+				configured_scope
+			);
+			send_event(
+				"{\"type\":\"maxforge.snapshot\",\"requestId\":" +
+				json_string(request_id) +
+				",\"scope\":" +
+				json_string(configured_scope) +
+				",\"revision\":" +
+				(revision.empty() ? "null" : json_string(revision)) +
+				",\"patcher\":" +
+				patch_snapshot_json(snapshot) +
+				"}"
+			);
+		} catch(const std::exception &exception) {
+			send_error(exception.what());
+		} catch(...) {
+			send_error("unknown patch inspection error");
 		}
 	}
 
