@@ -1,0 +1,23 @@
+patch "maxforge.sync demo" | "Apply a managed PatchPlan without node.script or thispatcher" | 940x560
+
+title = comment "maxforge.sync: native external PatchPlan demo" at(40, 35)
+step1 = comment "The plan is imported and applied automatically. The buttons let you retry and inspect stale-revision rejection." at(40, 70)
+step2 = comment "The generated boxes use scope sync_demo; these controls and maxforge.sync itself remain unmanaged." at(40, 95)
+
+import = message "import managed_plan.json" at(40, 145)
+plan = dict maxforge_sync_demo_plan @embed 0 at(250, 145)
+apply = message "applydict maxforge_sync_demo_plan" at(40, 185)
+revision = message "revision" at(40, 225)
+load = loadbang at(250, 175)
+set_scope = message "scope sync_demo" at(330, 175)
+delay = delay 500 at(440, 175)
+sync = maxforge.sync at(250, 225)
+status = print maxforge-sync-status at(500, 205)
+
+import -> plan
+apply -> sync
+revision -> sync
+load -> set_scope -> sync
+load -> import
+load -> delay -> apply
+sync -> status

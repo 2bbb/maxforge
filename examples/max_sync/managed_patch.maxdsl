@@ -1,0 +1,21 @@
+patch "maxforge.sync managed content" | "Repeated controls inserted into the demo patcher" | 940x560
+
+for row in 0..1 {
+  for column in 0..5 {
+    toggle_${row * 6 + column} = toggle at(${40 + column * 145}, ${310 + row * 100})
+    value_${row * 6 + column} = number at(${75 + column * 145}, ${312 + row * 100})
+    toggle_${row * 6 + column} -> value_${row * 6 + column}
+  }
+}
+
+bank = p generated_bank at(40, 500) {
+  in = inlet "pass-through input" at(40, 40)
+  out = outlet "pass-through output" at(180, 40)
+  in -> out
+
+  for i in 0..3 {
+    nested_toggle_${i} = toggle at(${40 + i * 140}, 120)
+    nested_value_${i} = number at(${75 + i * 140}, 122)
+    nested_toggle_${i} -> nested_value_${i}
+  }
+}
