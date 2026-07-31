@@ -6,8 +6,8 @@ a maxforge DSL fragment with a live Max patcher.
 ## Boundary
 
 The TypeScript library is the compiler and planner. It produces a `PatchPlan`;
-it does not mutate Max. A Max-side consumer such as `maxforge.sync` is responsible
-for validating and applying the plan through the Max SDK.
+it does not mutate Max. The included `maxforge.sync` external validates and
+applies the plan through the Max SDK.
 
 ```text
 DSL -> PatchGraph -> diffPatchGraphs(current, desired) -> PatchPlan -> Max consumer
@@ -99,10 +99,51 @@ The Max SDK does not make arbitrary external-driven patcher mutations undoable.
 Do not claim transaction safety until snapshot restoration has been implemented
 and tested in Max.
 
+## maxforge.sync
+
+Build the native consumer:
+
+```bash
+git submodule update --init --recursive
+cmake -S . -B build
+cmake --build build
+```
+
+`maxforge.sync` supports:
+
+- `apply <compact-json>` — validate and apply a serialized `PatchPlan`.
+- `validate <compact-json>` — validate without mutation.
+- `applydict <name>` — validate and apply a named Max dictionary.
+- `revision` — output the consumer's current revision.
+- `@scope <name>` — select the exact managed namespace.
+- `@revision_state <hash>` — persisted optimistic concurrency state.
+
+The first apply is accepted only when the revision state is empty and the
+configured scope contains no managed root boxes. After success,
+`revision_state` advances to `targetRevision`. It is not advanced when an
+operation fails.
+
+The consumer parses and validates all operations before mutation. Validation
+simulates create/delete ordering so a plan can create a parent subpatcher and
+then target its contents. Mutation occurs synchronously on Max's main thread.
+
+Generate plan JSON with the CLI:
+
+```bash
+maxforge plan desired.maxdsl --scope voices --compact -o plan.json
+maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
+```
+
+`--current` also accepts a `.maxpat` snapshot. Only boxes already carrying exact
+managed varnames for the selected scope are imported from such a snapshot.
+
+See `examples/max_sync/` for a Max 9 smoke test. The example imports
+`managed_plan.json` into a named `dict`, applies it with `applydict`, and creates
+both root objects and objects inside `p generated_bank`.
+
 ## Current limitations
 
 - There is no network transport or MCP server in this package yet.
-- There is no Max external consumer yet.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
 - Manual edits to managed objects require a fresh snapshot before the next diff.

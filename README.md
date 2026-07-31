@@ -159,10 +159,47 @@ operations. Objects use stable scripting names derived from the DSL name, so
 growing a `for` loop only creates the new instances instead of replacing the
 whole generated patch.
 
-The graph API only creates plans; it does not mutate Max or provide rollback by
-itself. A plan consumer must verify `baseRevision` before applying it and must
-keep non-`maxforge_<scope>_obj_...` objects outside the managed scope. See
-[`docs/patch-sync.md`](docs/patch-sync.md) for the protocol contract.
+Generate a plan from the CLI:
+
+```bash
+# Empty managed scope -> desired DSL
+npx maxforge@latest plan desired.maxdsl \
+  --scope voices \
+  --compact \
+  -o plan.json
+
+# Diff current desired DSL -> next desired DSL
+npx maxforge@latest plan next.maxdsl \
+  --scope voices \
+  --current current.maxdsl \
+  -o plan.json
+```
+
+This repository also contains the native `maxforge.sync` Max external. It
+accepts compact JSON with `apply <json>` or a named Max dictionary with
+`applydict <name>`, validates the complete plan, and mutates the containing
+patcher directly through the Max SDK. It does not route through JavaScript or
+`thispatcher`.
+
+Build and install it for local development:
+
+```bash
+git submodule update --init --recursive
+cmake -S . -B build
+cmake --build build
+
+mkdir -p "$HOME/Documents/Max 9/Packages"
+ln -s "$PWD" "$HOME/Documents/Max 9/Packages/maxforge"
+# Restart Max after installing an external.
+```
+
+Open `examples/max_sync/maxforge_sync_demo.maxpat` for an end-to-end native
+example, including managed objects inside a generated subpatcher.
+
+`maxforge.sync` verifies `baseRevision` and never touches objects outside the
+exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does **not** provide
+rollback after a runtime mutation failure. See
+[`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
 
 ## AI agent skill
 
@@ -195,6 +232,12 @@ maxforge decompile input.maxpat -o output.maxdsl
 
 # Validate without writing output
 maxforge validate input.maxdsl
+
+# Desired DSL → managed PatchPlan for maxforge.sync
+maxforge plan desired.maxdsl --scope voices --compact -o plan.json
+
+# Diff from a prior desired DSL or a scoped maxpat snapshot
+maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 
 # Allow objects not in the database
 maxforge compile input.maxdsl --allow-unknown -o output.maxpat
@@ -339,6 +382,11 @@ src/
     clipboard.ts       Compress/decompress for Max clipboard
     serializer.ts      JSON serialization
     types.ts           Type definitions
+  max/
+    patch-graph.ts     Managed desired graph and PatchPlan diff
+    thispatcher.ts     thispatcher command generation
+source/projects/
+  maxforge.sync/       Native min-api PatchPlan consumer
 data/
   objects.json         374-object database
 docs/
@@ -352,6 +400,7 @@ tests/
 examples/
   basic_synth.maxdsl   Example patch
   voice_bank.maxdsl    Repeated-object generation example
+  max_sync/            Native external end-to-end example
 ```
 
 ## Development

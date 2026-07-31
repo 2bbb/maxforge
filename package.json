@@ -46,6 +46,7 @@
     "docs/patch-sync.md",
     "examples/**/*.maxdsl",
     "examples/**/*.maxpat",
+    "examples/**/*.json",
     "examples/**/*.cjs",
     "examples/**/README.md"
   ],

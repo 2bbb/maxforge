@@ -14,6 +14,7 @@ Use the published CLI without global install:
 ```bash
 npx maxforge@latest validate input.maxdsl
 npx maxforge@latest compile input.maxdsl -o output.maxpat
+npx maxforge@latest plan input.maxdsl --scope voices --compact -o plan.json
 ```
 
 In this repository, use the local build while developing:
@@ -70,6 +71,9 @@ for i in 0..7 {
 3. Run `maxforge compile input.maxdsl -o output.maxpat`.
 4. If targeting Max clipboard paste, use `--clipboard` and pipe/copy the output.
 5. For reverse engineering, use `maxforge decompile input.maxpat -o output.maxdsl`; positions round-trip via `at(x, y)`.
+6. For live managed patching, generate a plan with `maxforge plan` and apply it
+   to the native `maxforge.sync` external. Do not invent raw thispatcher commands
+   when the target contains nested patchers.
 
 ## Syntax reminders
 
@@ -84,4 +88,6 @@ for i in 0..7 {
 
 - Full DSL spec: `docs/dsl-spec.md`
 - Public examples: `examples/basic_synth.maxdsl`, `examples/voice_bank.maxdsl`
+- Native live-sync example: `examples/max_sync/`
+- Managed synchronization protocol: `docs/patch-sync.md`
 - Object database used by the compiler: `data/objects.json`

@@ -193,11 +193,22 @@ const desired = compileDslToPatchGraph(source, database, "voices");
 const plan = diffPatchGraphs(currentGraph, desired.graph);
 ```
 
+CLIでは同じplanを直接生成できる。
+
+```bash
+maxforge plan desired.maxdsl --scope voices --compact -o plan.json
+maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
+```
+
 - `scope` は英字またはアンダースコアで始まる識別子にする。
 - managed graphでは`@varname`を指定しない。`maxforge_<scope>_obj_...`の形式で自動管理される。
 - `baseRevision`が現在のrevisionと一致しないplanは適用しない。
 - managed scope外のオブジェクトを削除・変更しない。
 - DSLはdesired stateとして扱い、`delete`などの命令型構文を追加しない。
+- Max内では`maxforge.sync @scope voices`へ`apply <compact-json>`を送るか、
+  named `dict`を`applydict <name>`で適用する。
+- `maxforge.sync`はJavaScriptや`thispatcher`を経由せずMax SDKでpatcherを変更する。
+- protocol v1はruntime failure時のrollbackを保証しない。
 - 詳細は`docs/patch-sync.md`を参照。
 
 ### Full Example: MIDI Synth
