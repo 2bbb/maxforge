@@ -1042,6 +1042,7 @@ private:
 	}
 
 	void send_error(const std::string &message) {
+		cerr << message << c74::min::endl;
 		status_output.send("error", message);
 		const c74::min::symbol configured_scope_symbol = scope;
 		const std::string configured_scope{configured_scope_symbol.c_str()};
