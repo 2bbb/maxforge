@@ -143,10 +143,41 @@ function boxToDSL(box: BoxJSON, name: string): string {
   }
 
   if (box.maxclass === "newobj") {
-    return `${name} = ${box.text || box.maxclass}${attrSuffix}${posSuffix}`;
+    const objectText = escapeLiteralAttributeTokens(box.text || box.maxclass);
+    return `${name} = ${objectText}${attrSuffix}${posSuffix}`;
   }
 
   return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
+}
+
+function escapeLiteralAttributeTokens(text: string): string {
+  let result = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (character === '"' && !isEscaped(text, i)) {
+      inQuotes = !inQuotes;
+    }
+    if (
+      !inQuotes &&
+      character === "@" &&
+      (i === 0 || /\s/.test(text[i - 1]))
+    ) {
+      result += "\\";
+    }
+    result += character;
+  }
+
+  return result;
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let i = index - 1; 0 <= i && text[i] === "\\"; i--) {
+    slashCount++;
+  }
+  return slashCount % 2 === 1;
 }
 
 function positionSuffix(box: BoxJSON): string {

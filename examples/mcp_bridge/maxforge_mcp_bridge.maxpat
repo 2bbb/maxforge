@@ -67,12 +67,7 @@
           "outlettype": [
             ""
           ],
-          "text": "maxforge.sync",
-          "host": "127.0.0.1",
-          "port": 8766,
-          "scope": "agent_demo",
-          "patcher_id": "maxforge_bridge",
-          "controller": 1
+          "text": "maxforge.sync @host 127.0.0.1 @port 8766 @scope agent_demo @patcher_id maxforge_bridge @controller 1"
         }
       }
     ],

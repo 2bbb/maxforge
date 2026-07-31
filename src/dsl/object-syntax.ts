@@ -22,22 +22,24 @@ export function parseAttributes(text: string): { text: string; attrs: Record<str
   }
 
   if (attrIndices.length === 0) {
-    return { text, attrs };
+    return { text: unescapeLiteralAttributeTokens(text), attrs };
   }
 
   const firstAttr = attrIndices[0];
-  const objectTokens = tokens.slice(0, firstAttr);
+  const objectTokens = tokens
+    .slice(0, firstAttr)
+    .map(unescapeLiteralAttributeToken);
 
   for (const startIdx of attrIndices) {
     const key = tokens[startIdx].substring(1);
     const endIdx = attrIndices.find(idx => idx > startIdx) ?? tokens.length;
     const values: AttrValue[] = [];
     for (let j = startIdx + 1; j < endIdx; j++) {
-      const t = tokens[j];
-      if (/^-?\d+(\.\d+)?$/.test(t)) {
-        values.push(parseFloat(t));
+      const token = unescapeLiteralAttributeToken(tokens[j]);
+      if (/^-?\d+(\.\d+)?$/.test(token)) {
+        values.push(parseFloat(token));
       } else {
-        values.push(stripQuotes(t));
+        values.push(stripQuotes(token));
       }
     }
     if (values.length > 0) {
@@ -46,6 +48,43 @@ export function parseAttributes(text: string): { text: string; attrs: Record<str
   }
 
   return { text: objectTokens.join(" "), attrs };
+}
+
+function unescapeLiteralAttributeTokens(text: string): string {
+  let result = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (character === '"' && !isEscaped(text, i)) {
+      inQuotes = !inQuotes;
+    }
+    if (
+      !inQuotes &&
+      character === "\\" &&
+      text[i + 1] === "@" &&
+      (i === 0 || /\s/.test(text[i - 1]))
+    ) {
+      result += "@";
+      i++;
+      continue;
+    }
+    result += character;
+  }
+
+  return result;
+}
+
+function unescapeLiteralAttributeToken(token: string): string {
+  return token.startsWith("\\@") ? token.substring(1) : token;
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let i = index - 1; 0 <= i && text[i] === "\\"; i--) {
+    slashCount++;
+  }
+  return slashCount % 2 === 1;
 }
 
 function tokenizeWithQuotes(text: string): string[] {

@@ -27,14 +27,13 @@ describe("MCP Max bridge example", () => {
     expect(boxes).toHaveLength(1);
     expect(result.output!.patcher.lines).toEqual([]);
     expect(boxes[0]).toMatchObject({
-      text: "maxforge.sync",
+      text:
+        "maxforge.sync @host 127.0.0.1 @port 8766 @scope agent_demo " +
+        "@patcher_id maxforge_bridge @controller 1",
       numinlets: 1,
       numoutlets: 1,
-      host: "127.0.0.1",
-      port: 8766,
-      scope: "agent_demo",
-      patcher_id: "maxforge_bridge",
-      controller: 1,
     });
+    expect(boxes[0]).not.toHaveProperty("host");
+    expect(boxes[0]).not.toHaveProperty("controller");
   });
 });

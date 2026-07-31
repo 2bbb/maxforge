@@ -180,11 +180,13 @@ content is:
 maxforge.sync @host 127.0.0.1 @port 8766 @scope agent_demo @patcher_id maxforge_bridge @controller 1
 ```
 
-The checked-in `.maxdsl` expresses these as box attributes; the generated
-`.maxpat` contains exactly one box and zero patch cords. `maxforge.sync` waits
-until its containing top-level patcher has a visible view, connects, and
-registers automatically. The resulting `maxforge.registered` event advertises
-identity, metadata, capability, and either the live revision or `null`.
+The checked-in `.maxdsl` escapes each leading `@` as `\@`, keeping these values
+in the Max object's initialization text instead of writing unrelated box JSON
+keys. The generated `.maxpat` contains exactly one box and zero patch cords.
+`maxforge.sync` waits until its containing top-level patcher has a visible view,
+connects, and registers automatically. The resulting `maxforge.registered`
+event advertises identity, metadata, capability, and either the live revision
+or `null`.
 
 Transport lifecycle can also be controlled with `connect`, `disconnect`, and
 `restart`. `status` reports the current connection state. Attributes

@@ -902,6 +902,39 @@ describe("attributes", () => {
     expect(stmt.attrs).toEqual({ presentation: [1] });
   });
 
+  it("preserves escaped @ arguments in object text and round-trips them", () => {
+    const source = String.raw`sync = maxforge.sync \@host 127.0.0.1 \@port 8766 @presentation 1`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+
+    const stmt = ast.statements[0] as any;
+    expect(stmt.objectText).toBe(
+      "maxforge.sync @host 127.0.0.1 @port 8766"
+    );
+    expect(stmt.attrs).toEqual({ presentation: [1] });
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    const box = result.output!.patcher.boxes[0].box as any;
+    expect(box.text).toBe("maxforge.sync @host 127.0.0.1 @port 8766");
+    expect(box.host).toBeUndefined();
+    expect(box.presentation).toBe(1);
+
+    const decompiled = decompile(result.output!);
+    expect(decompiled).toContain(
+      String.raw`maxforge.sync \@host 127.0.0.1 \@port 8766 @presentation 1`
+    );
+
+    const reparsed = parse(decompiled);
+    expect(reparsed.errors).toHaveLength(0);
+    const recompiled = compile(reparsed.ast, db);
+    expect(recompiled.success).toBe(true);
+    expect(recompiled.output!.patcher.boxes[0].box).toMatchObject({
+      text: "maxforge.sync @host 127.0.0.1 @port 8766",
+      presentation: 1,
+    });
+  });
+
   it("compiles single-value attrs as scalar in box JSON", () => {
     const { ast } = parse('freq = number @minimum 0 @maximum 127');
     const result = compile(ast, db);

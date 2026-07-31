@@ -155,6 +155,11 @@ attr_value ::= NUMBER | STRING | unquoted_token
 - Single-value attributes emit a scalar in the box JSON; multi-value emit an array.
 - String values can be quoted (`"Courier"`) or unquoted (`Arial`).
 - Numeric values are parsed as numbers; everything else is a string.
+- Prefix an object argument with `\` when the literal token must begin with
+  `@`. For example, `maxforge.sync \@host 127.0.0.1` emits the object text
+  `maxforge.sync @host 127.0.0.1` instead of a `host` box JSON key.
+- The decompiler adds this escape to literal `@` tokens in `newobj` text so
+  compile/decompile round-trips preserve Max initialization arguments.
 
 Examples:
 

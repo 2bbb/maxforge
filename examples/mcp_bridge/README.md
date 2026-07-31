@@ -21,6 +21,11 @@ The external compiles the reusable WebSocket client source pinned through the
 `bbb.agent` submodule. Neither the `bbb.agent.hub` external nor the
 `bbb.agent` helper process is a runtime dependency.
 
+The `.maxdsl` writes `\@host`, `\@scope`, and the other initialization
+arguments with escaped leading `@` tokens. This keeps them in the `newobj`
+text, which min-api reads at construction time; unescaped DSL attributes would
+instead become box JSON keys.
+
 ## Build the patch and external
 
 From the repository root:
