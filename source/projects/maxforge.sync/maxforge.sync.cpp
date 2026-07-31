@@ -1,8 +1,10 @@
 #include "c74_min.h"
+#include "bbb_agent_websocket_client.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -195,118 +197,17 @@ auto patch_box_json(
 		"}}";
 }
 
-auto patch_line_json(
-	const std::string &source,
-	long outlet,
-	const std::string &destination,
-	long inlet
+auto patcher_json(
+	const std::vector<std::string> &boxes,
+	const std::vector<std::string> &lines,
+	double width,
+	double height
 ) -> std::string
 {
-	return
-		"{\"patchline\":{\"source\":[" +
-		json_string(source) + "," + std::to_string(outlet) +
-		"],\"destination\":[" +
-		json_string(destination) + "," + std::to_string(inlet) +
-		"]}}";
-}
-
-auto bridge_patch_json(
-	const std::string &patcher_id,
-	const std::string &scope,
-	const std::string &title,
-	const std::string &host,
-	long port
-) -> std::string
-{
-	const auto host_text =
-		"host " + host + ", port " + std::to_string(port);
-	const std::vector<std::string> boxes{
-		patch_box_json(
-			"obj-title",
-			"comment",
-			title + " — managed by maxforge",
-			30,
-			25,
-			420,
-			20
-		),
-		patch_box_json(
-			"obj-scope",
-			"comment",
-			"patcherId: " + patcher_id + " / scope: " + scope,
-			30,
-			50,
-			420,
-			20
-		),
-		patch_box_json("obj-load", "newobj", "loadbang", 30, 100, 70, 22),
-		patch_box_json("obj-host", "message", host_text, 125, 90, 190, 22),
-		patch_box_json("obj-delay", "newobj", "delay 250", 125, 125, 70, 22),
-		patch_box_json("obj-connect", "message", "connect", 220, 125, 60, 22),
-		patch_box_json(
-			"obj-set-scope",
-			"message",
-			"scope " + scope,
-			30,
-			160,
-			145,
-			22
-		),
-		patch_box_json(
-			"obj-set-id",
-			"message",
-			"patcher_id " + patcher_id,
-			30,
-			195,
-			230,
-			22
-		),
-		patch_box_json(
-			"obj-set-controller",
-			"message",
-			"controller 0",
-			30,
-			230,
-			95,
-			22
-		),
-		patch_box_json("obj-hub", "newobj", "bbb.agent.hub", 340, 125, 105, 22),
-		patch_box_json("obj-route-status", "newobj", "route status", 340, 175, 80, 22),
-		patch_box_json("obj-connected", "newobj", "sel connected", 340, 210, 85, 22),
-		patch_box_json("obj-register", "message", "register", 340, 245, 65, 22),
-		patch_box_json("obj-route-data", "newobj", "route data", 500, 175, 70, 22),
-		patch_box_json("obj-apply", "newobj", "prepend apply", 500, 210, 90, 22),
-		patch_box_json("obj-sync", "newobj", "maxforge.sync", 500, 245, 110, 22),
-		patch_box_json("obj-route-event", "newobj", "route event", 500, 295, 80, 22),
-		patch_box_json("obj-send", "newobj", "prepend send", 500, 330, 90, 22)
-	};
-	const std::vector<std::string> lines{
-		patch_line_json("obj-load", 0, "obj-host", 0),
-		patch_line_json("obj-host", 0, "obj-hub", 0),
-		patch_line_json("obj-load", 0, "obj-delay", 0),
-		patch_line_json("obj-delay", 0, "obj-connect", 0),
-		patch_line_json("obj-connect", 0, "obj-hub", 0),
-		patch_line_json("obj-load", 0, "obj-set-scope", 0),
-		patch_line_json("obj-set-scope", 0, "obj-sync", 0),
-		patch_line_json("obj-load", 0, "obj-set-id", 0),
-		patch_line_json("obj-set-id", 0, "obj-sync", 0),
-		patch_line_json("obj-load", 0, "obj-set-controller", 0),
-		patch_line_json("obj-set-controller", 0, "obj-sync", 0),
-		patch_line_json("obj-hub", 0, "obj-route-status", 0),
-		patch_line_json("obj-route-status", 0, "obj-connected", 0),
-		patch_line_json("obj-connected", 0, "obj-register", 0),
-		patch_line_json("obj-register", 0, "obj-sync", 0),
-		patch_line_json("obj-hub", 1, "obj-route-data", 0),
-		patch_line_json("obj-route-data", 0, "obj-apply", 0),
-		patch_line_json("obj-apply", 0, "obj-sync", 0),
-		patch_line_json("obj-sync", 0, "obj-route-event", 0),
-		patch_line_json("obj-route-event", 0, "obj-send", 0),
-		patch_line_json("obj-send", 0, "obj-hub", 0)
-	};
-
 	std::string result{
-		"{\"patcher\":{\"fileversion\":1,\"classnamespace\":\"box\"," +
-		std::string{"\"rect\":[120,120,900,560],"} +
+		"{\"fileversion\":1,\"classnamespace\":\"box\",\"rect\":[120,120," +
+		json_number(width) + "," +
+		json_number(height) + "]," +
 		"\"bglocked\":0,\"openinpresentation\":0," +
 		"\"default_fontsize\":12,\"default_fontface\":0," +
 		"\"default_fontname\":\"Arial\",\"gridonopen\":1," +
@@ -322,8 +223,29 @@ auto bridge_patch_json(
 		if(0 < index) result += ",";
 		result += lines[index];
 	}
-	result += "]}}";
+	result += "]}";
 	return result;
+}
+
+auto bridge_patch_json(
+	const std::string &patcher_id,
+	const std::string &scope,
+	const std::string &host,
+	long port
+) -> std::string
+{
+	const auto object_text =
+		"maxforge.sync @host " + host +
+		" @port " + std::to_string(port) +
+		" @scope " + scope +
+		" @patcher_id " + patcher_id +
+		" @controller 0";
+	const std::vector<std::string> boxes{
+		patch_box_json("obj-sync", "newobj", object_text, 30, 30, 560, 22)
+	};
+	return "{\"patcher\":" +
+		patcher_json(boxes, {}, 900, 560) +
+		"}";
 }
 
 auto json_number(double value) -> std::string {
@@ -344,7 +266,6 @@ auto create_bridge_patch(
 	const auto json = bridge_patch_json(
 		patcher_id,
 		scope,
-		title,
 		host,
 		port
 	);
@@ -367,6 +288,11 @@ auto create_bridge_patch(
 		c74::max::gensym(title.c_str())
 	);
 	c74::max::jpatcher_set_dirty(patcher, 1);
+	c74::max::jpatcher_set_locked(patcher, 0);
+	c74::max::object_method(
+		patcher,
+		c74::max::gensym("front")
+	);
 	c74::max::object_method(
 		patcher,
 		c74::max::gensym("loadbang")
@@ -1411,33 +1337,38 @@ auto apply_operation(
 	return false;
 }
 
+auto dictionary_from_json(const std::string &json) -> c74::max::t_dictionary * {
+	c74::max::t_dictionary *dictionary{};
+	std::array<char, 256> error_message{};
+	const auto error = c74::max::dictobj_dictionaryfromstring(
+		&dictionary,
+		json.c_str(),
+		1,
+		error_message.data()
+	);
+	if(error != c74::max::MAX_ERR_NONE || !dictionary) {
+		throw std::runtime_error(
+			error_message.front() ? error_message.data() : "invalid JSON plan"
+		);
+	}
+	return dictionary;
+}
+
 auto dictionary_from_atoms(
 	const c74::min::atoms &arguments
 ) -> c74::max::t_dictionary *
 {
 	if(arguments.empty()) throw std::runtime_error("apply requires a JSON plan");
 
-	c74::max::t_dictionary *dictionary{};
 	if(
 		arguments.size() == 1 &&
 		c74::max::atom_gettype(&arguments.front()) == c74::max::A_SYM
 	) {
 		const std::string json = arguments.front();
-		std::array<char, 256> error_message{};
-		const auto error = c74::max::dictobj_dictionaryfromstring(
-			&dictionary,
-			json.c_str(),
-			1,
-			error_message.data()
-		);
-		if(error != c74::max::MAX_ERR_NONE || !dictionary) {
-			throw std::runtime_error(
-				error_message.front() ? error_message.data() : "invalid JSON plan"
-			);
-		}
-		return dictionary;
+		return dictionary_from_json(json);
 	}
 
+	c74::max::t_dictionary *dictionary{};
 	const auto error = c74::max::dictobj_dictionaryfromatoms_extended(
 		&dictionary,
 		c74::max::gensym(""),
@@ -1454,15 +1385,46 @@ auto dictionary_from_atoms(
 
 class maxforge_sync : public c74::min::object<maxforge_sync> {
 public:
-	MIN_DESCRIPTION{"Validate and apply maxforge PatchPlan operations"};
-	MIN_TAGS{"patcher, scripting, agent"};
+	MIN_DESCRIPTION{"Connect Max to maxforge MCP and synchronize a live patcher"};
+	MIN_TAGS{"patcher, scripting, agent, websocket"};
 	MIN_AUTHOR{"2bit"};
 
 	c74::min::inlet<> input{
 		this,
-		"(anything) apply, applydict, validate, inspect, register, revision"
+		"(anything) connect, disconnect, status, apply, validate, inspect, revision"
 	};
 	c74::min::outlet<> status_output{this, "(anything) status and errors"};
+
+	c74::min::attribute<c74::min::symbol> host{
+		this,
+		"host",
+		"127.0.0.1",
+		c74::min::description{"Loopback maxforge MCP WebSocket host"}
+	};
+
+	c74::min::attribute<long> port{
+		this,
+		"port",
+		8766,
+		c74::min::description{"maxforge MCP WebSocket port"},
+		c74::min::range{1, 65535}
+	};
+
+	c74::min::attribute<long> reconnect{
+		this,
+		"reconnect",
+		1,
+		c74::min::description{"Automatically reconnect to the maxforge MCP bridge"},
+		c74::min::range{0, 1}
+	};
+
+	c74::min::attribute<long> reconnect_interval{
+		this,
+		"reconnect_interval",
+		1000,
+		c74::min::description{"WebSocket reconnect interval in milliseconds"},
+		c74::min::range{100, 60000}
+	};
 
 	c74::min::attribute<c74::min::symbol> scope{
 		this,
@@ -1554,7 +1516,7 @@ public:
 		"register",
 		"Register the containing patcher with the MCP bridge",
 		MIN_FUNCTION {
-			send_registration_event();
+			send_registration_event(true);
 			return {};
 		}
 	};
@@ -1574,7 +1536,207 @@ public:
 		}
 	};
 
+	c74::min::message<> connect_message{
+		this,
+		"connect",
+		"Connect to the maxforge MCP WebSocket bridge",
+		MIN_FUNCTION {
+			connect_transport();
+			return {};
+		}
+	};
+
+	c74::min::message<> disconnect_message{
+		this,
+		"disconnect",
+		"Disconnect from the maxforge MCP WebSocket bridge",
+		MIN_FUNCTION {
+			disconnect_transport();
+			return {};
+		}
+	};
+
+	c74::min::message<> restart_message{
+		this,
+		"restart",
+		"Restart the maxforge MCP WebSocket connection",
+		MIN_FUNCTION {
+			disconnect_transport();
+			connect_transport();
+			return {};
+		}
+	};
+
+	c74::min::message<> transport_status_message{
+		this,
+		"status",
+		"Output the maxforge MCP WebSocket connection status",
+		MIN_FUNCTION {
+			status_output.send("status", transport_status_label());
+			return {};
+		}
+	};
+
+	maxforge_sync() {
+		websocket_client_.set_notifier([this]() {
+			transport_queue_.set();
+		});
+		init_timer_.delay(0);
+	}
+
+	~maxforge_sync() {
+		websocket_client_.clear_notifier();
+		websocket_client_.disconnect();
+	}
+
 private:
+	enum class registration_result {
+		sent,
+		retry,
+		failed
+	};
+
+	c74::min::queue<> transport_queue_{this, MIN_FUNCTION {
+		deliver_transport_events();
+		return {};
+	}};
+
+	bbb::agent::websocket_client websocket_client_;
+
+	c74::min::timer<c74::min::timer_options::defer_delivery> init_timer_{
+		this,
+		MIN_FUNCTION {
+			connect_transport();
+			return {};
+		}
+	};
+
+	c74::min::timer<c74::min::timer_options::defer_delivery> registration_timer_{
+		this,
+		MIN_FUNCTION {
+			if(!transport_open_ || registration_sent_) return {};
+			const auto result = send_registration_event(false);
+			if(result == registration_result::retry) {
+				registration_timer_.delay(100);
+			}
+			return {};
+		}
+	};
+
+	bool transport_open_{false};
+	bool registration_sent_{false};
+	std::string last_transport_error_;
+
+	auto transport_status_label() const -> const char * {
+		switch(websocket_client_.state()) {
+			case bbb::agent::websocket_state::connecting:
+				return "connecting";
+			case bbb::agent::websocket_state::open:
+				return "connected";
+			case bbb::agent::websocket_state::closing:
+			case bbb::agent::websocket_state::closed:
+				return "disconnected";
+		}
+		return "disconnected";
+	}
+
+	auto websocket_url() const -> std::string {
+		const c74::min::symbol host_symbol = host;
+		const std::string host_value{host_symbol.c_str()};
+		if(host_value != "127.0.0.1" && host_value != "::1") {
+			throw std::runtime_error(
+				"@host must be the loopback address 127.0.0.1 or ::1"
+			);
+		}
+		const long port_value = port;
+		if(port_value < 1 || 65535 < port_value) {
+			throw std::runtime_error("invalid @port");
+		}
+		const auto authority = host_value == "::1"
+			? "[" + host_value + "]"
+			: host_value;
+		return "ws://" + authority + ":" + std::to_string(port_value);
+	}
+
+	void connect_transport() {
+		try {
+			const long interval = reconnect_interval;
+			if(interval < 100 || 60000 < interval) {
+				throw std::runtime_error("invalid @reconnect_interval");
+			}
+			transport_open_ = false;
+			registration_sent_ = false;
+			status_output.send("status", "connecting");
+			websocket_client_.connect(
+				websocket_url(),
+				static_cast<long>(reconnect) != 0,
+				static_cast<std::uint32_t>(interval)
+			);
+		} catch(const std::exception &exception) {
+			report_transport_error(exception.what());
+		} catch(...) {
+			report_transport_error("unknown WebSocket connection error");
+		}
+	}
+
+	void disconnect_transport() {
+		transport_open_ = false;
+		registration_sent_ = false;
+		websocket_client_.disconnect();
+		status_output.send("status", "disconnected");
+	}
+
+	void deliver_transport_events() {
+		for(auto &event : websocket_client_.drain_events()) {
+			switch(event.type) {
+				case bbb::agent::websocket_event_type::open:
+					transport_open_ = true;
+					registration_sent_ = false;
+					last_transport_error_.clear();
+					status_output.send("status", "connected");
+					registration_timer_.delay(0);
+					break;
+				case bbb::agent::websocket_event_type::close:
+					transport_open_ = false;
+					registration_sent_ = false;
+					status_output.send("status", "disconnected");
+					break;
+				case bbb::agent::websocket_event_type::message:
+					process_json(event.text);
+					break;
+				case bbb::agent::websocket_event_type::error:
+					report_transport_error(
+						"WebSocket: " +
+						(event.text.empty() ? "unknown error" : event.text)
+					);
+					break;
+			}
+		}
+	}
+
+	void process_json(const std::string &json) {
+		c74::max::t_dictionary *dictionary{};
+		try {
+			dictionary = dictionary_from_json(json);
+			process_dictionary(dictionary, true);
+			c74::max::object_free(dictionary);
+		} catch(const std::exception &exception) {
+			if(dictionary) c74::max::object_free(dictionary);
+			send_error(exception.what(), "transport");
+		} catch(...) {
+			if(dictionary) c74::max::object_free(dictionary);
+			send_error("unknown transport message error", "transport");
+		}
+	}
+
+	void report_transport_error(const std::string &message) {
+		if(message != last_transport_error_) {
+			cerr << message << c74::min::endl;
+			last_transport_error_ = message;
+		}
+		status_output.send("error", message);
+	}
+
 	auto configured_patcher_id() const -> std::string {
 		const c74::min::symbol value_symbol = patcher_id;
 		const std::string value{value_symbol.c_str()};
@@ -1593,17 +1755,31 @@ private:
 		return value;
 	}
 
-	auto containing_patcher() -> c74::max::t_object * {
-		c74::max::t_object *root_patcher{};
+	auto top_level_patcher() -> c74::max::t_object * {
+		c74::max::t_object *containing_patcher{};
 		const auto patcher_error = c74::max::object_obex_lookup(
 			maxobj(),
 			c74::max::gensym("#P"),
-			&root_patcher
+			&containing_patcher
 		);
-		if(patcher_error != c74::max::MAX_ERR_NONE || !root_patcher) {
+		if(patcher_error != c74::max::MAX_ERR_NONE || !containing_patcher) {
 			throw std::runtime_error("could not access the containing patcher");
 		}
-		return root_patcher;
+		auto *top_level = c74::max::jpatcher_get_toppatcher(
+			containing_patcher
+		);
+		return top_level ? top_level : containing_patcher;
+	}
+
+	auto visible_view(c74::max::t_object *patcher) -> c74::max::t_object * {
+		for(
+			auto *view = c74::max::jpatcher_get_firstview(patcher);
+			view;
+			view = c74::max::patcherview_get_nextview(view)
+		) {
+			if(c74::max::patcherview_get_visible(view) != 0) return view;
+		}
+		return nullptr;
 	}
 
 	void process_atoms(const c74::min::atoms &arguments, bool should_apply) {
@@ -1714,7 +1890,7 @@ private:
 
 			const auto plan = parse_plan(dictionary);
 			event_scope = plan.scope;
-			auto *root_patcher = containing_patcher();
+			auto *root_patcher = top_level_patcher();
 			const auto current_scope = configured_scope();
 			const c74::min::symbol revision_symbol = revision_state;
 			const std::string current_revision{revision_symbol.c_str()};
@@ -1772,7 +1948,7 @@ private:
 
 	void send_patch_snapshot(const std::string &request_id) {
 		try {
-			auto *root_patcher = containing_patcher();
+			auto *root_patcher = top_level_patcher();
 			const auto current_scope = configured_scope();
 			const auto current_patcher_id = configured_patcher_id();
 			const c74::min::symbol revision_symbol = revision_state;
@@ -1801,9 +1977,28 @@ private:
 		}
 	}
 
-	void send_registration_event() {
+	auto send_registration_event(bool report_invisible) -> registration_result {
 		try {
-			auto *root_patcher = containing_patcher();
+			if(!transport_open_) {
+				if(report_invisible) {
+					report_transport_error(
+						"cannot register while WebSocket is disconnected"
+					);
+				}
+				return registration_result::failed;
+			}
+			auto *root_patcher = top_level_patcher();
+			auto *view = visible_view(root_patcher);
+			if(!view) {
+				if(report_invisible) {
+					send_error(
+						"containing patcher does not have a visible window",
+						"register"
+					);
+				}
+				return registration_result::retry;
+			}
+			c74::max::patcherview_set_locked(view, 0);
 			const auto current_patcher_id = configured_patcher_id();
 			const auto current_scope = configured_scope();
 			const c74::min::symbol revision_symbol = revision_state;
@@ -1816,7 +2011,7 @@ private:
 				c74::max::jpatcher_get_title(root_patcher)
 			);
 			if(title.empty()) title = filename;
-			send_event(
+			if(!send_event(
 				"{\"type\":\"maxforge.registered\",\"patcherId\":" +
 				json_string(current_patcher_id) +
 				",\"scope\":" +
@@ -1832,12 +2027,17 @@ private:
 				",\"filepath\":" +
 				json_string(symbol_string(c74::max::jpatcher_get_filepath(root_patcher))) +
 				"}"
-			);
+			)) {
+				return registration_result::failed;
+			}
+			registration_sent_ = true;
+			return registration_result::sent;
 		} catch(const std::exception &exception) {
 			send_error(exception.what(), "register");
 		} catch(...) {
 			send_error("unknown patch registration error", "register");
 		}
+		return registration_result::failed;
 	}
 
 	void send_error(
@@ -1922,8 +2122,12 @@ private:
 		);
 	}
 
-	void send_event(const std::string &json) {
+	auto send_event(const std::string &json) -> bool {
 		status_output.send("event", json);
+		if(!transport_open_) return false;
+		if(websocket_client_.send(json)) return true;
+		report_transport_error("could not send event to maxforge MCP bridge");
+		return false;
 	}
 };
 
