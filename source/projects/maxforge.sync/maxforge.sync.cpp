@@ -608,15 +608,21 @@ auto box_runtime_id(c74::max::t_object *box) -> std::string {
 	return stream.str();
 }
 
-auto box_text(c74::max::t_object *box, bool &has_text) -> std::string {
+auto attribute_text(
+	c74::max::t_object *object,
+	const char *attribute_name,
+	bool &has_text
+) -> std::string
+{
 	has_text = false;
-	const auto text_symbol = c74::max::gensym("text");
-	if(!c74::max::object_attr_get(box, text_symbol)) return {};
+	if(!object) return {};
+	const auto text_symbol = c74::max::gensym(attribute_name);
+	if(!c74::max::object_attr_get(object, text_symbol)) return {};
 
 	long count{};
 	c74::max::t_atom *values{};
 	const auto value_error = c74::max::object_attr_getvalueof(
-		box,
+		object,
 		text_symbol,
 		&count,
 		&values
@@ -646,6 +652,39 @@ auto box_text(c74::max::t_object *box, bool &has_text) -> std::string {
 	c74::max::sysmem_freeptr(text);
 	has_text = true;
 	return result;
+}
+
+auto box_text(c74::max::t_object *box, bool &has_text) -> std::string {
+	auto result = attribute_text(box, "text", has_text);
+	if(has_text) return result;
+
+	result = attribute_text(c74::max::jbox_get_object(box), "text", has_text);
+	if(has_text) return result;
+
+	auto *textfield = c74::max::jbox_get_textfield(box);
+	result = attribute_text(textfield, "text", has_text);
+	if(has_text) return result;
+
+	if(!textfield) return {};
+	// Max's patcher controller reads live textfields through this A_CANT method.
+	// object_method_imp is required here; object_method returns the error sentinel.
+	const auto text_symbol = c74::max::gensym("getptr");
+	if(!c74::max::object_getmethod(textfield, text_symbol)) return {};
+	const auto *text = (const char *)c74::max::object_method_imp(
+		textfield,
+		text_symbol,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr
+	);
+	if(!text) return {};
+	has_text = true;
+	return text;
 }
 
 auto snapshot_path_component(const snapshot_box &box) -> std::string {
