@@ -74,9 +74,11 @@ for i in 0..7 {
 6. For live managed patching, generate a plan with `maxforge plan` and apply it
    to the native `maxforge.sync` external. Do not invent raw thispatcher commands
    when the target contains nested patchers.
-7. When MCP tools are available, call `maxforge_status`, inspect
-   `maxforge_compile_plan`, then apply the complete desired state with
-   `maxforge_apply_dsl`. Never treat a timeout as success.
+7. When MCP tools are available, call `maxforge_list_patches`, select the
+   explicit `patcherId`, inspect it, inspect `maxforge_compile_plan`, then
+   apply the complete desired state with `maxforge_apply_dsl`. Use
+   `maxforge_create_patch` when isolation in a new Max window is required.
+   Never treat a timeout as success.
 8. After an MCP process restart, provide the previous complete DSL as
    `currentDsl` when Max reports an initialized scope. A revision hash is not a
    recoverable graph.

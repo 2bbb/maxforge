@@ -80,6 +80,39 @@ describe("maxforge MCP protocol surface", () => {
           },
         },
       });
+
+      const created = await client.request(5, "tools/call", {
+        name: "maxforge_create_patch",
+        arguments: {
+          patcherId: "generated_patch",
+          scope: "generated",
+          title: "Generated patch",
+        },
+      });
+      expect(created).toMatchObject({
+        result: {
+          structuredContent: {
+            patch: {
+              patcherId: "generated_patch",
+              scope: "generated",
+              title: "Generated patch",
+              controller: false,
+            },
+          },
+        },
+      });
+
+      const patches = await client.request(6, "tools/call", {
+        name: "maxforge_list_patches",
+        arguments: {},
+      });
+      expect(patches).toMatchObject({
+        result: {
+          structuredContent: {
+            patches: [],
+          },
+        },
+      });
     } finally {
       await client.close();
     }

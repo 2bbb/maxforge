@@ -209,13 +209,17 @@ rollback after a runtime mutation failure. Its status outlet emits
 `maxforge-mcp` exposes the managed workflow to MCP clients over stdio:
 
 - `maxforge_status`
+- `maxforge_list_patches`
+- `maxforge_create_patch`
 - `maxforge_inspect_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
 
 It listens for a native Max transport only on `127.0.0.1:8766`. The Max patch
 uses `bbb.agent.hub` as the generic WebSocket transport and `maxforge.sync` as
-the validating patch consumer. No JavaScript runs inside Max.
+the validating patch consumer. Each live patch registers a stable `patcherId`,
+so MCP can create and operate multiple independent Max windows without
+ambiguity. No JavaScript runs inside Max.
 
 ```json
 {

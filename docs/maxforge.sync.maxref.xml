@@ -36,6 +36,16 @@
 			<description>Output the current managed revision </description>
 		</method>
 
+		<method name='register'>
+			<digest>Register the containing patcher with the MCP bridge </digest>
+			<description>Register the containing patcher with the MCP bridge </description>
+		</method>
+
+		<method name='inspect'>
+			<digest>Output a structural snapshot of the containing patcher </digest>
+			<description>Output a structural snapshot of the containing patcher </description>
+		</method>
+
 		<method name='validate'>
 			<digest>Validate a compact JSON PatchPlan without mutating the patcher </digest>
 			<description>Validate a compact JSON PatchPlan without mutating the patcher </description>
@@ -66,6 +76,16 @@
 		<attribute name='scope' get='1' set='1' type='symbol' size='1' >
 			<digest>Managed maxforge scope </digest>
 			<description>Managed maxforge scope </description>
+		</attribute>
+
+		<attribute name='patcher_id' get='1' set='1' type='symbol' size='1' >
+			<digest>Stable MCP routing ID for the containing patcher </digest>
+			<description>Stable MCP routing ID for the containing patcher </description>
+		</attribute>
+
+		<attribute name='controller' get='1' set='1' type='long' size='1' >
+			<digest>Allow this patcher to create top-level patches </digest>
+			<description>Allow this patcher to create top-level patches </description>
 		</attribute>
 
 	</attributelist>

@@ -100,19 +100,35 @@ For repository development, use an absolute path:
    ~/Library/Application Support/Cycling '74/Max 9/Logs/Max.log
    ```
 
-3. Call `maxforge_status`; it must report exactly one connected Max client and
-   `agent_demo` as either `null` or an existing revision.
-4. Call `maxforge_inspect_patch` with scope `agent_demo`. This reads the live
+3. Call `maxforge_list_patches`; it must report `maxforge_bridge` with scope
+   `agent_demo` and `controller: true`.
+4. To work in the controller itself, call `maxforge_inspect_patch` with
+   `patcherId: maxforge_bridge` and scope `agent_demo`. This reads the live
    patch graph without looking at the Max window. Before the first apply,
    `comparisonAvailable` is false.
-5. Call `maxforge_compile_plan` with scope `agent_demo` and the full contents of
-   `desired.maxdsl`.
-6. Inspect the plan, then call `maxforge_apply_dsl` with the same scope and DSL.
+5. Call `maxforge_compile_plan` with the same `patcherId` and scope plus the
+   full contents of `desired.maxdsl`.
+6. Inspect the plan, then call `maxforge_apply_dsl` with the same target and
+   DSL.
 7. Confirm eight managed toggle/number pairs appear and the tool returns a
    matching `maxforge.applied` acknowledgement.
 8. Move, edit, connect, create, or delete a box manually, then call
    `maxforge_inspect_patch` again. The response reports the exact structural
    change and whether it touches maxforge-managed state.
+
+To work in a separate window instead, call `maxforge_create_patch`:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "title": "Generated patch"
+}
+```
+
+Wait for the tool to return the registered patch, then use
+`patcherId: generated_patch` and scope `generated` for compile, apply, and
+inspection. Do not identify a patch by its title.
 
 After the MCP process restarts, it cannot reconstruct a graph from a revision
 hash. If Max already reports an initialized revision, pass the previous full

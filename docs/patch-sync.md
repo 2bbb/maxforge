@@ -116,19 +116,25 @@ cmake --build build
 - `applydict <name>` — validate and apply a named Max dictionary.
 - `inspect [request-id]` — emit a structural snapshot of the containing
   patcher without mutating it.
+- `register` — advertise the containing patcher's stable MCP identity,
+  scope, revision, metadata, and controller capability.
 - `revision` — output the consumer's current revision.
 - `@scope <name>` — select the exact managed namespace.
+- `@patcher_id <name>` — select the stable MCP routing identity.
+- `@controller 0|1` — allow or deny native top-level patch creation requests.
 - `@revision_state <hash>` — persisted optimistic concurrency state.
 
 The status outlet also emits machine-readable transport events as
 `event <compact-json>`:
 
+- `maxforge.registered` in response to `register`.
 - `maxforge.applied` after all operations succeed.
 - `maxforge.revision` in response to `revision`; an uninitialized revision is
   encoded as `null`.
 - `maxforge.snapshot` in response to `inspect` or a correlated
   `maxforge.inspect.request`.
 - `maxforge.error` when parsing, validation, or mutation fails.
+- `maxforge.patch.created` after a requested top-level patch is loaded.
 
 These events are intended for a native transport object. Human-readable
 `applied`, `revision`, and `error` messages remain available on the same outlet.
@@ -142,9 +148,34 @@ wiring:
 {
   "type": "maxforge.inspect.request",
   "requestId": "correlation-id",
+  "patcherId": "synth_patch",
   "scope": "voices"
 }
 ```
+
+MCP apply requests use the same correlation and routing fields and contain the
+plan under `plan`. Every applied, snapshot, and error response carries the
+request ID and patcher ID, preventing one patch's response from satisfying
+another patch's request.
+
+A controller can receive:
+
+```json
+{
+  "type": "maxforge.create_patch.request",
+  "requestId": "correlation-id",
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "title": "Generated patch",
+  "host": "127.0.0.1",
+  "port": 8766
+}
+```
+
+The host must be loopback and the controller attribute must be enabled.
+`maxforge.sync` loads an unsaved top-level patch through the Max SDK, triggers
+its bootstrap loadbang, and acknowledges creation. The new patch then
+registers through its own native WebSocket connection.
 
 The snapshot response contains root patcher metadata plus flattened boxes and
 connections. `targetPath` identifies nested patchers. Box records include
@@ -185,6 +216,7 @@ both root objects and objects inside `p generated_bank`.
   with accurate `currentDsl` after the MCP process restarts.
 - MCP-to-Max transport currently requires the separate native `bbb.agent.hub`
   external.
+- New patch creation requires exactly one registered controller patch.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
 - MCP comparison baselines are process-local and begin only after an
