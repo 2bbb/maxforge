@@ -77,7 +77,28 @@ For repository development, use an absolute path:
 ## Run
 
 1. Start or reconnect the MCP client so `maxforge-mcp` is running.
-2. Open `maxforge_mcp_bridge.maxpat`.
+2. Launch Max through LaunchServices and open the bridge as a document:
+
+   ```bash
+   /usr/bin/open -F \
+     -a /Applications/Max.app \
+     --stdout /tmp/maxforge-max.stdout.log \
+     --stderr /tmp/maxforge-max.stderr.log \
+     "$PWD/examples/mcp_bridge/maxforge_mcp_bridge.maxpat"
+   ```
+
+   Pass the patch as the document operand, not after `--args`. The latter only
+   forwards values to the application's `main()` and Max does not guarantee a
+   command-line patch-loading interface. `-F` suppresses macOS saved-window
+   restoration, but it does not disable Max's own crash recovery.
+
+   Native startup output is captured in the two `/tmp` files. Max console and
+   `maxforge.sync` messages remain in:
+
+   ```text
+   ~/Library/Application Support/Cycling '74/Max 9/Logs/Max.log
+   ```
+
 3. Call `maxforge_status`; it must report exactly one connected Max client and
    `agent_demo` as either `null` or an existing revision.
 4. Call `maxforge_compile_plan` with scope `agent_demo` and the full contents of
