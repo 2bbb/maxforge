@@ -1,0 +1,32 @@
+{
+  "title": "maxforge",
+  "description": "Unofficial text-first Max patch generation and synchronization tools",
+  "author": "2bit",
+  "website": "https://github.com/2bbb/maxforge",
+  "extends": "",
+  "extensible": 0,
+  "homepatcher": "",
+  "max_version_min": "8.0",
+  "os": {
+    "macintosh": {
+      "externals": [
+        "externals/"
+      ],
+      "help": [
+        "help/"
+      ]
+    },
+    "windows": {
+      "externals": [
+        "externals/"
+      ],
+      "help": [
+        "help/"
+      ]
+    }
+  },
+  "filelist": {
+    "externals/maxforge.sync.mxo": {},
+    "externals/maxforge.sync.mxe64": {}
+  }
+}
