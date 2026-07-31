@@ -179,7 +179,9 @@ This repository also contains the native `maxforge.sync` Max external. It
 accepts compact JSON with `apply <json>` or a named Max dictionary with
 `applydict <name>`, validates the complete plan, and mutates the containing
 patcher directly through the Max SDK. It does not route through JavaScript or
-`thispatcher`.
+`thispatcher`. Its `inspect` request walks the live containing patcher and emits
+a machine-readable structural snapshot, so an agent does not need the screen
+or a saved `.maxpat` to read patch state.
 
 Build and install it for local development:
 
@@ -207,6 +209,7 @@ rollback after a runtime mutation failure. Its status outlet emits
 `maxforge-mcp` exposes the managed workflow to MCP clients over stdio:
 
 - `maxforge_status`
+- `maxforge_inspect_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
 

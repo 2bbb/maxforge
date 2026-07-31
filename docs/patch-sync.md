@@ -114,6 +114,8 @@ cmake --build build
 - `apply <compact-json>` — validate and apply a serialized `PatchPlan`.
 - `validate <compact-json>` — validate without mutation.
 - `applydict <name>` — validate and apply a named Max dictionary.
+- `inspect [request-id]` — emit a structural snapshot of the containing
+  patcher without mutating it.
 - `revision` — output the consumer's current revision.
 - `@scope <name>` — select the exact managed namespace.
 - `@revision_state <hash>` — persisted optimistic concurrency state.
@@ -124,10 +126,35 @@ The status outlet also emits machine-readable transport events as
 - `maxforge.applied` after all operations succeed.
 - `maxforge.revision` in response to `revision`; an uninitialized revision is
   encoded as `null`.
+- `maxforge.snapshot` in response to `inspect` or a correlated
+  `maxforge.inspect.request`.
 - `maxforge.error` when parsing, validation, or mutation fails.
 
 These events are intended for a native transport object. Human-readable
 `applied`, `revision`, and `error` messages remain available on the same outlet.
+Failures are also sent through Max's error API, so they use error severity in
+the Max Console rather than appearing as ordinary posts.
+
+The MCP transport sends inspection requests through the existing `apply`
+wiring:
+
+```json
+{
+  "type": "maxforge.inspect.request",
+  "requestId": "correlation-id",
+  "scope": "voices"
+}
+```
+
+The snapshot response contains root patcher metadata plus flattened boxes and
+connections. `targetPath` identifies nested patchers. Box records include
+`runtimeId`, `varName`, `maxclass`, `patchingRect`, `managed`, and `text` when
+the box exposes it. Connection records include both endpoint runtime IDs,
+varnames, and port indices.
+
+Inspection is structural by design. It does not serialize arbitrary object
+attributes or live values: doing so would confuse UI/DSP state changes with
+patch edits. Patchline color, hidden state, and midpoints are also omitted.
 
 The first apply is accepted only when the revision state is empty and the
 configured scope contains no managed root boxes. After success,
@@ -160,6 +187,8 @@ both root objects and objects inside `p generated_bank`.
   external.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
-- Manual edits to managed objects require a fresh snapshot before the next diff.
+- MCP comparison baselines are process-local and begin only after an
+  acknowledged apply. A snapshot can always report current state, but it cannot
+  reconstruct edit history that predates the baseline.
 - Patchline metadata (`midpoints`, `color`, `hidden`, and `disabled`) is not
   managed in protocol version 1 and is lost if a connection must be recreated.

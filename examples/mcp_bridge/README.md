@@ -11,7 +11,8 @@ The boundary is deliberately split:
    WebSocket.
 3. The native `maxforge.sync` external validates and applies the plan through
    the Max SDK.
-4. `maxforge.sync` sends a revision acknowledgement back to the MCP process.
+4. `maxforge.sync` sends revision acknowledgements and live structural patch
+   snapshots back to the MCP process.
 
 ## Requirements
 
@@ -101,15 +102,23 @@ For repository development, use an absolute path:
 
 3. Call `maxforge_status`; it must report exactly one connected Max client and
    `agent_demo` as either `null` or an existing revision.
-4. Call `maxforge_compile_plan` with scope `agent_demo` and the full contents of
+4. Call `maxforge_inspect_patch` with scope `agent_demo`. This reads the live
+   patch graph without looking at the Max window. Before the first apply,
+   `comparisonAvailable` is false.
+5. Call `maxforge_compile_plan` with scope `agent_demo` and the full contents of
    `desired.maxdsl`.
-5. Inspect the plan, then call `maxforge_apply_dsl` with the same scope and DSL.
-6. Confirm eight managed toggle/number pairs appear and the tool returns a
+6. Inspect the plan, then call `maxforge_apply_dsl` with the same scope and DSL.
+7. Confirm eight managed toggle/number pairs appear and the tool returns a
    matching `maxforge.applied` acknowledgement.
+8. Move, edit, connect, create, or delete a box manually, then call
+   `maxforge_inspect_patch` again. The response reports the exact structural
+   change and whether it touches maxforge-managed state.
 
 After the MCP process restarts, it cannot reconstruct a graph from a revision
 hash. If Max already reports an initialized revision, pass the previous full
 DSL as `currentDsl` once. Guessing or using an empty current graph is rejected.
+The new process can still inspect the complete live graph, but it cannot infer
+pre-restart changes until an apply captures a new baseline.
 
 ## Safety boundary
 
