@@ -118,6 +118,17 @@ cmake --build build
 - `@scope <name>` — select the exact managed namespace.
 - `@revision_state <hash>` — persisted optimistic concurrency state.
 
+The status outlet also emits machine-readable transport events as
+`event <compact-json>`:
+
+- `maxforge.applied` after all operations succeed.
+- `maxforge.revision` in response to `revision`; an uninitialized revision is
+  encoded as `null`.
+- `maxforge.error` when parsing, validation, or mutation fails.
+
+These events are intended for a native transport object. Human-readable
+`applied`, `revision`, and `error` messages remain available on the same outlet.
+
 The first apply is accepted only when the revision state is empty and the
 configured scope contains no managed root boxes. After success,
 `revision_state` advances to `targetRevision`. It is not advanced when an

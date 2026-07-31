@@ -198,7 +198,8 @@ example, including managed objects inside a generated subpatcher.
 
 `maxforge.sync` verifies `baseRevision` and never touches objects outside the
 exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does **not** provide
-rollback after a runtime mutation failure. See
+rollback after a runtime mutation failure. Its status outlet emits
+`event <compact-json>` acknowledgements for native localhost transports. See
 [`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
 
 ## AI agent skill

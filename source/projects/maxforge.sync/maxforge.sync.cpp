@@ -80,6 +80,47 @@ auto is_valid_scope(const std::string &scope) -> bool {
 	return true;
 }
 
+auto json_string(const std::string &value) -> std::string {
+	constexpr char hexadecimal[]{"0123456789abcdef"};
+	std::string result{"\""};
+	for(const auto character : value) {
+		const auto unsigned_character = static_cast<unsigned char>(character);
+		switch(character) {
+			case '"':
+				result += "\\\"";
+				break;
+			case '\\':
+				result += "\\\\";
+				break;
+			case '\b':
+				result += "\\b";
+				break;
+			case '\f':
+				result += "\\f";
+				break;
+			case '\n':
+				result += "\\n";
+				break;
+			case '\r':
+				result += "\\r";
+				break;
+			case '\t':
+				result += "\\t";
+				break;
+			default:
+				if(unsigned_character < 0x20) {
+					result += "\\u00";
+					result += hexadecimal[(unsigned_character >> 4) & 0x0f];
+					result += hexadecimal[unsigned_character & 0x0f];
+				} else {
+					result += character;
+				}
+		}
+	}
+	result += '"';
+	return result;
+}
+
 auto is_valid_box_id(const std::string &id) -> bool {
 	constexpr auto prefix = "obj-";
 	if(id.rfind(prefix, 0) != 0 || id.size() == 4) return false;
@@ -912,10 +953,12 @@ public:
 		"Output the current managed revision",
 		MIN_FUNCTION {
 			const c74::min::symbol revision = revision_state;
+			const std::string revision_value{revision.c_str()};
 			status_output.send(
 				"revision",
-				revision.c_str()[0] == '\0' ? "uninitialized" : revision
+				revision_value.empty() ? "uninitialized" : revision
 			);
+			send_revision_event(revision_value);
 			return {};
 		}
 	};
@@ -990,6 +1033,7 @@ private:
 				plan.target_revision,
 				static_cast<long>(plan.operations.size())
 			);
+			send_applied_event(plan);
 		} catch(const std::exception &exception) {
 			send_error(exception.what());
 		} catch(...) {
@@ -999,6 +1043,43 @@ private:
 
 	void send_error(const std::string &message) {
 		status_output.send("error", message);
+		const c74::min::symbol configured_scope_symbol = scope;
+		const std::string configured_scope{configured_scope_symbol.c_str()};
+		send_event(
+			"{\"type\":\"maxforge.error\",\"scope\":" +
+			json_string(configured_scope) +
+			",\"message\":" +
+			json_string(message) +
+			"}"
+		);
+	}
+
+	void send_applied_event(const patch_plan &plan) {
+		send_event(
+			"{\"type\":\"maxforge.applied\",\"scope\":" +
+			json_string(plan.scope) +
+			",\"revision\":\"" +
+			plan.target_revision +
+			"\",\"operations\":" +
+			std::to_string(plan.operations.size()) +
+			"}"
+		);
+	}
+
+	void send_revision_event(const std::string &revision) {
+		const c74::min::symbol configured_scope_symbol = scope;
+		const std::string configured_scope{configured_scope_symbol.c_str()};
+		send_event(
+			"{\"type\":\"maxforge.revision\",\"scope\":" +
+			json_string(configured_scope) +
+			",\"revision\":" +
+			(revision.empty() ? "null" : "\"" + revision + "\"") +
+			"}"
+		);
+	}
+
+	void send_event(const std::string &json) {
+		status_output.send("event", json);
 	}
 };
 
