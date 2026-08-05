@@ -17,17 +17,185 @@ const patcherIdSchema = z
     "patcherId must start with a letter or underscore and contain only letters, digits, underscores, and hyphens"
   );
 
+const revisionSchema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/, "revision must be a 64-character lowercase SHA-256 hash");
+
+const patchInfoSchema = z.object({
+  patcherId: patcherIdSchema.describe("Stable transport ID; use this instead of a window title"),
+  scope: scopeSchema.describe("Managed namespace advertised by this patch"),
+  revision: revisionSchema.nullable().describe("Live managed revision, or null before the first apply"),
+  controller: z.boolean().describe("Whether this patch may create new top-level patches"),
+  title: z.string().describe("Display-only Max window title"),
+  filename: z.string().describe("Display-only Max document filename"),
+  filepath: z.string().describe("Saved document path, or an empty string for an unsaved patch"),
+});
+
+const warningSchema = z.object({
+  code: z.string().describe("Stable maxforge warning code"),
+  message: z.string(),
+  line: z.number().int().positive().optional(),
+});
+
+const patchPlanSchema = z.object({
+  protocolVersion: z.literal(1),
+  scope: scopeSchema,
+  baseRevision: revisionSchema,
+  targetRevision: revisionSchema,
+  operations: z.array(
+    z.object({
+      op: z.enum(["disconnect", "delete", "create", "set", "connect"]),
+      targetPath: z.array(z.string()),
+    }).passthrough()
+  ).describe("Ordered native Max mutations; review these before apply"),
+});
+
+const snapshotEndpointSchema = z.object({
+  runtimeId: z.string(),
+  varName: z.string(),
+  port: z.number().int().nonnegative(),
+});
+
+const snapshotBoxSchema = z.object({
+  targetPath: z.array(z.string()),
+  runtimeId: z.string(),
+  varName: z.string(),
+  maxclass: z.string(),
+  patchingRect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  managed: z.boolean(),
+  text: z.string().optional(),
+});
+
+const snapshotConnectionSchema = z.object({
+  targetPath: z.array(z.string()),
+  source: snapshotEndpointSchema,
+  destination: snapshotEndpointSchema,
+});
+
+const snapshotEventSchema = z.object({
+  type: z.literal("maxforge.snapshot"),
+  requestId: z.string(),
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  revision: revisionSchema.nullable(),
+  patcher: z.object({
+    title: z.string(),
+    filename: z.string(),
+    filepath: z.string(),
+    dirty: z.boolean(),
+    locked: z.boolean(),
+    presentation: z.boolean(),
+    boxes: z.array(snapshotBoxSchema),
+    connections: z.array(snapshotConnectionSchema),
+  }),
+});
+
+const acknowledgementSchema = z.object({
+  type: z.literal("maxforge.applied"),
+  requestId: z.string(),
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  revision: revisionSchema,
+  operations: z.number().int().nonnegative(),
+});
+
+const helpTopicSchema = z.enum(["workflow", "setup", "recovery", "safety"]);
+
+const helpResultSchema = z.object({
+  topic: helpTopicSchema,
+  summary: z.string(),
+  steps: z.array(z.string()),
+  rules: z.array(z.string()),
+  relatedTools: z.array(z.string()),
+});
+
 const dslRequestSchema = z.object({
-  patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
-  desiredDsl: z.string().min(1).describe("Complete desired maxforge DSL source"),
-  scope: scopeSchema.describe("Managed patch scope"),
+  patcherId: patcherIdSchema.describe(
+    "Registered target Max patch ID copied from maxforge_list_patches; never infer it from a title"
+  ),
+  desiredDsl: z.string().min(1).describe(
+    "Complete desired maxforge DSL state. Managed objects omitted from this source are deleted."
+  ),
+  scope: scopeSchema.describe(
+    "Exact managed scope advertised by the selected patch"
+  ),
   currentDsl: z
     .string()
     .optional()
     .describe(
-      "Current DSL state. Required once after MCP restart if Max is already initialized."
+      "Exact previous complete DSL. Required once after MCP restart when Max already has a revision; never guess or substitute empty state."
     ),
 });
+
+const HELP_CONTENT = {
+  workflow: {
+    summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
+    steps: [
+      "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
+      "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
+      "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
+      "Send the same target and complete desired DSL to maxforge_apply_dsl.",
+      "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
+    ],
+    rules: [
+      "DSL is complete desired state, not an imperative edit; omitted managed objects are removed.",
+      "Never mutate an unlisted patcherId or a scope different from the registration.",
+      "Never retry a timeout or baseline warning blindly; inspect live state first.",
+    ],
+    relatedTools: [
+      "maxforge_list_patches",
+      "maxforge_inspect_patch",
+      "maxforge_compile_plan",
+      "maxforge_apply_dsl",
+    ],
+  },
+  setup: {
+    summary: "Runtime prerequisites for MCP-to-Max control.",
+    steps: [
+      "Run maxforge-mcp as an MCP stdio server with Node.js 20 or newer.",
+      "Install the native maxforge.sync external separately; the npm package does not install the Max external.",
+      "Open one controller patch containing maxforge.sync with controller enabled.",
+      "Call maxforge_status, then maxforge_list_patches to verify registration before creating or changing patches.",
+    ],
+    rules: [
+      "The WebSocket bridge is loopback-only and defaults to 127.0.0.1:8766.",
+      "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
+      "New patch creation requires exactly one registered controller.",
+    ],
+    relatedTools: ["maxforge_status", "maxforge_list_patches", "maxforge_create_patch"],
+  },
+  recovery: {
+    summary: "Recovery rules for stale process state, manual edits, timeouts, and partial failures.",
+    steps: [
+      "After an MCP process restart, call maxforge_list_patches and inspect the target.",
+      "If Max reports an initialized revision but MCP has no graph, provide the exact previous complete DSL as currentDsl once.",
+      "If inspect reports managed manual changes, manually restore the post-apply managed structure before applying again.",
+      "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
+      "If baselineCaptured is false, the apply still succeeded; do not repeat it solely to obtain a baseline.",
+    ],
+    rules: [
+      "A revision hash proves identity but cannot reconstruct DSL or graph state.",
+      "There is no MCP operation that adopts managed manual edits as the new baseline.",
+      "Protocol v1 is not transactional; a runtime mutation failure can leave a partial patch while the revision remains unchanged.",
+    ],
+    relatedTools: ["maxforge_status", "maxforge_inspect_patch", "maxforge_apply_dsl"],
+  },
+  safety: {
+    summary: "Ownership, identity, and mutation boundaries enforced by maxforge.",
+    steps: [
+      "Select targets only from maxforge_list_patches.",
+      "Preview every nontrivial change with maxforge_compile_plan.",
+      "Inspect after apply and separate managed from unmanaged changes.",
+    ],
+    rules: [
+      "Only exact maxforge_<scope>_obj_... scripting names belong to the managed scope.",
+      "Titles and filenames are display metadata and are not stable identities.",
+      "Unmanaged standalone edits do not block apply, but cords touching managed boxes do.",
+      "The loopback WebSocket transport is unauthenticated; do not expose it on a public interface.",
+    ],
+    relatedTools: ["maxforge_list_patches", "maxforge_compile_plan", "maxforge_inspect_patch"],
+  },
+} as const;
 
 export interface CreateMcpServerOptions {
   readonly service: MaxforgePatchService;
@@ -45,11 +213,39 @@ export function createMaxforgeMcpServer(
     },
     {
       instructions:
-        "Use maxforge_list_patches and maxforge_inspect_patch before " +
-        "mutation. Create a new isolated patch with maxforge_create_patch. Use " +
-        "maxforge_compile_plan to inspect a DSL diff and maxforge_apply_dsl " +
-        "to apply complete desired DSL to an explicit patcherId. Only " +
-        "maxforge-managed objects in the selected scope may be changed.",
+        "Call maxforge_help with topic 'workflow' before the first live mutation. " +
+        "Always select patcherId and scope from maxforge_list_patches, inspect the " +
+        "live patch, preview the complete desired DSL with maxforge_compile_plan, " +
+        "then pass the same complete DSL to maxforge_apply_dsl. Omitted managed " +
+        "objects are deleted. Success requires acknowledgement.revision to equal " +
+        "targetRevision. Never retry a timeout or baseline warning blindly. After " +
+        "an MCP restart, an initialized patch requires its exact previous complete " +
+        "DSL as currentDsl once. Call maxforge_help with topic 'recovery' on errors " +
+        "or managed manual drift.",
+    }
+  );
+
+  server.registerTool(
+    "maxforge_help",
+    {
+      title: "Maxforge MCP workflow help",
+      description:
+        "Return agent-oriented instructions for safe live patch workflow, setup, recovery, or safety. Call this before the first mutation and whenever an apply is rejected or ambiguous.",
+      inputSchema: z.object({
+        topic: helpTopicSchema.optional().describe(
+          "Help topic; defaults to workflow"
+        ),
+      }),
+      outputSchema: helpResultSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ topic }) => {
+      const selectedTopic = topic ?? "workflow";
+      return toolResult({ topic: selectedTopic, ...HELP_CONTENT[selectedTopic] });
     }
   );
 
@@ -58,8 +254,19 @@ export function createMaxforgeMcpServer(
     {
       title: "Maxforge status",
       description:
-        "Report localhost transport connections, live Max revisions, and MCP graph state.",
+        "Diagnose localhost transport and process-local state. Use when no patch is listed, after restart, or after a timeout; connected clients are not usable targets until registered.",
       inputSchema: z.object({}),
+      outputSchema: z.object({
+        bridge: z.object({
+          host: z.string(),
+          port: z.number().int().nonnegative(),
+          connectedClients: z.number().int().nonnegative(),
+          registeredPatches: z.array(patchInfoSchema),
+          liveRevisions: z.record(z.string(), revisionSchema.nullable()),
+        }),
+        managedRevisions: z.record(z.string(), revisionSchema),
+        inspectionBaselineScopes: z.array(z.string()),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -81,8 +288,9 @@ export function createMaxforgeMcpServer(
     {
       title: "List live Max patches",
       description:
-        "List registered Max patch windows and their stable patcherId targets.",
+        "List registered Max patches. Always copy patcherId and scope from this result before inspect, compile, or apply; never target a patch by title or filename.",
       inputSchema: z.object({}),
+      outputSchema: z.object({ patches: z.array(patchInfoSchema) }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -97,7 +305,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Create Max patch",
       description:
-        "Create a new top-level Max patch window with a native maxforge bridge and wait until it is registered.",
+        "Create an unsaved top-level Max patch containing its own maxforge.sync and wait for registration. Requires exactly one live controller and a globally unique patcherId.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe(
           "Unique stable ID for the new patch"
@@ -105,6 +313,7 @@ export function createMaxforgeMcpServer(
         scope: scopeSchema.describe("Managed scope in the new patch"),
         title: z.string().min(1).max(256).describe("Visible patch window title"),
       }),
+      outputSchema: z.object({ patch: patchInfoSchema }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -126,10 +335,30 @@ export function createMaxforgeMcpServer(
     {
       title: "Inspect live Max patch",
       description:
-        "Read the live patcher graph without using the screen and report structural changes since the last acknowledged maxforge apply.",
+        "Read the complete live patch graph without using the screen. Reports managed and unmanaged structural drift from the last acknowledged apply; inspection does not accept or reset that baseline.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Managed patch scope to inspect"),
+      }),
+      outputSchema: z.object({
+        patcherId: patcherIdSchema,
+        scope: scopeSchema,
+        comparisonAvailable: z.boolean(),
+        managedChangeCount: z.number().int().nonnegative(),
+        unmanagedChangeCount: z.number().int().nonnegative(),
+        changes: z.array(
+          z.object({
+            kind: z.enum([
+              "box_added",
+              "box_removed",
+              "box_changed",
+              "connection_added",
+              "connection_removed",
+            ]),
+            managed: z.boolean(),
+          }).passthrough()
+        ),
+        snapshot: snapshotEventSchema,
       }),
       annotations: {
         readOnlyHint: true,
@@ -160,8 +389,13 @@ export function createMaxforgeMcpServer(
     {
       title: "Compile maxforge patch plan",
       description:
-        "Compile desired DSL into a PatchPlan without connecting to or mutating Max.",
+        "Preview the ordered diff from current managed state to complete desired DSL without mutating Max. Review destructive operations and warnings before apply.",
       inputSchema: dslRequestSchema,
+      outputSchema: z.object({
+        plan: patchPlanSchema,
+        operationCount: z.number().int().nonnegative(),
+        warnings: z.array(warningSchema),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -187,8 +421,19 @@ export function createMaxforgeMcpServer(
     {
       title: "Apply desired maxforge DSL",
       description:
-        "Compile complete desired DSL, send its managed diff to the selected Max patch, and wait for maxforge.sync acknowledgement.",
+        "Apply complete desired DSL to one explicit patcherId and wait for exact revision acknowledgement. Do not retry timeouts or baselineCaptured=false blindly; inspect live state first.",
       inputSchema: dslRequestSchema,
+      outputSchema: z.object({
+        patcherId: patcherIdSchema,
+        scope: scopeSchema,
+        baseRevision: revisionSchema,
+        targetRevision: revisionSchema,
+        operationCount: z.number().int().nonnegative(),
+        acknowledgement: acknowledgementSchema,
+        baselineCaptured: z.boolean(),
+        baselineWarning: z.string().optional(),
+        warnings: z.array(warningSchema),
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,

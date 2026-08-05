@@ -35,6 +35,7 @@ describe("maxforge MCP protocol surface", () => {
       await client.connect();
       const tools = await client.request(2, "tools/list", {});
       expect(toolNames(tools)).toEqual([
+        "maxforge_help",
         "maxforge_status",
         "maxforge_list_patches",
         "maxforge_create_patch",
@@ -42,8 +43,34 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
+      const definitions = toolDefinitions(tools);
+      expect(definitions).toHaveLength(7);
+      expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
+        .toBe(true);
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_apply_dsl")
+          ?.description
+      ).toContain("Do not retry");
 
-      const result = await client.request(3, "tools/call", {
+      const help = await client.request(3, "tools/call", {
+        name: "maxforge_help",
+        arguments: { topic: "recovery" },
+      });
+      expect(help).toMatchObject({
+        result: {
+          structuredContent: {
+            topic: "recovery",
+            steps: expect.arrayContaining([
+              expect.stringContaining("currentDsl"),
+            ]),
+            rules: expect.arrayContaining([
+              expect.stringContaining("no MCP operation"),
+            ]),
+          },
+        },
+      });
+
+      const result = await client.request(4, "tools/call", {
         name: "maxforge_compile_plan",
         arguments: {
           patcherId: "patch_a",
@@ -63,7 +90,7 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
-      const inspection = await client.request(4, "tools/call", {
+      const inspection = await client.request(5, "tools/call", {
         name: "maxforge_inspect_patch",
         arguments: { patcherId: "patch_a", scope: "voices" },
       });
@@ -81,7 +108,7 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
-      const created = await client.request(5, "tools/call", {
+      const created = await client.request(6, "tools/call", {
         name: "maxforge_create_patch",
         arguments: {
           patcherId: "generated_patch",
@@ -102,7 +129,7 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
-      const patches = await client.request(6, "tools/call", {
+      const patches = await client.request(7, "tools/call", {
         name: "maxforge_list_patches",
         arguments: {},
       });
@@ -177,13 +204,28 @@ class InMemoryMcpClient {
 }
 
 function toolNames(message: JSONRPCMessage): string[] {
+  return toolDefinitions(message).map((tool) => tool.name);
+}
+
+function toolDefinitions(message: JSONRPCMessage): Array<{
+  name: string;
+  description?: string;
+  outputSchema?: { type?: unknown };
+}> {
   if (!("result" in message)) return [];
   const result = message.result as {
-    tools?: Array<{ name?: unknown }>;
+    tools?: Array<{
+      name?: unknown;
+      description?: unknown;
+      outputSchema?: { type?: unknown };
+    }>;
   };
   return result.tools
-    ?.map((tool) => tool.name)
-    .filter((name): name is string => typeof name === "string") ?? [];
+    ?.filter((tool): tool is {
+      name: string;
+      description?: string;
+      outputSchema?: { type?: unknown };
+    } => typeof tool.name === "string") ?? [];
 }
 
 class FakeTransport implements PatchPlanTransport {
