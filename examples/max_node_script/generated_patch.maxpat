@@ -2,11 +2,11 @@
   "patcher": {
     "fileversion": 1,
     "appversion": {
-      "major": 8,
-      "minor": 6,
-      "revision": 4,
-      "processor": "x86",
-      "platform": "macintel"
+      "major": 9,
+      "minor": 0,
+      "revision": 0,
+      "architecture": "x64",
+      "modernui": 1
     },
     "classnamespace": "box",
     "rect": [
@@ -54,7 +54,7 @@
     "boxes": [
       {
         "box": {
-          "id": "obj-1",
+          "id": "obj-title",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -69,7 +69,7 @@
       },
       {
         "box": {
-          "id": "obj-2",
+          "id": "obj-hello",
           "maxclass": "message",
           "numinlets": 2,
           "numoutlets": 1,
@@ -87,18 +87,15 @@
       },
       {
         "box": {
-          "id": "obj-3",
+          "id": "obj-printer",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 1,
+          "numoutlets": 0,
           "patching_rect": [
             60,
             170,
             80,
             22
-          ],
-          "outlettype": [
-            ""
           ],
           "text": "print maxforge-generated"
         }
@@ -108,11 +105,11 @@
       {
         "patchline": {
           "source": [
-            "obj-2",
+            "obj-hello",
             0
           ],
           "destination": [
-            "obj-3",
+            "obj-printer",
             0
           ]
         }

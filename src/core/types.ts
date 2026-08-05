@@ -43,8 +43,11 @@ export interface AppVersion {
   major: number;
   minor: number;
   revision: number;
-  processor: string;
-  platform: string;
+  architecture?: string;
+  modernui?: number;
+  /** Legacy fields accepted when decompiling older patches. */
+  processor?: string;
+  platform?: string;
 }
 
 export interface BoxWrapper {
@@ -98,6 +101,8 @@ export interface ObjectDef {
   category: string;
   argDependent?: boolean;
   argRule?: string;
+  /** Port shape depends on attributes, an embedded patcher, or runtime state. */
+  dynamicPorts?: boolean;
 }
 
 export type ObjectDatabase = Record<string, ObjectDef>;

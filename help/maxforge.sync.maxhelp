@@ -2,11 +2,11 @@
   "patcher": {
     "fileversion": 1,
     "appversion": {
-      "major": 8,
-      "minor": 6,
-      "revision": 4,
-      "processor": "x86",
-      "platform": "macintel"
+      "major": 9,
+      "minor": 0,
+      "revision": 0,
+      "architecture": "x64",
+      "modernui": 1
     },
     "classnamespace": "box",
     "rect": [
@@ -119,8 +119,8 @@
         "box": {
           "id": "obj-plan",
           "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 1,
+          "numinlets": 2,
+          "numoutlets": 5,
           "patching_rect": [
             250,
             145,
@@ -128,6 +128,10 @@
             22
           ],
           "outlettype": [
+            "dictionary",
+            "",
+            "",
+            "",
             ""
           ],
           "text": "dict maxforge_sync_demo_plan",
@@ -174,7 +178,7 @@
         "box": {
           "id": "obj-load",
           "maxclass": "newobj",
-          "numinlets": 0,
+          "numinlets": 1,
           "numoutlets": 1,
           "patching_rect": [
             250,
@@ -233,7 +237,7 @@
           "patching_rect": [
             250,
             225,
-            80,
+            100,
             22
           ],
           "outlettype": [
@@ -247,15 +251,12 @@
           "id": "obj-status",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 1,
+          "numoutlets": 0,
           "patching_rect": [
             500,
             205,
             80,
             22
-          ],
-          "outlettype": [
-            ""
           ],
           "text": "print maxforge-sync-status"
         }

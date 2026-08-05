@@ -7,6 +7,7 @@ export interface CompiledBox {
   numinlets: number;
   numoutlets: number;
   outlettype: string[];
+  dynamicPorts?: boolean;
   text?: string;
   comment?: string;
   defaultSize: [number, number];

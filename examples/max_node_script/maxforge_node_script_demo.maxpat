@@ -2,11 +2,11 @@
   "patcher": {
     "fileversion": 1,
     "appversion": {
-      "major": 8,
-      "minor": 6,
-      "revision": 4,
-      "processor": "x86",
-      "platform": "macintel"
+      "major": 9,
+      "minor": 0,
+      "revision": 0,
+      "architecture": "x64",
+      "modernui": 1
     },
     "classnamespace": "box",
     "rect": [
@@ -54,7 +54,7 @@
     "boxes": [
       {
         "box": {
-          "id": "obj-1",
+          "id": "obj-title",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -69,7 +69,7 @@
       },
       {
         "box": {
-          "id": "obj-2",
+          "id": "obj-step1",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -84,7 +84,7 @@
       },
       {
         "box": {
-          "id": "obj-3",
+          "id": "obj-step2",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -99,7 +99,7 @@
       },
       {
         "box": {
-          "id": "obj-4",
+          "id": "obj-step3",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -114,7 +114,7 @@
       },
       {
         "box": {
-          "id": "obj-5",
+          "id": "obj-generate",
           "maxclass": "message",
           "numinlets": 2,
           "numoutlets": 1,
@@ -132,7 +132,7 @@
       },
       {
         "box": {
-          "id": "obj-6",
+          "id": "obj-clear",
           "maxclass": "message",
           "numinlets": 2,
           "numoutlets": 1,
@@ -150,17 +150,18 @@
       },
       {
         "box": {
-          "id": "obj-7",
+          "id": "obj-node",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 1,
+          "numoutlets": 2,
           "patching_rect": [
             170,
             195,
-            80,
+            100,
             22
           ],
           "outlettype": [
+            "",
             ""
           ],
           "text": "node.script maxforge_node_script_demo.cjs",
@@ -169,10 +170,10 @@
       },
       {
         "box": {
-          "id": "obj-8",
+          "id": "obj-patcher",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 1,
+          "numoutlets": 2,
           "patching_rect": [
             430,
             195,
@@ -180,6 +181,7 @@
             22
           ],
           "outlettype": [
+            "",
             ""
           ],
           "text": "thispatcher"
@@ -187,7 +189,7 @@
       },
       {
         "box": {
-          "id": "obj-9",
+          "id": "obj-status",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -202,7 +204,7 @@
       },
       {
         "box": {
-          "id": "obj-10",
+          "id": "obj-output",
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
@@ -220,11 +222,11 @@
       {
         "patchline": {
           "source": [
-            "obj-5",
+            "obj-generate",
             0
           ],
           "destination": [
-            "obj-7",
+            "obj-node",
             0
           ]
         }
@@ -232,11 +234,11 @@
       {
         "patchline": {
           "source": [
-            "obj-6",
+            "obj-clear",
             0
           ],
           "destination": [
-            "obj-7",
+            "obj-node",
             0
           ]
         }
@@ -244,11 +246,11 @@
       {
         "patchline": {
           "source": [
-            "obj-7",
+            "obj-node",
             0
           ],
           "destination": [
-            "obj-8",
+            "obj-patcher",
             0
           ]
         }

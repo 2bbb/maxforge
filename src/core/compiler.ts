@@ -97,6 +97,7 @@ export function compile(
       outlettype: portSpec?.kind === "inlet" && portSpec.signal
         ? ["signal"]
         : result.def.outlettype,
+      dynamicPorts: result.def.dynamicPorts,
       defaultSize: result.def.defaultSize,
       text: isPortObject ? undefined : (result.text || undefined),
       comment: portSpec?.comment,

@@ -12,8 +12,8 @@ async function loadMaxforge() {
   try {
     return await import(maxforgeEntry);
   } catch (error) {
-    maxApi.post(`[maxforge] Failed to import ${maxforgeEntry}`);
-    maxApi.post("[maxforge] Run `npm install && npm run build` at the repository root, then reload this patch.");
+    maxApi.error(`[maxforge] Failed to import ${maxforgeEntry}`);
+    maxApi.error("[maxforge] Run `npm install && npm run build` at the repository root, then reload this patch.");
     throw error;
   }
 }
@@ -25,7 +25,7 @@ async function generate() {
   const result = compileDslToThispatcherCommands(source, db, true);
 
   if (!result.success) {
-    maxApi.post(`[maxforge] compile failed: ${JSON.stringify(result.errors)}`);
+    maxApi.error(`[maxforge] compile failed: ${JSON.stringify(result.errors)}`);
     return;
   }
 

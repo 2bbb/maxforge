@@ -3,11 +3,11 @@
 exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -19,9 +19,10 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
         "id": "obj-freq",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           50,
@@ -38,7 +39,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
         "numinlets": 1,
         "numoutlets": 1,
         "outlettype": [
-          "float",
+          "",
         ],
         "patching_rect": [
           50,
@@ -93,7 +94,7 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
         "numoutlets": 2,
         "outlettype": [
           "signal",
-          "signal",
+          "",
         ],
         "patching_rect": [
           50,
@@ -238,11 +239,11 @@ exports[`snapshot > matches snapshot: basic_synth > basic_synth 1`] = `
 exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -305,9 +306,10 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
         "id": "obj-pinned",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           100,
@@ -429,11 +431,11 @@ exports[`snapshot > matches snapshot: edge_cases > edge_cases 1`] = `
 exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -444,7 +446,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
       "box": {
         "id": "obj-note",
         "maxclass": "newobj",
-        "numinlets": 0,
+        "numinlets": 1,
         "numoutlets": 3,
         "outlettype": [
           "int",
@@ -470,10 +472,10 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
           "",
           "",
           "",
+          "int",
+          "int",
           "",
-          "",
-          "",
-          "",
+          "int",
           "",
         ],
         "patching_rect": [
@@ -492,7 +494,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
         "numinlets": 1,
         "numoutlets": 1,
         "outlettype": [
-          "float",
+          "",
         ],
         "patching_rect": [
           50,
@@ -566,7 +568,7 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
         "numoutlets": 2,
         "outlettype": [
           "signal",
-          "signal",
+          "",
         ],
         "patching_rect": [
           50,
@@ -747,11 +749,11 @@ exports[`snapshot > matches snapshot: midi_synth > midi_synth 1`] = `
 exports[`snapshot > matches snapshot: position_override > position_override 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -778,9 +780,10 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
         "id": "obj-freq",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           50,
@@ -925,11 +928,11 @@ exports[`snapshot > matches snapshot: position_override > position_override 1`] 
 exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -948,11 +951,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
         ],
         "patcher": {
           "appversion": {
-            "major": 8,
-            "minor": 6,
-            "platform": "macintel",
-            "processor": "x86",
-            "revision": 4,
+            "architecture": "x64",
+            "major": 9,
+            "minor": 0,
+            "modernui": 1,
+            "revision": 0,
           },
           "assistshowspatchername": 0,
           "bglocked": 0,
@@ -1014,7 +1017,7 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
                 "numinlets": 1,
                 "numoutlets": 1,
                 "outlettype": [
-                  "signal",
+                  "tapconnect",
                 ],
                 "patching_rect": [
                   50,
@@ -1303,11 +1306,11 @@ exports[`snapshot > matches snapshot: subpatcher > subpatcher 1`] = `
 exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 1`] = `
 {
   "appversion": {
-    "major": 8,
-    "minor": 6,
-    "platform": "macintel",
-    "processor": "x86",
-    "revision": 4,
+    "architecture": "x64",
+    "major": 9,
+    "minor": 0,
+    "modernui": 1,
+    "revision": 0,
   },
   "assistshowspatchername": 0,
   "bglocked": 0,
@@ -1318,7 +1321,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
       "box": {
         "id": "obj-lb",
         "maxclass": "newobj",
-        "numinlets": 0,
+        "numinlets": 1,
         "numoutlets": 1,
         "outlettype": [
           "bang",
@@ -1356,7 +1359,7 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
       "box": {
         "id": "obj-met",
         "maxclass": "newobj",
-        "numinlets": 3,
+        "numinlets": 2,
         "numoutlets": 1,
         "outlettype": [
           "bang",
@@ -1374,9 +1377,12 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
       "box": {
         "id": "obj-cnt",
         "maxclass": "newobj",
-        "numinlets": 4,
-        "numoutlets": 1,
+        "numinlets": 5,
+        "numoutlets": 4,
         "outlettype": [
+          "int",
+          "",
+          "",
           "int",
         ],
         "patching_rect": [
@@ -1393,9 +1399,10 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
         "id": "obj-num",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           350,
@@ -1446,9 +1453,10 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
         "id": "obj-a",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           500,
@@ -1463,9 +1471,10 @@ exports[`snapshot > matches snapshot: trigger_and_routing > trigger_and_routing 
         "id": "obj-b",
         "maxclass": "number",
         "numinlets": 1,
-        "numoutlets": 1,
+        "numoutlets": 2,
         "outlettype": [
-          "int",
+          "",
+          "bang",
         ],
         "patching_rect": [
           650,

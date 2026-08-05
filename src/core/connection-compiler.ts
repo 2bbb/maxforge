@@ -45,7 +45,7 @@ export function compileConnectionPair(
   const outletIdx = src.outlet ?? 0;
   const inletIdx = dst.inlet ?? dst.outlet ?? 0;
 
-  if (outletIdx >= srcBox.numoutlets) {
+  if (!srcBox.dynamicPorts && outletIdx >= srcBox.numoutlets) {
     return {
       errors: [{
         code: ErrorCode.OUTLET_OUT_OF_RANGE,
@@ -54,7 +54,7 @@ export function compileConnectionPair(
       }],
     };
   }
-  if (inletIdx >= dstBox.numinlets) {
+  if (!dstBox.dynamicPorts && inletIdx >= dstBox.numinlets) {
     return {
       errors: [{
         code: ErrorCode.INLET_OUT_OF_RANGE,

@@ -1,325 +1,4516 @@
 {
-  "cycle~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "phasor~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "saw~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "tri~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "rect~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "noise~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "pink~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "train~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "ioscbank~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "*~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "+~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "-~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "/~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "sig~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "abs~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "pow~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "sqrt~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "clip~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "scale~": {"maxclass": "newobj", "numinlets": 6, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "snapshot~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "msp"},
-  "vectral~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "line~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "bang"], "defaultSize": [80, 22], "category": "msp"},
-  "curve~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "bang"], "defaultSize": [80, 22], "category": "msp"},
-  "adsr~": {"maxclass": "newobj", "numinlets": 5, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "zigzag~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "rampsmooth~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "slide~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "overdrive~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "lores~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "reson~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "onepole~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "biquad~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "cascade~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "cross~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "svf~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 4, "outlettype": ["signal", "signal", "signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "comb~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "teeth~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "allpass~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "tapin~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "tapout~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "delay~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "ezadc~": {"maxclass": "ezadc~", "numinlets": 0, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [52, 36], "category": "msp"},
-  "ezdac~": {"maxclass": "ezdac~", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [52, 36], "category": "msp"},
-  "adc~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "dac~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "msp"},
-  "sfplay~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 3, "outlettype": ["signal", "signal", "bang"], "defaultSize": [80, 22], "category": "msp"},
-  "groove~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "buffer~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [80, 22], "category": "msp"},
-  "peek~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "msp"},
-  "poke~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "play~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "record~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "msp"},
-  "wave~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "index~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "waveform~": {"maxclass": "waveform~", "numinlets": 1, "numoutlets": 4, "outlettype": ["float", "float", "float", "list"], "defaultSize": [250, 120], "category": "msp"},
-  "average~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "zerox~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["bang", "int"], "defaultSize": [80, 22], "category": "msp"},
-  "fzero~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [80, 22], "category": "msp"},
-  "fft~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "ifft~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "fftin~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["signal", "signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "fftout~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "msp"},
-  "pfft~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "cartopol~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "poltocar~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp"},
-  "fftinfo~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["float", "float", "float"], "defaultSize": [80, 22], "category": "msp"},
-  "mtof~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "ftom~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "dbtoa~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "atodb~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "sampstoms~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "mstosamps~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "mstosamps": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["float", "float"], "defaultSize": [80, 22], "category": "msp"},
-  "gain~": {"maxclass": "gain~", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [34, 130], "category": "msp"},
-  "live.gain~": {"maxclass": "live.gain~", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [58, 130], "category": "msp", "argDependent": true, "argRule": "inlets = outlets = first arg * 2"},
-  "matrix~": {"maxclass": "newobj", "numinlets": 4, "numoutlets": 4, "outlettype": ["signal", "signal", "signal", "signal"], "defaultSize": [80, 22], "category": "msp", "argDependent": true, "argRule": "inlets = first arg, outlets = second arg"},
-  "selector~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp", "argDependent": true, "argRule": "inlets = first arg + 1"},
-  "gate~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "signal"], "defaultSize": [80, 22], "category": "msp", "argDependent": true, "argRule": "outlets = first arg"},
-  "scope~": {"maxclass": "scope~", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 120], "category": "msp"},
-  "spectroscope~": {"maxclass": "spectroscope~", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 120], "category": "msp"},
-  "meter~": {"maxclass": "meter~", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [16, 130], "category": "msp"},
-  "multislider": {"maxclass": "multislider", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [200, 80], "category": "msp"},
-  "gate": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = first arg value"},
-  "switch": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = first arg + 1"},
-  "selector": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = first arg + 1"},
-  "route": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = arg count + 1"},
-  "routepass": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = arg count + 1"},
-  "zl": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic"},
-  "funnel": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = first arg"},
-  "spray": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = first arg"},
-  "forward": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "send": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "s": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "receive": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "r": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "send~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "s~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "receive~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "logic"},
-  "r~": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "logic"},
-  "pack": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = arg count"},
-  "unpack": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = arg count"},
-  "spell": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "atoi": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "itoa": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "prepend": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "append": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "bucket": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = outlets = first arg"},
-  "thresh": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic"},
-  "pak": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = arg count"},
-  "+": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "-": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "*": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "/": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "expr": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "inlets = max $i/$f reference index"},
-  "vexpr": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic"},
-  "random": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "drunk": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "urn": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["int", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "accum": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "scale": {"maxclass": "newobj", "numinlets": 5, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "logic"},
-  "line": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "==": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "!=": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  ">": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "<": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  ">=": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "<=": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "sel": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["bang", ""], "defaultSize": [80, 22], "category": "logic", "argDependent": true, "argRule": "outlets = arg count + 1"},
-  "match": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "change": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "if": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic"},
-  "speedlim": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "metro": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "qmetro": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "tempo": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "delay": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "pipe": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "clocker": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "logic"},
-  "timer": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "logic"},
-  "counter": {"maxclass": "newobj", "numinlets": 4, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "int": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "float": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "logic"},
-  "coll": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "dict": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "table": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "itable": {"maxclass": "itable", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [200, 120], "category": "logic"},
-  "preset": {"maxclass": "preset", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [100, 40], "category": "logic"},
-  "pattr": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "pattrstorage": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "pattrforward": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "autopattr": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "sprintf": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "regexp": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 3, "outlettype": ["list", "list", "symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "fromsymbol": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic"},
-  "tosymbol": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "number": {"maxclass": "number", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [50, 20], "category": "logic"},
-  "flonum": {"maxclass": "flonum", "numinlets": 1, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [50, 20], "category": "logic"},
-  "toggle": {"maxclass": "toggle", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [24, 24], "category": "logic"},
-  "button": {"maxclass": "button", "numinlets": 1, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [24, 24], "category": "logic"},
-  "slider": {"maxclass": "slider", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [20, 140], "category": "logic"},
-  "rslider": {"maxclass": "rslider", "numinlets": 2, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [200, 25], "category": "logic"},
-  "dial": {"maxclass": "dial", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [40, 40], "category": "logic"},
-  "umenu": {"maxclass": "umenu", "numinlets": 1, "numoutlets": 3, "outlettype": ["int", "symbol", "bang"], "defaultSize": [100, 20], "category": "logic"},
-  "kslider": {"maxclass": "kslider", "numinlets": 2, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [420, 62], "category": "logic"},
-  "textedit": {"maxclass": "textedit", "numinlets": 1, "numoutlets": 2, "outlettype": ["symbol", "bang"], "defaultSize": [200, 20], "category": "logic"},
-  "comment": {"maxclass": "comment", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 20], "category": "logic"},
-  "message": {"maxclass": "message", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "text": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic"},
-  "opendialog": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "savedialog": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "conformpath": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "absolutepath": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "relativepath": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["symbol"], "defaultSize": [80, 22], "category": "logic"},
-  "udpsend": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "udpreceive": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "logic"},
-  "live.numbox": {"maxclass": "live.numbox", "numinlets": 1, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [50, 20], "category": "logic"},
-  "live.dial": {"maxclass": "live.dial", "numinlets": 1, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [40, 40], "category": "logic"},
-  "live.slider": {"maxclass": "live.slider", "numinlets": 1, "numoutlets": 2, "outlettype": ["float", "bang"], "defaultSize": [20, 140], "category": "logic"},
-  "live.toggle": {"maxclass": "live.toggle", "numinlets": 1, "numoutlets": 2, "outlettype": ["int", "bang"], "defaultSize": [24, 24], "category": "logic"},
-  "live.tab": {"maxclass": "live.tab", "numinlets": 1, "numoutlets": 3, "outlettype": ["int", "symbol", "bang"], "defaultSize": [120, 20], "category": "logic"},
-  "live.menu": {"maxclass": "live.menu", "numinlets": 1, "numoutlets": 3, "outlettype": ["int", "symbol", "bang"], "defaultSize": [100, 20], "category": "logic"},
-  "live.colors": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [120, 20], "category": "logic"},
-  "notein": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "ctlin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "pgmin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "bendin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "touchin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "polyin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "midiin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "rtin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "midi"},
-  "midiparse": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 8, "outlettype": ["", "", "", "", "", "", "", ""], "defaultSize": [80, 22], "category": "midi"},
-  "xbendin": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "xbendin2": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "noteout": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "ctlout": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "pgmout": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "bendout": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "touchout": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "midiout": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "midiformat": {"maxclass": "newobj", "numinlets": 8, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "midi"},
-  "xbendout": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "xbendout2": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "midi"},
-  "stripnote": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "flush": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "sustain": {"maxclass": "newobj", "numinlets": 4, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "midiselect": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 8, "outlettype": ["", "", "", "", "", "", "", ""], "defaultSize": [80, 22], "category": "midi"},
-  "midiflush": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 3, "outlettype": ["int", "int", "int"], "defaultSize": [80, 22], "category": "midi"},
-  "midiinfo": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "midi"},
-  "prob": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "midi"},
-  "seq": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["int", "bang"], "defaultSize": [80, 22], "category": "midi"},
-  "detonate": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 5, "outlettype": ["int", "int", "int", "int", "bang"], "defaultSize": [80, 22], "category": "midi"},
-  "follow": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "midi"},
-  "borax": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 5, "outlettype": ["int", "int", "int", "int", "int"], "defaultSize": [80, 22], "category": "logic"},
-  "mtof": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "midi"},
-  "ftom": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "midi"},
-  "anal": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "midi"},
-  "jit.movie": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["jit_matrix", "bang"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.qt.movie": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["jit_matrix", "bang"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.window": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.pwindow": {"maxclass": "jit.pwindow", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [200, 200], "category": "jitter"},
-  "jit.broadcast": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.record": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.vcr": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.matrix": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.pack": {"maxclass": "newobj", "numinlets": 4, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter", "argDependent": true, "argRule": "inlets = first arg"},
-  "jit.unpack": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 4, "outlettype": ["jit_matrix", "jit_matrix", "jit_matrix", "jit_matrix"], "defaultSize": [80, 22], "category": "jitter", "argDependent": true, "argRule": "outlets = first arg"},
-  "jit.spill": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.fill": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.iter": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.cellblock": {"maxclass": "jit.cellblock", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 200], "category": "jitter"},
-  "jit.dimop": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.concat": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.op": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.rota": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.rgb2luma": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.colorspace": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.brcosa": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.chromakey": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.keyscreen": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.xfade": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.altern": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.convolve": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.fastblur": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.histogram": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.findbounds": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["list"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.3m": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 3, "outlettype": ["float", "float", "float"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.peek~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.poke~": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.render": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.mesh": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.gridshape": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.videoplane": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.slab": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.shader": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.sketch": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.light": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.camera": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.texture": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.multiple": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.gl.picker": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 3, "outlettype": ["list", "list", "int"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.p.shiva": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.p.vishnu": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.net.send": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "jitter"},
-  "jit.net.recv": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["jit_matrix"], "defaultSize": [80, 22], "category": "jitter"},
-  "inlet": {"maxclass": "inlet", "numinlets": 0, "numoutlets": 1, "outlettype": [""], "defaultSize": [25, 25], "category": "special"},
-  "outlet": {"maxclass": "outlet", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [25, 25], "category": "special"},
-  "trigger": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argRule": "outlets = arg count, outlettype from args"},
-  "t": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argRule": "outlets = arg count, outlettype from args"},
-  "b": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["bang", "bang"], "defaultSize": [50, 22], "category": "logic"},
-  "loadbang": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "loadmess": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "closebang": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["bang"], "defaultSize": [80, 22], "category": "logic"},
-  "thispatcher": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "patcherargs": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 2, "outlettype": ["", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "print": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "maxforge.sync": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [100, 22], "category": "external"},
-  "bbb.agent.hub": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [100, 22], "category": "external"},
-  "split": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "logic"},
-  "past": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["bang", ""], "defaultSize": [80, 22], "category": "logic"},
-  "togedge": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["bang", "bang"], "defaultSize": [80, 22], "category": "logic"},
-  "makenote": {"maxclass": "newobj", "numinlets": 3, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "logic"},
-  "swap": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic"},
-  "bondo": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 2, "outlettype": ["", ""], "defaultSize": [80, 22], "category": "logic", "argRule": "inlets = arg count, outlets = arg count", "argDependent": {"numinlets": "arg_count", "numoutlets": "arg_count"}},
-  "key": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "keyup": {"maxclass": "newobj", "numinlets": 0, "numoutlets": 1, "outlettype": ["int"], "defaultSize": [80, 22], "category": "logic"},
-  "mousestate": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["int", "int"], "defaultSize": [80, 22], "category": "logic"},
-  "hi": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["list", "list"], "defaultSize": [80, 22], "category": "logic"},
-  "%~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "!-~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "!/~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "cos~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "atan2~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "log~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "tanh~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "degrade~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "bitand~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "bitor~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "bitxor~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "bitnot~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "dspstate~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 2, "outlettype": ["int", "float"], "defaultSize": [80, 22], "category": "msp"},
-  "adstatus": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "msp"},
-  "gen~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "gen": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "logic"},
-  "poly~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [80, 22], "category": "msp"},
-  "thispoly~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "msp"},
-  "bpatcher": {"maxclass": "bpatcher", "numinlets": 0, "numoutlets": 0, "outlettype": [], "defaultSize": [80, 22], "category": "logic"},
-  "fpic": {"maxclass": "fpic", "numinlets": 0, "numoutlets": 0, "outlettype": [], "defaultSize": [100, 100], "category": "ui"},
-  "panel": {"maxclass": "panel", "numinlets": 1, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 200], "category": "ui"},
-  "live.step": {"maxclass": "live.step", "numinlets": 1, "numoutlets": 2, "outlettype": ["list", ""], "defaultSize": [200, 200], "category": "live"},
-  "live.grid": {"maxclass": "live.grid", "numinlets": 2, "numoutlets": 2, "outlettype": ["list", "list"], "defaultSize": [200, 200], "category": "live"},
-  "live.text": {"maxclass": "live.text", "numinlets": 1, "numoutlets": 2, "outlettype": ["", "bang"], "defaultSize": [80, 22], "category": "live"},
-  "live.line": {"maxclass": "live.line", "numinlets": 0, "numoutlets": 0, "outlettype": [], "defaultSize": [200, 2], "category": "live"},
-  "function": {"maxclass": "function", "numinlets": 1, "numoutlets": 4, "outlettype": ["float", "", "", "bang"], "defaultSize": [200, 100], "category": "ui"},
-  "sfrecord~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp", "argDependent": true, "argRule": "inlets = first arg"},
-  "peakamp~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["float"], "defaultSize": [80, 22], "category": "msp"},
-  "minimum~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "maximum~": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "sinx~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "tanx~": {"maxclass": "newobj", "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"], "defaultSize": [80, 22], "category": "msp"},
-  "number~": {"maxclass": "number~", "numinlets": 2, "numoutlets": 2, "outlettype": ["signal", "float"], "defaultSize": [56, 22], "category": "msp"},
-  "string.concat": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [90, 22], "category": "logic"},
-  "string.substring": {"maxclass": "newobj", "numinlets": 2, "numoutlets": 1, "outlettype": [""], "defaultSize": [120, 22], "category": "logic"},
-  "live.arrows": {"maxclass": "live.arrows", "numinlets": 1, "numoutlets": 1, "outlettype": [""], "defaultSize": [32, 30], "category": "live"}
+  "cycle~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "phasor~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "saw~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "tri~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "rect~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "noise~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "pink~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "train~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "ioscbank~": {
+    "maxclass": "newobj",
+    "numinlets": 4,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "*~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "+~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "-~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "/~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "sig~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "abs~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "pow~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "sqrt~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "clip~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "scale~": {
+    "maxclass": "newobj",
+    "numinlets": 6,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "snapshot~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "vectral~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "line~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "curve~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "adsr~": {
+    "maxclass": "newobj",
+    "numinlets": 5,
+    "numoutlets": 4,
+    "outlettype": [
+      "signal",
+      "signal",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "zigzag~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 4,
+    "outlettype": [
+      "signal",
+      "signal",
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "rampsmooth~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "slide~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "overdrive~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "lores~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "reson~": {
+    "maxclass": "newobj",
+    "numinlets": 4,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "onepole~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "biquad~": {
+    "maxclass": "newobj",
+    "numinlets": 6,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "cascade~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "cross~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "svf~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 4,
+    "outlettype": [
+      "signal",
+      "signal",
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "comb~": {
+    "maxclass": "newobj",
+    "numinlets": 5,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "teeth~": {
+    "maxclass": "newobj",
+    "numinlets": 6,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "allpass~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "tapin~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "tapconnect"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "tapout~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = outlets = arg count, default 1 signal"
+  },
+  "delay~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "ezadc~": {
+    "maxclass": "ezadc~",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      52,
+      36
+    ],
+    "category": "msp"
+  },
+  "ezdac~": {
+    "maxclass": "ezdac~",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      52,
+      36
+    ],
+    "category": "msp"
+  },
+  "adc~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "outlets = arg count, default 2 signals"
+  },
+  "dac~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = arg count, default 2"
+  },
+  "sfplay~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "signal outlets = channel arg + completion bang"
+  },
+  "groove~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "signal outlets = second arg + sync outlet"
+  },
+  "buffer~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "float",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "peek~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "poke~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "play~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "signal outlets = second arg + completion bang"
+  },
+  "record~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = second arg + 2"
+  },
+  "wave~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "index~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "waveform~": {
+    "maxclass": "waveform~",
+    "numinlets": 5,
+    "numoutlets": 6,
+    "outlettype": [
+      "float",
+      "float",
+      "float",
+      "float",
+      "list",
+      ""
+    ],
+    "defaultSize": [
+      250,
+      120
+    ],
+    "category": "msp"
+  },
+  "average~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "zerox~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "fzero~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "float",
+      "float",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "fft~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 3,
+    "outlettype": [
+      "signal",
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "ifft~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 3,
+    "outlettype": [
+      "signal",
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "fftin~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "signal",
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "fftout~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "pfft~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "cartopol~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "poltocar~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "fftinfo~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "mtof~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "ftom~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "dbtoa~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "atodb~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "sampstoms~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "mstosamps~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "gain~": {
+    "maxclass": "gain~",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      ""
+    ],
+    "defaultSize": [
+      34,
+      130
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "live.gain~": {
+    "maxclass": "live.gain~",
+    "numinlets": 2,
+    "numoutlets": 5,
+    "outlettype": [
+      "signal",
+      "signal",
+      "",
+      "float",
+      "list"
+    ],
+    "defaultSize": [
+      58,
+      130
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "matrix~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 3,
+    "outlettype": [
+      "signal",
+      "signal",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = first arg, outlets = second arg + status"
+  },
+  "selector~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = first arg + 1"
+  },
+  "gate~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "signal outlets = first arg"
+  },
+  "scope~": {
+    "maxclass": "scope~",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      200,
+      120
+    ],
+    "category": "msp"
+  },
+  "spectroscope~": {
+    "maxclass": "spectroscope~",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      200,
+      120
+    ],
+    "category": "msp"
+  },
+  "meter~": {
+    "maxclass": "meter~",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      16,
+      130
+    ],
+    "category": "msp"
+  },
+  "multislider": {
+    "maxclass": "multislider",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      80
+    ],
+    "category": "msp"
+  },
+  "gate": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "outlets = first arg value"
+  },
+  "switch": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = first arg + 1"
+  },
+  "route": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = outlets = arg count + 1"
+  },
+  "routepass": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = outlets = arg count + 1"
+  },
+  "zl": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "funnel": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "list"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = first arg"
+  },
+  "spray": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "outlets = first arg"
+  },
+  "forward": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "send": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "s": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "receive": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "one inlet without name, zero with name"
+  },
+  "r": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "one inlet without name, zero with name"
+  },
+  "send~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "s~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "receive~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "r~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "pack": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = arg count"
+  },
+  "unpack": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "outlets = arg count, value types from args"
+  },
+  "spell": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "atoi": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "list"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "itoa": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "prepend": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "append": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "bucket": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "outlets = first arg"
+  },
+  "thresh": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "pak": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = arg count"
+  },
+  "+": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "-": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "*": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "/": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "expr": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = max $i/$f/$s reference index"
+  },
+  "vexpr": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = max $i/$f/$s reference index"
+  },
+  "random": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "drunk": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "urn": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "accum": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "scale": {
+    "maxclass": "newobj",
+    "numinlets": 6,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "line": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "==": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "!=": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  ">": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "<": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  ">=": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "<=": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "sel": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = outlets = arg count + 1, matched outlets bang"
+  },
+  "match": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "change": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "if": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "ports from variable and outN references"
+  },
+  "speedlim": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "metro": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "qmetro": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "tempo": {
+    "maxclass": "newobj",
+    "numinlets": 4,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "delay": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = second arg + 1, outlets = second arg"
+  },
+  "pipe": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = arg count, outlets = arg count - 1"
+  },
+  "clocker": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "timer": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "float",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "counter": {
+    "maxclass": "newobj",
+    "numinlets": 5,
+    "numoutlets": 4,
+    "outlettype": [
+      "int",
+      "",
+      "",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "int": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "float": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "coll": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "dict": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 5,
+    "outlettype": [
+      "dictionary",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "table": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "itable": {
+    "maxclass": "itable",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "bang"
+    ],
+    "defaultSize": [
+      200,
+      120
+    ],
+    "category": "logic"
+  },
+  "preset": {
+    "maxclass": "preset",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "preset",
+      "int",
+      "preset",
+      "int",
+      ""
+    ],
+    "defaultSize": [
+      100,
+      40
+    ],
+    "category": "logic"
+  },
+  "pattr": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "pattrstorage": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "pattrforward": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "autopattr": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "sprintf": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = format conversion count"
+  },
+  "regexp": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "fromsymbol": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "tosymbol": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "number": {
+    "maxclass": "number",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      50,
+      20
+    ],
+    "category": "logic"
+  },
+  "flonum": {
+    "maxclass": "flonum",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      50,
+      20
+    ],
+    "category": "logic"
+  },
+  "toggle": {
+    "maxclass": "toggle",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      24,
+      24
+    ],
+    "category": "logic"
+  },
+  "button": {
+    "maxclass": "button",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      24,
+      24
+    ],
+    "category": "logic"
+  },
+  "slider": {
+    "maxclass": "slider",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      20,
+      140
+    ],
+    "category": "logic"
+  },
+  "rslider": {
+    "maxclass": "rslider",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      25
+    ],
+    "category": "logic"
+  },
+  "dial": {
+    "maxclass": "dial",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      40,
+      40
+    ],
+    "category": "logic"
+  },
+  "umenu": {
+    "maxclass": "umenu",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      100,
+      20
+    ],
+    "category": "logic"
+  },
+  "kslider": {
+    "maxclass": "kslider",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      420,
+      62
+    ],
+    "category": "logic"
+  },
+  "textedit": {
+    "maxclass": "textedit",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "",
+      "int",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      20
+    ],
+    "category": "logic"
+  },
+  "comment": {
+    "maxclass": "comment",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      200,
+      20
+    ],
+    "category": "logic"
+  },
+  "message": {
+    "maxclass": "message",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "text": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "bang",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "opendialog": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "savedialog": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "conformpath": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "absolutepath": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "relativepath": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "udpsend": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "udpreceive": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "live.numbox": {
+    "maxclass": "live.numbox",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "float"
+    ],
+    "defaultSize": [
+      50,
+      20
+    ],
+    "category": "logic"
+  },
+  "live.dial": {
+    "maxclass": "live.dial",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "float"
+    ],
+    "defaultSize": [
+      40,
+      40
+    ],
+    "category": "logic"
+  },
+  "live.slider": {
+    "maxclass": "live.slider",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "float"
+    ],
+    "defaultSize": [
+      20,
+      140
+    ],
+    "category": "logic"
+  },
+  "live.toggle": {
+    "maxclass": "live.toggle",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      24,
+      24
+    ],
+    "category": "logic"
+  },
+  "live.tab": {
+    "maxclass": "live.tab",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      "float"
+    ],
+    "defaultSize": [
+      120,
+      20
+    ],
+    "category": "logic"
+  },
+  "live.menu": {
+    "maxclass": "live.menu",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      "float"
+    ],
+    "defaultSize": [
+      100,
+      20
+    ],
+    "category": "logic"
+  },
+  "live.colors": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      120,
+      20
+    ],
+    "category": "logic"
+  },
+  "notein": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "ctlin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "pgmin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "bendin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "touchin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "polyin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "midiin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "rtin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "midiparse": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 8,
+    "outlettype": [
+      "",
+      "",
+      "",
+      "int",
+      "int",
+      "",
+      "int",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "xbendin": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "xbendin2": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "noteout": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "ctlout": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "pgmout": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "bendout": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "touchout": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "midiout": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "midiformat": {
+    "maxclass": "newobj",
+    "numinlets": 7,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "xbendout": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "xbendout2": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "stripnote": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "flush": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "sustain": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "midiselect": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 8,
+    "outlettype": [
+      "",
+      "",
+      "",
+      "int",
+      "int",
+      "",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi",
+    "dynamicPorts": true
+  },
+  "midiflush": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "midiinfo": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "prob": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "seq": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "bang",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "detonate": {
+    "maxclass": "newobj",
+    "numinlets": 8,
+    "numoutlets": 8,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "follow": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "borax": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 9,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "mtof": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "ftom": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "anal": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "list"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "midi"
+  },
+  "jit.movie": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter",
+    "argDependent": true,
+    "argRule": "jit.movie output type from output_texture attribute"
+  },
+  "jit.qt.movie": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.window": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.pwindow": {
+    "maxclass": "jit.pwindow",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      200
+    ],
+    "category": "jitter"
+  },
+  "jit.broadcast": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.record": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.vcr": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.matrix": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.pack": {
+    "maxclass": "newobj",
+    "numinlets": 4,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter",
+    "argDependent": true,
+    "argRule": "inlets = first arg"
+  },
+  "jit.unpack": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "jit_matrix",
+      "jit_matrix",
+      "jit_matrix",
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter",
+    "argDependent": true,
+    "argRule": "outlets = first arg + status"
+  },
+  "jit.spill": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.fill": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.iter": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.cellblock": {
+    "maxclass": "jit.cellblock",
+    "numinlets": 2,
+    "numoutlets": 4,
+    "outlettype": [
+      "list",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      200
+    ],
+    "category": "jitter"
+  },
+  "jit.dimop": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.concat": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.op": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.rota": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.rgb2luma": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.colorspace": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.brcosa": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.chromakey": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.keyscreen": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.xfade": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.altern": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.convolve": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.fastblur": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.histogram": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.findbounds": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.3m": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.peek~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.poke~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.render": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.mesh": {
+    "maxclass": "newobj",
+    "numinlets": 9,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.gridshape": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.videoplane": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.slab": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_gl_texture",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter",
+    "dynamicPorts": true
+  },
+  "jit.gl.shader": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.sketch": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.light": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.camera": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_gl_texture",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.texture": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_gl_texture",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.gl.multiple": {
+    "maxclass": "newobj",
+    "numinlets": 4,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter",
+    "dynamicPorts": true
+  },
+  "jit.gl.picker": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.p.shiva": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.p.vishnu": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "jit_matrix",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.net.send": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "jit.net.recv": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "jit_matrix",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "jitter"
+  },
+  "inlet": {
+    "maxclass": "inlet",
+    "numinlets": 0,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      25,
+      25
+    ],
+    "category": "special"
+  },
+  "outlet": {
+    "maxclass": "outlet",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      25,
+      25
+    ],
+    "category": "special"
+  },
+  "trigger": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "bang",
+      "float",
+      "int",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argRule": "outlets = arg count, outlettype from args",
+    "argDependent": true
+  },
+  "t": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argRule": "outlets = arg count, outlettype from args",
+    "argDependent": true
+  },
+  "b": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      "bang"
+    ],
+    "defaultSize": [
+      50,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "outlets = first arg, default 2 bangs"
+  },
+  "loadbang": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "loadmess": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "closebang": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "thispatcher": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "node.script": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      100,
+      22
+    ],
+    "category": "external"
+  },
+  "patcherargs": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "print": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "inlets = arg count, default 1"
+  },
+  "maxforge.sync": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      100,
+      22
+    ],
+    "category": "external"
+  },
+  "split": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from numeric arguments"
+  },
+  "past": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "togedge": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "bang",
+      "bang"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "makenote": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 2,
+    "outlettype": [
+      "float",
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "dynamicPorts": true
+  },
+  "swap": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argDependent": true,
+    "argRule": "fixed ports, outlettype from first arg"
+  },
+  "bondo": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "argRule": "inlets = outlets = first arg",
+    "argDependent": true
+  },
+  "key": {
+    "maxclass": "newobj",
+    "numinlets": 0,
+    "numoutlets": 4,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "keyup": {
+    "maxclass": "newobj",
+    "numinlets": 0,
+    "numoutlets": 4,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "mousestate": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "int",
+      "int",
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "hi": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "list",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic"
+  },
+  "%~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "!-~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "!/~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "cos~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "atan2~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "log~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "tanh~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "degrade~": {
+    "maxclass": "newobj",
+    "numinlets": 3,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "bitand~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "bitor~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "bitxor~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "bitnot~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "dspstate~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "int",
+      "float",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "adstatus": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "gen~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "gen": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "dynamicPorts": true
+  },
+  "poly~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "thispoly~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 3,
+    "outlettype": [
+      "int",
+      "int",
+      "int"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "dynamicPorts": true
+  },
+  "bpatcher": {
+    "maxclass": "bpatcher",
+    "numinlets": 0,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "logic",
+    "dynamicPorts": true
+  },
+  "fpic": {
+    "maxclass": "fpic",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "jit_matrix"
+    ],
+    "defaultSize": [
+      100,
+      100
+    ],
+    "category": "ui"
+  },
+  "panel": {
+    "maxclass": "panel",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      200,
+      200
+    ],
+    "category": "ui"
+  },
+  "live.step": {
+    "maxclass": "live.step",
+    "numinlets": 1,
+    "numoutlets": 5,
+    "outlettype": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      200
+    ],
+    "category": "live"
+  },
+  "live.grid": {
+    "maxclass": "live.grid",
+    "numinlets": 2,
+    "numoutlets": 6,
+    "outlettype": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "defaultSize": [
+      200,
+      200
+    ],
+    "category": "live"
+  },
+  "live.text": {
+    "maxclass": "live.text",
+    "numinlets": 1,
+    "numoutlets": 2,
+    "outlettype": [
+      "",
+      ""
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "live"
+  },
+  "live.line": {
+    "maxclass": "live.line",
+    "numinlets": 1,
+    "numoutlets": 0,
+    "outlettype": [],
+    "defaultSize": [
+      200,
+      2
+    ],
+    "category": "live"
+  },
+  "function": {
+    "maxclass": "function",
+    "numinlets": 1,
+    "numoutlets": 4,
+    "outlettype": [
+      "float",
+      "",
+      "",
+      "bang"
+    ],
+    "defaultSize": [
+      200,
+      100
+    ],
+    "category": "ui"
+  },
+  "sfrecord~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp",
+    "argDependent": true,
+    "argRule": "inlets = first arg"
+  },
+  "peakamp~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "float"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "minimum~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "maximum~": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "sinx~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "tanx~": {
+    "maxclass": "newobj",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      "signal"
+    ],
+    "defaultSize": [
+      80,
+      22
+    ],
+    "category": "msp"
+  },
+  "number~": {
+    "maxclass": "number~",
+    "numinlets": 2,
+    "numoutlets": 2,
+    "outlettype": [
+      "signal",
+      "float"
+    ],
+    "defaultSize": [
+      56,
+      22
+    ],
+    "category": "msp"
+  },
+  "string.concat": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      90,
+      22
+    ],
+    "category": "logic"
+  },
+  "string.substring": {
+    "maxclass": "newobj",
+    "numinlets": 2,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      120,
+      22
+    ],
+    "category": "logic"
+  },
+  "live.arrows": {
+    "maxclass": "live.arrows",
+    "numinlets": 1,
+    "numoutlets": 1,
+    "outlettype": [
+      ""
+    ],
+    "defaultSize": [
+      32,
+      30
+    ],
+    "category": "live"
+  }
 }

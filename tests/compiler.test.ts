@@ -331,10 +331,16 @@ fire -> value -> display
   });
 
   it("allows unknown objects with flag", () => {
-    const source = `a = custom_object`;
+    const source = `
+a = custom_object
+b = custom_sink
+a[4] -> b[3]
+`;
     const { ast } = parse(source);
     const result = compile(ast, db, true);
     expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines[0].patchline.source).toEqual(["obj-a", 4]);
+    expect(result.output!.patcher.lines[0].patchline.destination).toEqual(["obj-b", 3]);
   });
 
   it("emits patch declaration metadata into patcher JSON", () => {
@@ -535,7 +541,20 @@ r[3] -> d
       const route = result.output!.patcher.boxes.find(
         (bw) => bw.box.text === "route 1 2 3"
       )!.box;
+      expect(route.numinlets).toBe(4);
       expect(route.numoutlets).toBe(4);
+    });
+
+    it("does not invent a fixed upper bound for runtime-defined ports", () => {
+      const source = `
+voice = poly~ voice.maxpat 8
+out = dac~
+voice[3] -> out[1]
+`;
+      const { ast } = parse(source);
+      const result = compile(ast, db);
+      expect(result.success).toBe(true);
+      expect(result.output!.patcher.lines[0].patchline.source).toEqual(["obj-voice", 3]);
     });
 
     it("resolves pack inlets from arg count", () => {
@@ -843,14 +862,14 @@ tog -> msg
     expect(msg.text).toBe("open file.txt");
   });
 
-  it("handles loadbang with no inlets", () => {
+  it("uses the Max 9 loadbang port shape", () => {
     const source = `lb = loadbang`;
     const { ast, errors } = parse(source);
     expect(errors).toHaveLength(0);
     const result = compile(ast, db);
     expect(result.success).toBe(true);
     const lb = result.output!.patcher.boxes[0].box;
-    expect(lb.numinlets).toBe(0);
+    expect(lb.numinlets).toBe(1);
     expect(lb.numoutlets).toBe(1);
   });
 });

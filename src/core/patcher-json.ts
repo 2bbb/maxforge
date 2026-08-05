@@ -59,11 +59,11 @@ export function buildPatcherJSON(
     patcher: {
       fileversion: 1,
       appversion: {
-        major: 8,
-        minor: 6,
-        revision: 4,
-        processor: "x86",
-        platform: "macintel",
+        major: 9,
+        minor: 0,
+        revision: 0,
+        architecture: "x64",
+        modernui: 1,
       },
       classnamespace: "box",
       rect: [100.0, 100.0, patchDecl?.size?.[0] ?? 640, patchDecl?.size?.[1] ?? 480],
