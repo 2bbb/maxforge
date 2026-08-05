@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="description" content="maxforge is an unofficial text-first DSL, CLI, MCP server, and native sync external for generating and managing Max patches.">
+  <meta property="og:title" content="maxforge — text-first patch generation for Max">
+  <meta property="og:description" content="Generate repetitive Max patches with for, if, and arithmetic. Compile to .maxpat or control a managed patch through MCP.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://2bbb.github.io/maxforge/">
+  <link rel="canonical" href="https://2bbb.github.io/maxforge/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>maxforge — text-first patch generation for Max</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <a class="wordmark" href="#top" aria-label="maxforge home">
+      <span class="wordmark-mark" aria-hidden="true">mf</span>
+      <span>maxforge</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#dsl">DSL</a>
+      <a href="#live">MCP</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/2bbb/maxforge">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow">TEXT → PATCHER</p>
+        <h1>Mass-produce Max patches.<br><span>Keep the source readable.</span></h1>
+        <p class="hero-lede">
+          maxforge compiles a compact DSL into valid <code>.maxpat</code> files.
+          Use loops, conditions, and arithmetic for the repetitive object creation
+          that Max's visual editor handles poorly.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#quickstart">Start with npx</a>
+          <a class="button button-secondary" href="https://github.com/2bbb/maxforge/releases/download/latest/maxforge.zip">Download Max package</a>
+        </div>
+        <p class="disclaimer">Unofficial software. Not affiliated with, endorsed by, or sponsored by Cycling '74.</p>
+      </div>
+
+      <div class="hero-panel" aria-label="maxforge compilation overview">
+        <div class="panel-bar">
+          <span class="status-dot"></span>
+          <span>voice_bank.maxdsl</span>
+          <span class="panel-state">COMPILES</span>
+        </div>
+        <pre><code><span class="token-keyword">for</span> i <span class="token-keyword">in</span> 0..7 {
+  osc_${i} = cycle~ ${110 + i * 27.5}
+  amp_${i} = *~ 0.125
+  osc_${i} -&gt; amp_${i} -&gt; dac
+
+  <span class="token-keyword">if</span> i &lt; 4 {
+    meter_${i} = meter~
+    amp_${i} -&gt; meter_${i}
+  }
+}</code></pre>
+        <div class="compile-result">
+          <div><strong>20</strong><span>objects</span></div>
+          <div><strong>20</strong><span>connections</span></div>
+          <div><strong>1</strong><span>source loop</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-strip" aria-label="Project capabilities">
+      <span>FOR / IF / + − × ÷</span>
+      <span>374 OBJECTS</span>
+      <span>AUTO LAYOUT</span>
+      <span>SUBPATCHERS</span>
+      <span>MAX ↔ DSL</span>
+      <span>MCP LIVE SYNC</span>
+    </section>
+
+    <section class="section" id="quickstart">
+      <div class="section-heading">
+        <p class="eyebrow">00 / QUICKSTART</p>
+        <h2>No global install.<br>One command to a patch.</h2>
+      </div>
+      <div class="command-stack">
+        <div class="command-block">
+          <div class="command-label">Compile DSL to a Max patch</div>
+          <code>npx maxforge@latest compile input.maxdsl -o output.maxpat</code>
+          <button class="copy-button" type="button" data-copy="npx maxforge@latest compile input.maxdsl -o output.maxpat">Copy</button>
+        </div>
+        <div class="command-block">
+          <div class="command-label">Validate without writing</div>
+          <code>npx maxforge@latest validate input.maxdsl</code>
+          <button class="copy-button" type="button" data-copy="npx maxforge@latest validate input.maxdsl">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section feature-section" id="dsl">
+      <div class="section-heading">
+        <p class="eyebrow">01 / DSL</p>
+        <h2>Describe intent.<br>Stop duplicating boxes.</h2>
+        <p>
+          Names become stable Max box IDs. Connections stay explicit. Layout can
+          be automatic or pinned with <code>at(x, y)</code> when position matters.
+        </p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card feature-card-wide">
+          <span class="feature-index">01</span>
+          <h3>Generate at scale</h3>
+          <p>Inclusive ranges, stepped loops, numeric conditions, and interpolated expressions create consistent banks without copy/paste drift.</p>
+          <code>for voice in 0..31 { ... }</code>
+        </article>
+        <article class="feature-card">
+          <span class="feature-index">02</span>
+          <h3>Compile both ways</h3>
+          <p>Build <code>.maxpat</code> from DSL, or decompile existing patch structure and positions back to editable text.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-index">03</span>
+          <h3>Nest cleanly</h3>
+          <p>Define subpatchers inline. Inlets, outlets, object shape, and nested connections are resolved recursively.</p>
+        </article>
+        <article class="feature-card feature-card-accent">
+          <span class="feature-index">04</span>
+          <h3>Paste into Max</h3>
+          <p>Emit compressed patch text for the clipboard when a file is unnecessary.</p>
+          <a href="https://github.com/2bbb/maxforge#cli-reference">CLI reference →</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section live-section" id="live">
+      <div class="section-heading">
+        <p class="eyebrow">02 / LIVE CONTROL</p>
+        <h2>Let an agent read and replace<br>a managed patch scope.</h2>
+        <p>
+          The MCP server compiles desired DSL and sends ordered plans to one native
+          <code>maxforge.sync</code> object in each patch. The external inspects and
+          mutates through the Max SDK—no JavaScript bridge or screenshot required.
+        </p>
+      </div>
+
+      <div class="architecture" aria-label="MCP architecture">
+        <div class="architecture-node">
+          <span>01</span>
+          <strong>AI agent</strong>
+          <small>MCP client</small>
+        </div>
+        <div class="architecture-link"><span>stdio</span></div>
+        <div class="architecture-node architecture-node-hot">
+          <span>02</span>
+          <strong>maxforge-mcp</strong>
+          <small>Node.js planner</small>
+        </div>
+        <div class="architecture-link"><span>loopback WS</span></div>
+        <div class="architecture-node">
+          <span>03</span>
+          <strong>maxforge.sync</strong>
+          <small>native Max external</small>
+        </div>
+      </div>
+
+      <div class="config-grid">
+        <div>
+          <h3>MCP configuration</h3>
+          <p>Run the published server directly with npx. Node.js 20 or newer is required.</p>
+        </div>
+        <div class="code-window">
+          <div class="panel-bar"><span>mcp.json</span><span class="panel-state">JSON</span></div>
+          <pre><code>{
+  "mcpServers": {
+    "maxforge": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package=maxforge@latest",
+        "maxforge-mcp"
+      ]
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="warning">
+        <strong>Experimental means experimental.</strong>
+        <p>Protocol v1 validates complete plans before mutation but does not roll back a partial runtime failure. Inspect first, preview destructive operations, then apply complete desired state.</p>
+      </div>
+    </section>
+
+    <section class="section" id="install">
+      <div class="section-heading">
+        <p class="eyebrow">03 / INSTALL</p>
+        <h2>Choose the surface<br>you actually need.</h2>
+      </div>
+      <div class="install-grid">
+        <article class="install-card">
+          <div class="install-tag">CLI + LIBRARY + MCP</div>
+          <h3>npm package</h3>
+          <p>Use for DSL compilation, decompilation, planning, and the MCP server.</p>
+          <div class="inline-command">
+            <code>npm install maxforge</code>
+            <button class="copy-button" type="button" data-copy="npm install maxforge">Copy</button>
+          </div>
+          <a href="https://www.npmjs.com/package/maxforge">View on npm →</a>
+        </article>
+
+        <article class="install-card install-card-primary">
+          <div class="install-tag">MACOS UNIVERSAL + WINDOWS X64</div>
+          <h3>Max package</h3>
+          <p>Use for native <code>maxforge.sync</code> live inspection and mutation. Includes help, reference, docs, and examples.</p>
+          <a class="button button-primary" href="https://github.com/2bbb/maxforge/releases/download/latest/maxforge.zip">Download maxforge.zip</a>
+          <small>macOS builds are ad-hoc signed and not notarized.</small>
+        </article>
+
+        <article class="install-card">
+          <div class="install-tag">AGENT WORKFLOWS</div>
+          <h3>Skills</h3>
+          <p>Install offline authoring or stricter live-control instructions for compatible coding agents.</p>
+          <div class="inline-command">
+            <code>npx skills add 2bbb/maxforge</code>
+            <button class="copy-button" type="button" data-copy="npx skills add 2bbb/maxforge">Copy</button>
+          </div>
+          <a href="https://github.com/2bbb/maxforge/tree/main/skills">Inspect the skills →</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <p class="eyebrow">SOURCE-CONTROL THE BORING PART</p>
+      <h2>Write the pattern once.<br>Forge the patch.</h2>
+      <div class="hero-actions">
+        <a class="button button-primary" href="https://github.com/2bbb/maxforge">Read the documentation</a>
+        <a class="button button-secondary" href="https://github.com/2bbb/maxforge/tree/main/examples">Browse examples</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="wordmark" href="#top"><span class="wordmark-mark" aria-hidden="true">mf</span><span>maxforge</span></a>
+    <p>MIT licensed · built by <a href="https://github.com/2bbb">2bit</a></p>
+    <div>
+      <a href="https://github.com/2bbb/maxforge">GitHub</a>
+      <a href="https://www.npmjs.com/package/maxforge">npm</a>
+      <a href="https://github.com/2bbb/maxforge/releases">Releases</a>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

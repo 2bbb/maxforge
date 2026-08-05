@@ -75,7 +75,7 @@
   "bugs": {
     "url": "https://github.com/2bbb/maxforge/issues"
   },
-  "homepage": "https://github.com/2bbb/maxforge#readme",
+  "homepage": "https://2bbb.github.io/maxforge/",
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
     "ws": "^8.21.1",

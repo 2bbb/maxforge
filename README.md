@@ -3,6 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
 [![Build Max package](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml)
 
+[Website](https://2bbb.github.io/maxforge/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
+
 Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
 Write compact text, get valid Max patch JSON.
 
@@ -478,11 +480,18 @@ docs/
   mcp.md               MCP setup, tools, recovery, and troubleshooting
   patch-sync.md        Native PatchPlan ownership protocol
   releasing.md         Max package CI and release procedure
+  website.md           GitHub Pages source and deployment procedure
 scripts/
   assemble-max-package.sh Build the Max package directory
   verify-max-package.py   Validate source, package, and ZIP contents
+  verify-pages.py         Validate static Pages files and local references
 .github/workflows/
   build-max-package.yml Cross-platform external build and release CI
+  deploy-pages.yml     Validate and deploy the static project website
+site/
+  index.html           GitHub Pages entry page
+  styles.css           Responsive site presentation
+  main.js              Dependency-free copy controls
 skills/
   maxforge/            Offline DSL/compiler agent skill
   maxforge-mcp/        Live MCP control agent skill
@@ -512,6 +521,9 @@ npm run pack:dry-run   # inspect npm package contents
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build --build-config Release --output-on-failure
+
+# Static website validation
+python3 scripts/verify-pages.py site
 ```
 
 ## Error Codes

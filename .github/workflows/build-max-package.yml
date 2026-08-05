@@ -35,6 +35,9 @@ jobs:
       - name: Validate Max package sources
         run: python3 scripts/verify-max-package.py --source .
 
+      - name: Validate GitHub Pages site
+        run: python3 scripts/verify-pages.py site
+
   build-macos:
     runs-on: macos-latest
     steps:
