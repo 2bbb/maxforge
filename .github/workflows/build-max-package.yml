@@ -1,0 +1,233 @@
+name: Build & Package Max external
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Validate Max package sources
+        run: python3 scripts/verify-max-package.py --source .
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+          ssh-key: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
+
+      - name: Require bbb.agent deploy key
+        shell: bash
+        env:
+          BBB_AGENT_DEPLOY_KEY: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BBB_AGENT_DEPLOY_KEY:-}" ]]; then
+            echo "::error::BBB_AGENT_DEPLOY_KEY is required to read the private deps/bbb.agent submodule"
+            exit 1
+          fi
+
+      - name: Initialize build submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- deps/min-api deps/bbb.agent
+          git submodule update --init deps/min-api
+          git submodule update --init deps/bbb.agent
+          git -C deps/min-api submodule update --init --recursive
+          git -C deps/bbb.agent submodule update --init deps/IXWebSocket
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Verify macOS external
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="externals/maxforge.sync.mxo"
+          binary="$bundle/Contents/MacOS/maxforge.sync"
+          test -d "$bundle"
+          test -x "$binary"
+          lipo "$binary" -verify_arch x86_64 arm64
+          test "$(plutil -extract CFBundleIdentifier raw "$bundle/Contents/Info.plist")" = "jp.2bit.maxforge.sync"
+          test "$(plutil -extract CFBundleShortVersionString raw "$bundle/Contents/Info.plist")" = "$(node -p "require('./package.json').version")"
+          codesign --verify --deep --strict --verbose=2 "$bundle"
+
+      - name: Upload macOS external
+        uses: actions/upload-artifact@v7
+        with:
+          name: maxforge-macos
+          path: externals/maxforge.sync.mxo
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+          ssh-key: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
+
+      - name: Require bbb.agent deploy key
+        shell: bash
+        env:
+          BBB_AGENT_DEPLOY_KEY: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BBB_AGENT_DEPLOY_KEY:-}" ]]; then
+            echo "::error::BBB_AGENT_DEPLOY_KEY is required to read the private deps/bbb.agent submodule"
+            exit 1
+          fi
+
+      - name: Initialize build submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- deps/min-api deps/bbb.agent
+          git submodule update --init deps/min-api
+          git submodule update --init deps/bbb.agent
+          git -C deps/min-api submodule update --init --recursive
+          git -C deps/bbb.agent submodule update --init deps/IXWebSocket
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Verify Windows external
+        shell: pwsh
+        run: |
+          $external = "externals/maxforge.sync.mxe64"
+          if (-not (Test-Path -PathType Leaf $external)) {
+            throw "Missing Windows external: $external"
+          }
+          if ((Get-Item $external).Length -eq 0) {
+            throw "Windows external is empty: $external"
+          }
+
+      - name: Upload Windows external
+        uses: actions/upload-artifact@v7
+        with:
+          name: maxforge-windows
+          path: externals/maxforge.sync.mxe64
+          if-no-files-found: error
+
+  package:
+    permissions:
+      contents: write
+    needs: [validate, build-macos, build-windows]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download macOS external
+        uses: actions/download-artifact@v8
+        with:
+          name: maxforge-macos
+          path: dist/maxforge/externals
+
+      - name: Download Windows external
+        uses: actions/download-artifact@v8
+        with:
+          name: maxforge-windows
+          path: dist/maxforge/externals
+
+      - name: Assemble Max package
+        shell: bash
+        run: scripts/assemble-max-package.sh dist/maxforge
+
+      - name: Verify Max package
+        run: python3 scripts/verify-max-package.py --package dist/maxforge
+
+      - name: Create macOS-preserving archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          ditto -c -k --keepParent maxforge maxforge.zip
+
+      - name: Verify archive
+        run: python3 scripts/verify-max-package.py --archive dist/maxforge.zip
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: maxforge-latest
+          path: dist/maxforge.zip
+          if-no-files-found: error
+
+      - name: Update latest package release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > latest-release-notes.md <<EOF
+          Latest successful main build for maxforge.
+
+          Commit: ${GITHUB_SHA}
+          Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          The archive contains the universal macOS maxforge.sync.mxo and x64 Windows maxforge.sync.mxe64, plus Max help, reference, documentation, and examples. The macOS external is ad-hoc signed and is not notarized.
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest "$GITHUB_SHA"
+          git push origin refs/tags/latest --force
+
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest dist/maxforge.zip#maxforge.zip --clobber
+            gh release edit latest \
+              --title "maxforge latest" \
+              --notes-file latest-release-notes.md \
+              --target "$GITHUB_SHA" \
+              --latest
+          else
+            gh release create latest dist/maxforge.zip#maxforge.zip \
+              --title "maxforge latest" \
+              --notes-file latest-release-notes.md \
+              --target "$GITHUB_SHA" \
+              --latest
+          fi
+
+      - name: Upload to versioned release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/maxforge.zip
+          fail_on_unmatched_files: true
