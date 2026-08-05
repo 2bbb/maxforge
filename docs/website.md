@@ -4,6 +4,12 @@ The public project site is <https://2bit.jp/maxforge/>. Its deployable,
 dependency-free source lives in `site/`; it is not generated from the README and
 does not require Jekyll or a Node.js build.
 
+`site/index.html` is the product overview. `site/docs/index.html` is the
+operational documentation for installation, CLI commands, DSL authoring, MCP
+target selection, the native external, recovery, Skills, and current safety
+limits. Keep detailed protocol schemas in the repository Markdown and link to
+them from the HTML guide instead of duplicating every schema.
+
 ## Local validation
 
 Run the same structural check used by CI:
@@ -13,10 +19,12 @@ python3 scripts/verify-pages.py site
 node --check site/main.js
 ```
 
-The verifier rejects a missing entry page, stylesheet, script, favicon, local
-asset, local anchor, unofficial-project disclaimer, or npx quickstart. The
-site uses the Pages artifact workflow, so it does not pass through Jekyll and
-does not need a `.nojekyll` marker.
+The verifier recursively checks every HTML page. It rejects missing titles,
+language metadata, primary headings, duplicate IDs, local files, cross-page
+anchors, required documentation sections, safety disclosures, sitemap entries,
+the unofficial-project disclaimer, or the npx quickstart. The site uses the
+Pages artifact workflow, so it does not pass through Jekyll and does not need a
+`.nojekyll` marker.
 
 For a local visual preview:
 

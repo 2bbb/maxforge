@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
 [![Build Max package](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml)
 
-[Website](https://2bit.jp/maxforge/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
+[Website](https://2bit.jp/maxforge/) · [Documentation](https://2bit.jp/maxforge/docs/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
 
 Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
 Write compact text, get valid Max patch JSON.
@@ -492,6 +492,9 @@ site/
   index.html           GitHub Pages entry page
   styles.css           Responsive site presentation
   main.js              Dependency-free copy controls
+  docs/index.html      Installation, DSL, MCP, and recovery guide
+  docs/docs.css        Documentation-specific layout and typography
+  sitemap.xml          Public home and documentation URLs
 skills/
   maxforge/            Offline DSL/compiler agent skill
   maxforge-mcp/        Live MCP control agent skill

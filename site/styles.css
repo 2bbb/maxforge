@@ -663,7 +663,7 @@ footer > div {
     min-height: 64px;
   }
 
-  nav a:not(:last-child) {
+  .site-header > nav a:not(:first-child):not(:last-child) {
     display: none;
   }
 

@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="description" content="Documentation for the maxforge DSL, CLI, MCP server, native Max external, and agent skills.">
+  <meta property="og:title" content="maxforge documentation">
+  <meta property="og:description" content="Install maxforge, generate Max patches with DSL, and safely control managed patches through MCP.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://2bit.jp/maxforge/docs/">
+  <link rel="canonical" href="https://2bit.jp/maxforge/docs/">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="docs.css">
+  <title>Documentation — maxforge</title>
+</head>
+<body class="docs-page">
+  <a class="skip-link" href="#documentation">Skip to documentation</a>
+
+  <header class="site-header docs-site-header">
+    <a class="wordmark" href="../" aria-label="maxforge home">
+      <span class="wordmark-mark" aria-hidden="true">mf</span>
+      <span>maxforge</span>
+      <span class="docs-label">docs</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="./" aria-current="page">Docs</a>
+      <a href="../#dsl">DSL</a>
+      <a href="../#live">MCP</a>
+      <a href="https://github.com/2bbb/maxforge">GitHub</a>
+    </nav>
+  </header>
+
+  <details class="docs-mobile-navigation">
+    <summary>Documentation menu</summary>
+    <nav aria-label="Mobile documentation navigation">
+      <a href="#overview">Choose a surface</a>
+      <a href="#install">Installation</a>
+      <a href="#first-patch">First patch</a>
+      <a href="#cli">CLI</a>
+      <a href="#dsl">DSL syntax</a>
+      <a href="#generation">for / if / arithmetic</a>
+      <a href="#mcp">MCP setup</a>
+      <a href="#mcp-workflow">Safe MCP workflow</a>
+      <a href="#external">Native external</a>
+      <a href="#recovery">Recovery</a>
+      <a href="#skills">Agent skills</a>
+      <a href="#limits">Limits and security</a>
+    </nav>
+  </details>
+
+  <main class="docs-shell" id="documentation">
+    <aside class="docs-sidebar" aria-label="Documentation sections">
+      <div class="docs-sidebar-group">
+        <span>Start here</span>
+        <a href="#overview">Choose a surface</a>
+        <a href="#install">Installation</a>
+        <a href="#first-patch">First patch</a>
+      </div>
+      <div class="docs-sidebar-group">
+        <span>Author patches</span>
+        <a href="#cli">CLI</a>
+        <a href="#dsl">DSL syntax</a>
+        <a href="#generation">for / if / arithmetic</a>
+        <a href="#connections">Connections</a>
+        <a href="#subpatchers">Subpatchers</a>
+      </div>
+      <div class="docs-sidebar-group">
+        <span>Live control</span>
+        <a href="#mcp">MCP setup</a>
+        <a href="#mcp-workflow">Safe workflow</a>
+        <a href="#mcp-tools">Tool reference</a>
+        <a href="#external">Native external</a>
+        <a href="#recovery">Recovery</a>
+      </div>
+      <div class="docs-sidebar-group">
+        <span>Agents and reference</span>
+        <a href="#skills">Agent skills</a>
+        <a href="#limits">Limits and security</a>
+        <a href="#references">Source references</a>
+      </div>
+    </aside>
+
+    <article class="docs-content">
+      <header class="docs-hero">
+        <p class="eyebrow">DOCUMENTATION / v0.1</p>
+        <h1>Use the smallest<br>maxforge surface that works.</h1>
+        <p>
+          Compile text into <code>.maxpat</code> files, generate large repeated
+          graphs, or let an MCP-capable agent inspect and replace an explicitly
+          managed patch scope. These are separate workflows with separate
+          installation requirements.
+        </p>
+        <div class="docs-badges" aria-label="Project requirements">
+          <span>Node.js 20+</span>
+          <span>Max 9 package available</span>
+          <span>Protocol v1 experimental</span>
+        </div>
+      </header>
+
+      <div class="docs-callout docs-callout-neutral">
+        <strong>Unofficial project</strong>
+        <p>maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.</p>
+      </div>
+
+      <section id="overview" class="docs-section">
+        <div class="docs-section-label">01 / ORIENTATION</div>
+        <h2>Choose a surface</h2>
+        <p>
+          Do not install the native external just to compile a file. Do not start
+          the MCP server when a deterministic CLI command is enough. The extra
+          layers only make sense when an agent must inspect or mutate an open Max
+          patch.
+        </p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Goal</th>
+                <th>Use</th>
+                <th>Requires Max running</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Compile or validate <code>.maxdsl</code></td>
+                <td><code>npx maxforge</code></td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td>Use maxforge from Node.js code</td>
+                <td><code>npm install maxforge</code></td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td>Generate <code>thispatcher</code> commands</td>
+                <td>Library API</td>
+                <td>Only when applying them</td>
+              </tr>
+              <tr>
+                <td>Inspect or replace an open patch with an agent</td>
+                <td><code>maxforge-mcp</code> + <code>maxforge.sync</code></td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <td>Give an agent reliable operating instructions</td>
+                <td>maxforge Skills</td>
+                <td>No; Skills are instructions</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="install" class="docs-section">
+        <div class="docs-section-label">02 / INSTALL</div>
+        <h2>Installation</h2>
+
+        <h3>Run the CLI without a global install</h3>
+        <p>The package is published to npm. Pin a version in automation; use <code>@latest</code> for interactive evaluation.</p>
+        <div class="docs-command">
+          <code>npx maxforge@latest --help</code>
+          <button class="copy-button" type="button" data-copy="npx maxforge@latest --help">Copy</button>
+        </div>
+
+        <h3>Install the Node.js library</h3>
+        <div class="docs-command">
+          <code>npm install maxforge</code>
+          <button class="copy-button" type="button" data-copy="npm install maxforge">Copy</button>
+        </div>
+
+        <h3>Install the native Max package</h3>
+        <ol class="docs-steps">
+          <li>
+            <span>01</span>
+            <div>Download <a href="https://github.com/2bbb/maxforge/releases/download/latest/maxforge.zip"><code>maxforge.zip</code></a>.</div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>Extract the top-level <code>maxforge</code> directory into the Max packages directory.</div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>Restart Max, then create a <code>maxforge.sync</code> object or open its help patch.</div>
+          </li>
+        </ol>
+        <div class="docs-paths">
+          <div><span>macOS</span><code>~/Documents/Max 9/Packages/</code></div>
+          <div><span>Windows</span><code>%USERPROFILE%\Documents\Max 9\Packages\</code></div>
+        </div>
+        <div class="docs-callout docs-callout-warning">
+          <strong>macOS signing</strong>
+          <p>The macOS external is ad-hoc signed but not notarized. It must not be treated as Gatekeeper-safe.</p>
+        </div>
+      </section>
+
+      <section id="first-patch" class="docs-section">
+        <div class="docs-section-label">03 / FIRST PATCH</div>
+        <h2>Compile a first patch</h2>
+        <p>Create <code>basic.maxdsl</code>:</p>
+        <div class="docs-code-window">
+          <div class="panel-bar"><span>basic.maxdsl</span><span class="panel-state">MAXDSL</span></div>
+          <pre><code>patch "Basic Synth"
+
+freq = number
+mt = mtof
+osc = cycle~ 440
+mul = *~ 0.5
+vol = gain~
+dac = ezdac~
+
+freq -&gt; mt -&gt; osc -&gt; mul -&gt; vol -&gt; dac
+vol[1] -&gt; dac[1]</code></pre>
+        </div>
+        <p>Validate, then compile:</p>
+        <div class="docs-command">
+          <code>npx maxforge@latest validate basic.maxdsl</code>
+          <button class="copy-button" type="button" data-copy="npx maxforge@latest validate basic.maxdsl">Copy</button>
+        </div>
+        <div class="docs-command">
+          <code>npx maxforge@latest compile basic.maxdsl -o basic.maxpat</code>
+          <button class="copy-button" type="button" data-copy="npx maxforge@latest compile basic.maxdsl -o basic.maxpat">Copy</button>
+        </div>
+        <p>Open <code>basic.maxpat</code> in Max. The generated JSON is ordinary Max patcher data; maxforge is not required to keep the compiled file open.</p>
+      </section>
+
+      <section id="cli" class="docs-section">
+        <div class="docs-section-label">04 / CLI</div>
+        <h2>CLI reference</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Command</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>compile input.maxdsl -o output.maxpat</code></td><td>Compile DSL to a Max patch.</td></tr>
+              <tr><td><code>compile input.maxdsl --clipboard</code></td><td>Emit compressed patch text pasteable into Max.</td></tr>
+              <tr><td><code>validate input.maxdsl</code></td><td>Parse and validate without writing output.</td></tr>
+              <tr><td><code>decompile patch.maxpat -o patch.maxdsl</code></td><td>Recover structural DSL and explicit positions.</td></tr>
+              <tr><td><code>from-clipboard -o patch.maxdsl</code></td><td>Read compressed patch text from stdin and emit DSL.</td></tr>
+              <tr><td><code>plan desired.maxdsl --scope voices -o plan.json</code></td><td>Create an ordered managed PatchPlan.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Unknown objects fail by default because maxforge cannot safely infer
+          their port shape. Use <code>--allow-unknown</code> only when you accept
+          that reduced validation.
+        </p>
+      </section>
+
+      <section id="dsl" class="docs-section">
+        <div class="docs-section-label">05 / AUTHORING</div>
+        <h2>Core DSL syntax</h2>
+
+        <h3>Patch metadata</h3>
+        <pre><code>patch "Title"
+patch "Title" | "Description" | 800x600</code></pre>
+        <p>Patch metadata is optional. The default canvas is <code>640x480</code>.</p>
+
+        <h3>Objects</h3>
+        <pre><code>name = type [arguments...] [@attribute value...] [at(x, y)]</code></pre>
+        <ul>
+          <li><code>name</code> is unique inside its patcher and becomes a stable generated box ID.</li>
+          <li>Known Max object names are resolved against the bundled 374-object database.</li>
+          <li>Attributes become Max box properties; structural keys such as <code>id</code>, <code>maxclass</code>, <code>text</code>, and <code>patching_rect</code> are reserved.</li>
+          <li>Omit <code>at(x, y)</code> for automatic topological layout.</li>
+        </ul>
+        <pre><code>osc = cycle~ 440
+freq = number @minimum 0 @maximum 127
+label = comment "Frequency"
+trigger = message "start"
+filter = lores~ 1000 0.5 at(240, 180)</code></pre>
+        <div class="docs-callout docs-callout-neutral">
+          <strong>Comments</strong>
+          <p>Lines beginning with <code>#</code> are comments. Inline comments after a statement are not supported.</p>
+        </div>
+      </section>
+
+      <section id="generation" class="docs-section">
+        <div class="docs-section-label">06 / GENERATION</div>
+        <h2><code>for</code>, <code>if</code>, and arithmetic</h2>
+        <p>Expansion runs before ordinary parsing. This is the feature intended for large families of similar Max objects.</p>
+        <div class="docs-code-window">
+          <div class="panel-bar"><span>voice_bank.maxdsl</span><span class="panel-state">MAXDSL</span></div>
+          <pre><code>dac = ezdac~ at(430, 420)
+
+for i in 0..7 {
+  osc_${i} = cycle~ ${110 + i * 27.5} at(${40 + i * 110}, 80)
+  amp_${i} = *~ 0.125 at(${40 + i * 110}, 140)
+  osc_${i} -&gt; amp_${i} -&gt; dac
+
+  if i &lt; 4 {
+    meter_${i} = meter~ at(${40 + i * 110}, 210)
+    amp_${i} -&gt; meter_${i}
+  }
+}</code></pre>
+        </div>
+        <ul>
+          <li><code>0..7</code> is inclusive.</li>
+          <li>Use <code>for i in 0..6 step 2</code> for a stepped range.</li>
+          <li>Expressions support loop variables, parentheses, comparisons, and <code>+ - * /</code>.</li>
+          <li><code>${expr}</code> works in names, arguments, attributes, positions, and connections.</li>
+          <li>Expressions are numeric only. There are no functions, arrays, strings, or modulo operator.</li>
+        </ul>
+      </section>
+
+      <section id="connections" class="docs-section">
+        <div class="docs-section-label">07 / CONNECTIONS</div>
+        <h2>Connections and ports</h2>
+        <pre><code>a -&gt; b -&gt; c
+source[1] -&gt; destination[2]</code></pre>
+        <p>
+          Ports are zero-indexed from the left. A source suffix selects an outlet;
+          a destination suffix selects an inlet. maxforge validates indices when
+          it knows the object shape.
+        </p>
+        <p>
+          Objects such as <code>gate</code>, <code>route</code>, <code>pack</code>,
+          <code>unpack</code>, <code>trigger</code>, <code>matrix~</code>, and
+          <code>selector~</code> derive port counts from their arguments.
+        </p>
+      </section>
+
+      <section id="subpatchers" class="docs-section">
+        <div class="docs-section-label">08 / SUBPATCHERS</div>
+        <h2>Subpatchers</h2>
+        <pre><code>fx = p delay_fx {
+  input = inlet~ "audio input"
+  output = outlet~ "audio output"
+  buffer = tapin~ 500
+  tap = tapout~ 250
+  feedback = *~ 0.4
+
+  input -&gt; buffer -&gt; tap -&gt; feedback -&gt; buffer
+  tap -&gt; output
+}</code></pre>
+        <p>
+          Subpatchers may be nested. <code>inlet</code>, <code>outlet</code>,
+          <code>inlet~</code>, and <code>outlet~</code> are only valid inside a
+          subpatcher; their count determines the parent object's visible port shape.
+        </p>
+      </section>
+
+      <section id="mcp" class="docs-section">
+        <div class="docs-section-label">09 / MCP SETUP</div>
+        <h2>Live MCP control</h2>
+        <p>
+          Live control requires three pieces: an MCP-capable agent, the Node.js
+          <code>maxforge-mcp</code> server, and one native <code>maxforge.sync</code>
+          object in each target patch. The npm package does not install the Max
+          external.
+        </p>
+        <div class="docs-code-window">
+          <div class="panel-bar"><span>mcp.json</span><span class="panel-state">JSON</span></div>
+          <pre><code>{
+  "mcpServers": {
+    "maxforge": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package=maxforge@latest",
+        "maxforge-mcp"
+      ]
+    }
+  }
+}</code></pre>
+        </div>
+        <p>
+          The stdio server listens for native clients on
+          <code>ws://127.0.0.1:8766</code>. Only literal loopback hosts
+          <code>127.0.0.1</code> and <code>::1</code> are accepted. There is no
+          supported public-network mode.
+        </p>
+      </section>
+
+      <section id="mcp-workflow" class="docs-section">
+        <div class="docs-section-label">10 / SAFE WORKFLOW</div>
+        <h2>Do not apply blind</h2>
+        <p>Use this sequence for every unfamiliar or ambiguous live session:</p>
+        <ol class="docs-steps docs-steps-long">
+          <li><span>01</span><div>Call <code>maxforge_help</code> with <code>{ "topic": "workflow" }</code>.</div></li>
+          <li><span>02</span><div>Call <code>maxforge_status</code> when process or connection state is uncertain.</div></li>
+          <li><span>03</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
+          <li><span>04</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
+          <li><span>05</span><div>Call <code>maxforge_compile_plan</code> with complete desired DSL.</div></li>
+          <li><span>06</span><div>Review warnings, deletes, and structural recreation before mutation.</div></li>
+          <li><span>07</span><div>Call <code>maxforge_apply_dsl</code> with the same target and complete DSL.</div></li>
+          <li><span>08</span><div>Verify the acknowledged revision, then inspect again.</div></li>
+        </ol>
+        <div class="docs-callout docs-callout-danger">
+          <strong>Desired state, not commands</strong>
+          <p><code>desiredDsl</code> describes the complete owned scope. Omitting an existing managed object requests its deletion; it is not an imperative “add these boxes” fragment.</p>
+        </div>
+      </section>
+
+      <section id="mcp-tools" class="docs-section">
+        <div class="docs-section-label">11 / MCP TOOLS</div>
+        <h2>Tool reference</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Tool</th><th>Responsibility</th></tr></thead>
+            <tbody>
+              <tr><td><code>maxforge_help</code></td><td>Agent-facing workflow, setup, recovery, and safety instructions.</td></tr>
+              <tr><td><code>maxforge_status</code></td><td>Server state, raw clients, registered targets, and remembered revisions.</td></tr>
+              <tr><td><code>maxforge_list_patches</code></td><td>List exact registered <code>patcherId</code>/<code>scope</code> targets.</td></tr>
+              <tr><td><code>maxforge_create_patch</code></td><td>Create a new unsaved top-level patch through one controller-capable external.</td></tr>
+              <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
+              <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>
+              <tr><td><code>maxforge_apply_dsl</code></td><td>Compile, send, acknowledge, and capture a new inspection baseline.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="external" class="docs-section">
+        <div class="docs-section-label">12 / NATIVE EXTERNAL</div>
+        <h2><code>maxforge.sync</code></h2>
+        <p>
+          The external owns loopback transport, stable patch registration,
+          preflight validation, live structural inspection, and Max SDK mutation.
+          It does not need <code>node.script</code>, <code>thispatcher</code>, a
+          separate WebSocket object, routers, or bootstrap patch cords.
+        </p>
+        <pre><code>maxforge.sync @patcher_id main_patch @scope voices @controller 0</code></pre>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Attribute</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>@patcher_id</code></td><td>Stable MCP routing identity. Do not derive it from the window title.</td></tr>
+              <tr><td><code>@scope</code></td><td>Exact managed ownership namespace.</td></tr>
+              <tr><td><code>@controller 0|1</code></td><td>Whether this patch may create new top-level patches.</td></tr>
+              <tr><td><code>@host</code></td><td>Loopback MCP host; defaults to <code>127.0.0.1</code>.</td></tr>
+              <tr><td><code>@port</code></td><td>Loopback WebSocket port; defaults to <code>8766</code>.</td></tr>
+              <tr><td><code>@reconnect</code></td><td>Enable or disable automatic reconnect.</td></tr>
+              <tr><td><code>@revision_state</code></td><td>Persisted optimistic-concurrency revision.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Managed scripting names follow
+          <code>maxforge_&lt;scope&gt;_obj_&lt;dsl-name&gt;</code>. The external must not
+          modify boxes outside that exact namespace.
+        </p>
+        <p>
+          Set <code>@controller 1</code> only on the single patch that may service
+          <code>maxforge_create_patch</code>. Normal managed targets should leave it
+          at <code>0</code>; patch creation is rejected unless exactly one connected
+          controller is available.
+        </p>
+      </section>
+
+      <section id="recovery" class="docs-section">
+        <div class="docs-section-label">13 / RECOVERY</div>
+        <h2>Ambiguous state requires inspection</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Situation</th><th>Required action</th></tr></thead>
+            <tbody>
+              <tr><td>Apply timed out</td><td>Do not retry. Call <code>maxforge_help</code> with <code>recovery</code>, inspect the live patch, and determine whether Max applied the revision.</td></tr>
+              <tr><td>MCP process restarted</td><td>List targets and inspect. The process no longer has its previous desired graph or comparison baseline.</td></tr>
+              <tr><td>Max or the patch restarted</td><td>Wait for registration, then status → list → inspect before compiling another plan.</td></tr>
+              <tr><td>Managed manual edit detected</td><td>Restore the last acknowledged managed structure manually. Inspection reports drift but does not adopt it.</td></tr>
+              <tr><td>Unmanaged manual edit detected</td><td>Review it. Unmanaged-only edits are reported but do not block managed mutation.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="skills" class="docs-section">
+        <div class="docs-section-label">14 / AGENT SKILLS</div>
+        <h2>Install operating instructions</h2>
+        <p>Skills do not install the npm package or Max external. They give compatible agents repository-specific instructions.</p>
+        <div class="docs-command">
+          <code>npx skills add 2bbb/maxforge --list</code>
+          <button class="copy-button" type="button" data-copy="npx skills add 2bbb/maxforge --list">Copy</button>
+        </div>
+        <div class="docs-command">
+          <code>npx skills add 2bbb/maxforge --skill maxforge</code>
+          <button class="copy-button" type="button" data-copy="npx skills add 2bbb/maxforge --skill maxforge">Copy</button>
+        </div>
+        <div class="docs-command">
+          <code>npx skills add 2bbb/maxforge --skill maxforge-mcp</code>
+          <button class="copy-button" type="button" data-copy="npx skills add 2bbb/maxforge --skill maxforge-mcp">Copy</button>
+        </div>
+        <p>Use <code>maxforge</code> for offline authoring and compilation. Use <code>maxforge-mcp</code> for target selection, plan review, acknowledgement, inspection, and recovery discipline.</p>
+      </section>
+
+      <section id="limits" class="docs-section">
+        <div class="docs-section-label">15 / LIMITS</div>
+        <h2>Current limits and security boundary</h2>
+        <ul>
+          <li>Live synchronization is experimental protocol version 1.</li>
+          <li>A plan is fully validated before mutation, but arbitrary Max SDK mutation has no implemented rollback after a runtime failure.</li>
+          <li>Inspection is structural. It does not serialize arbitrary object attributes, DSP values, UI values, patchline colors, hidden state, or line midpoints.</li>
+          <li>Reverse compilation preserves structure and explicit positions; it does not reproduce the exact original DSL source text.</li>
+          <li>The MCP bridge binds only to literal loopback addresses. It has no remote-network mode.</li>
+          <li>The ownership marker is the reserved scripting-name namespace. Manually renaming a box into it adopts that box into the managed scope.</li>
+          <li>The macOS external is not notarized.</li>
+        </ul>
+      </section>
+
+      <section id="references" class="docs-section docs-section-final">
+        <div class="docs-section-label">16 / SOURCE REFERENCES</div>
+        <h2>Detailed references</h2>
+        <p>This page is the operational guide. Use the repository documents below for exact schemas and contracts.</p>
+        <div class="reference-grid">
+          <a href="https://github.com/2bbb/maxforge/blob/main/docs/dsl-spec.md"><strong>DSL specification</strong><span>Grammar, semantics, layout, output, and errors.</span></a>
+          <a href="https://github.com/2bbb/maxforge/blob/main/docs/mcp.md"><strong>MCP reference</strong><span>Tool arguments, results, lifecycle, troubleshooting, and failure contract.</span></a>
+          <a href="https://github.com/2bbb/maxforge/blob/main/docs/patch-sync.md"><strong>Patch sync protocol</strong><span>Ownership, revisions, operation ordering, and consumer requirements.</span></a>
+          <a href="https://github.com/2bbb/maxforge/tree/main/examples"><strong>Examples</strong><span>Basic patches, repeated voice banks, native sync, and MCP controller setup.</span></a>
+        </div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="docs-footer">
+    <a class="wordmark" href="../"><span class="wordmark-mark" aria-hidden="true">mf</span><span>maxforge</span></a>
+    <p>Unofficial Max tooling · MIT licensed</p>
+    <div>
+      <a href="../">Home</a>
+      <a href="https://github.com/2bbb/maxforge">GitHub</a>
+      <a href="https://www.npmjs.com/package/maxforge">npm</a>
+    </div>
+  </footer>
+
+  <script src="../main.js"></script>
+</body>
+</html>
