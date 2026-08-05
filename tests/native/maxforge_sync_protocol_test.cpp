@@ -1,0 +1,405 @@
+#include "maxforge_sync_protocol.hpp"
+
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+namespace {
+
+namespace sync_protocol = maxforge::sync_protocol;
+
+struct test_case {
+	std::string name;
+	std::function<void()> action;
+};
+
+void require(bool condition, const std::string &message) {
+	if(!condition) throw std::runtime_error(message);
+}
+
+template <typename callable>
+void require_throws(
+	callable &&action,
+	const std::string &expected_message
+) {
+	try {
+		action();
+	} catch(const std::exception &exception) {
+		const std::string message{exception.what()};
+		if(message.find(expected_message) == std::string::npos) {
+			throw std::runtime_error(
+				"expected error containing \"" + expected_message +
+				"\", received \"" + message + "\""
+			);
+		}
+		return;
+	}
+	throw std::runtime_error(
+		"expected error containing \"" + expected_message + "\""
+	);
+}
+
+auto revision(char character) -> std::string {
+	return std::string(64, character);
+}
+
+auto create_operation(
+	const std::string &variable_name,
+	bool creates_subpatcher = false,
+	const std::vector<std::string> &target_path = {}
+) -> sync_protocol::validation_operation
+{
+	sync_protocol::validation_operation operation;
+	operation.kind = sync_protocol::operation_kind::create;
+	operation.target_path = target_path;
+	operation.created_variable_name = variable_name;
+	operation.creates_subpatcher = creates_subpatcher;
+	return operation;
+}
+
+auto base_plan() -> sync_protocol::validation_plan {
+	return sync_protocol::validation_plan{"default", revision('a'), {}};
+}
+
+void test_identifiers() {
+	require(sync_protocol::is_valid_scope("default"), "default scope rejected");
+	require(sync_protocol::is_valid_scope("_agent_2"), "underscore scope rejected");
+	require(!sync_protocol::is_valid_scope(""), "empty scope accepted");
+	require(!sync_protocol::is_valid_scope("2agent"), "numeric scope accepted");
+	require(!sync_protocol::is_valid_scope("agent-live"), "hyphenated scope accepted");
+
+	require(sync_protocol::is_valid_patcher_id("main-patch"), "patcher id rejected");
+	require(sync_protocol::is_valid_patcher_id("_main_2"), "underscore id rejected");
+	require(!sync_protocol::is_valid_patcher_id("2-main"), "numeric patcher id accepted");
+	require(!sync_protocol::is_valid_patcher_id("main patch"), "spaced patcher id accepted");
+
+	require(sync_protocol::is_valid_box_id("obj-osc_1"), "managed id rejected");
+	require(!sync_protocol::is_valid_box_id("osc_1"), "unprefixed managed id accepted");
+	require(!sync_protocol::is_valid_box_id("obj-"), "empty managed id suffix accepted");
+	require(!sync_protocol::is_valid_box_id("obj-osc-1"), "hyphenated suffix accepted");
+}
+
+void test_managed_identity() {
+	const auto variable_name = sync_protocol::expected_variable_name(
+		"voice",
+		"obj-osc_1"
+	);
+	require(
+		variable_name == "maxforge_voice_obj_osc_1",
+		"unexpected managed variable name"
+	);
+	require(
+		sync_protocol::managed_id_from_variable_name("voice", variable_name) ==
+			"obj-osc_1",
+		"managed identity did not round-trip"
+	);
+	require(
+		sync_protocol::managed_id_from_variable_name("other", variable_name).empty(),
+		"foreign scope was accepted"
+	);
+
+	sync_protocol::validate_identity("voice", "obj-osc_1", variable_name);
+	require_throws(
+		[] {
+			sync_protocol::validate_identity("voice", "osc", "maxforge_voice_obj_osc");
+		},
+		"invalid managed box id"
+	);
+	require_throws(
+		[] {
+			sync_protocol::validate_identity("voice", "obj-osc", "wrong");
+		},
+		"managed box identity mismatch"
+	);
+}
+
+void test_revisions_paths_and_subpatchers() {
+	require(sync_protocol::is_revision(revision('0')), "zero revision rejected");
+	require(sync_protocol::is_revision(revision('f')), "hex revision rejected");
+	require(!sync_protocol::is_revision(revision('A')), "uppercase revision accepted");
+	require(!sync_protocol::is_revision(std::string(63, 'a')), "short revision accepted");
+	require(!sync_protocol::is_revision(std::string(64, 'g')), "non-hex revision accepted");
+
+	const std::vector<std::string> path{"maxforge_default_obj_group", "inner"};
+	require(
+		sync_protocol::path_key(path) == "maxforge_default_obj_group/inner",
+		"path key mismatch"
+	);
+	require(
+		sync_protocol::child_path_key(path, "child") ==
+			"maxforge_default_obj_group/inner/child",
+		"child path key mismatch"
+	);
+
+	require(sync_protocol::text_creates_subpatcher("newobj", "p voices"), "p rejected");
+	require(
+		sync_protocol::text_creates_subpatcher("newobj", "patcher voices"),
+		"patcher rejected"
+	);
+	require(
+		!sync_protocol::text_creates_subpatcher("message", "p voices"),
+		"message treated as subpatcher"
+	);
+	require(
+		!sync_protocol::text_creates_subpatcher("newobj", "print voices"),
+		"print treated as subpatcher"
+	);
+}
+
+void test_valid_state_transition() {
+	auto plan = base_plan();
+	const std::string source{"maxforge_default_obj_source"};
+	const std::string old_box{"maxforge_default_obj_old"};
+	const std::string group{"maxforge_default_obj_group"};
+	const std::string oscillator{"maxforge_default_obj_osc"};
+	const std::string gain{"maxforge_default_obj_gain"};
+
+	sync_protocol::validation_operation disconnect;
+	disconnect.kind = sync_protocol::operation_kind::disconnect;
+	disconnect.source_variable_name = source;
+	disconnect.destination_variable_name = old_box;
+	plan.operations.push_back(disconnect);
+
+	sync_protocol::validation_operation delete_operation;
+	delete_operation.kind = sync_protocol::operation_kind::delete_box;
+	delete_operation.variable_name = old_box;
+	plan.operations.push_back(delete_operation);
+	plan.operations.push_back(create_operation(group, true));
+	plan.operations.push_back(create_operation(oscillator, false, {group}));
+	plan.operations.push_back(create_operation(gain, false, {group}));
+
+	sync_protocol::validation_operation set_operation;
+	set_operation.kind = sync_protocol::operation_kind::set;
+	set_operation.target_path = {group};
+	set_operation.variable_name = oscillator;
+	plan.operations.push_back(set_operation);
+
+	sync_protocol::validation_operation connect;
+	connect.kind = sync_protocol::operation_kind::connect;
+	connect.target_path = {group};
+	connect.source_variable_name = oscillator;
+	connect.destination_variable_name = gain;
+	plan.operations.push_back(connect);
+
+	sync_protocol::virtual_patch initial_state{
+		{"", {source, old_box}}
+	};
+	const auto state = sync_protocol::validate_plan(
+		plan,
+		initial_state,
+		"default",
+		revision('a')
+	);
+
+	require(state.at("").count(source) == 1, "source was removed");
+	require(state.at("").count(old_box) == 0, "deleted box remains");
+	require(state.at("").count(group) == 1, "subpatcher was not created");
+	require(state.at(group).count(oscillator) == 1, "nested oscillator missing");
+	require(state.at(group).count(gain) == 1, "nested gain missing");
+}
+
+void test_initial_revision_accepts_empty_scope() {
+	auto plan = base_plan();
+	plan.base_revision = revision('0');
+	plan.operations.push_back(create_operation("maxforge_default_obj_first"));
+	const auto state = sync_protocol::validate_plan(
+		plan,
+		{{"", {}}},
+		"default",
+		""
+	);
+	require(
+		state.at("").count("maxforge_default_obj_first") == 1,
+		"initial create failed"
+	);
+}
+
+void test_scope_and_revision_guards() {
+	const auto plan = base_plan();
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(plan, {{"", {}}}, "other", revision('a'));
+		},
+		"does not match @scope"
+	);
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(
+				plan,
+				{{"", {"maxforge_default_obj_existing"}}},
+				"default",
+				""
+			);
+		},
+		"revision state is empty"
+	);
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(plan, {{"", {}}}, "default", revision('b'));
+		},
+		"base revision does not match"
+	);
+}
+
+void test_operation_order_guard() {
+	auto plan = base_plan();
+	plan.operations.push_back(create_operation("maxforge_default_obj_new"));
+	sync_protocol::validation_operation delete_operation;
+	delete_operation.kind = sync_protocol::operation_kind::delete_box;
+	delete_operation.variable_name = "maxforge_default_obj_old";
+	plan.operations.push_back(delete_operation);
+
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(
+				plan,
+				{{"", {"maxforge_default_obj_old"}}},
+				"default",
+				revision('a')
+			);
+		},
+		"out of protocol order"
+	);
+}
+
+void test_missing_target_and_endpoint_guards() {
+	auto nested_plan = base_plan();
+	nested_plan.operations.push_back(create_operation(
+		"maxforge_default_obj_child",
+		false,
+		{"maxforge_default_obj_missing"}
+	));
+	require_throws(
+		[&nested_plan] {
+			sync_protocol::validate_plan(
+				nested_plan,
+				{{"", {}}},
+				"default",
+				revision('a')
+			);
+		},
+		"target patcher does not exist"
+	);
+
+	auto connect_plan = base_plan();
+	sync_protocol::validation_operation connect;
+	connect.kind = sync_protocol::operation_kind::connect;
+	connect.source_variable_name = "maxforge_default_obj_source";
+	connect.destination_variable_name = "maxforge_default_obj_missing";
+	connect_plan.operations.push_back(connect);
+	require_throws(
+		[&connect_plan] {
+			sync_protocol::validate_plan(
+				connect_plan,
+				{{"", {"maxforge_default_obj_source"}}},
+				"default",
+				revision('a')
+			);
+		},
+		"managed box does not exist"
+	);
+}
+
+void test_duplicate_create_guard() {
+	auto plan = base_plan();
+	plan.operations.push_back(create_operation("maxforge_default_obj_existing"));
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(
+				plan,
+				{{"", {"maxforge_default_obj_existing"}}},
+				"default",
+				revision('a')
+			);
+		},
+		"managed box already exists"
+	);
+}
+
+void test_delete_removes_descendants() {
+	auto plan = base_plan();
+	sync_protocol::validation_operation delete_operation;
+	delete_operation.kind = sync_protocol::operation_kind::delete_box;
+	delete_operation.variable_name = "maxforge_default_obj_group";
+	plan.operations.push_back(delete_operation);
+
+	const auto state = sync_protocol::validate_plan(
+		plan,
+		{
+			{"", {"maxforge_default_obj_group"}},
+			{"maxforge_default_obj_group", {"maxforge_default_obj_child"}},
+			{
+				"maxforge_default_obj_group/maxforge_default_obj_child",
+				{"maxforge_default_obj_nested"}
+			}
+		},
+		"default",
+		revision('a')
+	);
+	require(state.at("").empty(), "deleted root box remains");
+	require(state.count("maxforge_default_obj_group") == 0, "child patch remains");
+	require(
+		state.count("maxforge_default_obj_group/maxforge_default_obj_child") == 0,
+		"nested child patch remains"
+	);
+}
+
+void test_plain_object_does_not_create_child_patcher() {
+	auto plan = base_plan();
+	const std::string group{"maxforge_default_obj_group"};
+	plan.operations.push_back(create_operation(group));
+	plan.operations.push_back(create_operation(
+		"maxforge_default_obj_child",
+		false,
+		{group}
+	));
+	require_throws(
+		[&plan] {
+			sync_protocol::validate_plan(
+				plan,
+				{{"", {}}},
+				"default",
+				revision('a')
+			);
+		},
+		"target patcher does not exist"
+	);
+}
+
+}
+
+int main() {
+	const std::vector<test_case> test_cases{
+		{"identifiers", test_identifiers},
+		{"managed identity", test_managed_identity},
+		{"revisions, paths, and subpatchers", test_revisions_paths_and_subpatchers},
+		{"valid state transition", test_valid_state_transition},
+		{"initial revision", test_initial_revision_accepts_empty_scope},
+		{"scope and revision guards", test_scope_and_revision_guards},
+		{"operation order", test_operation_order_guard},
+		{"missing target and endpoint", test_missing_target_and_endpoint_guards},
+		{"duplicate create", test_duplicate_create_guard},
+		{"delete descendants", test_delete_removes_descendants},
+		{"plain object child patcher", test_plain_object_does_not_create_child_patcher}
+	};
+
+	std::size_t failure_count{};
+	for(const auto &test : test_cases) {
+		try {
+			test.action();
+			std::cout << "PASS: " << test.name << '\n';
+		} catch(const std::exception &exception) {
+			failure_count++;
+			std::cerr << "FAIL: " << test.name << ": " << exception.what() << '\n';
+		}
+	}
+
+	if(0 < failure_count) {
+		std::cerr << failure_count << " test case(s) failed\n";
+		return 1;
+	}
+	std::cout << test_cases.size() << " test cases passed\n";
+	return 0;
+}

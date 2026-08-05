@@ -20,6 +20,11 @@ set(EXCLUDE_FROM_COLLECTIVES "no")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(MAXFORGE_BUILD_TESTS "Build maxforge native unit tests" OFF)
+if(MAXFORGE_BUILD_TESTS)
+	enable_testing()
+endif()
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/maxforge_external.cmake)
 
 set(C74_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/externals)
@@ -65,5 +70,9 @@ foreach(project_directory ${project_directories})
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/${project_directory})
 	endif()
 endforeach()
+
+if(MAXFORGE_BUILD_TESTS)
+	add_subdirectory(tests/native)
+endif()
 
 set(CMAKE_SUPPRESS_REGENERATION true)

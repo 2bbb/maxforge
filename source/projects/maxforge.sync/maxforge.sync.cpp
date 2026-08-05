@@ -1,30 +1,22 @@
 #include "c74_min.h"
 #include "bbb_agent_websocket_client.hpp"
+#include "maxforge_sync_protocol.hpp"
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstdint>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace {
 
-constexpr long protocol_version{1};
-
-enum class operation_kind {
-	disconnect,
-	delete_box,
-	create,
-	set,
-	connect
-};
+namespace sync_protocol = maxforge::sync_protocol;
+using operation_kind = sync_protocol::operation_kind;
 
 struct endpoint {
 	std::string id;
@@ -100,37 +92,6 @@ struct patch_snapshot {
 	std::vector<snapshot_box> boxes;
 	std::vector<snapshot_connection> connections;
 };
-
-using virtual_patcher = std::unordered_set<std::string>;
-using virtual_patch = std::unordered_map<std::string, virtual_patcher>;
-
-auto is_word_character(char character) -> bool {
-	const auto unsigned_character = static_cast<unsigned char>(character);
-	return std::isalnum(unsigned_character) != 0 || character == '_';
-}
-
-auto is_valid_scope(const std::string &scope) -> bool {
-	if(scope.empty()) return false;
-	const auto first = static_cast<unsigned char>(scope.front());
-	if(std::isalpha(first) == 0 && scope.front() != '_') return false;
-
-	for(std::size_t index{1}; index < scope.size(); index++) {
-		if(!is_word_character(scope[index])) return false;
-	}
-	return true;
-}
-
-auto is_valid_patcher_id(const std::string &patcher_id) -> bool {
-	if(patcher_id.empty()) return false;
-	const auto first = static_cast<unsigned char>(patcher_id.front());
-	if(std::isalpha(first) == 0 && patcher_id.front() != '_') return false;
-
-	for(std::size_t index{1}; index < patcher_id.size(); index++) {
-		const auto character = patcher_id[index];
-		if(!is_word_character(character) && character != '-') return false;
-	}
-	return true;
-}
 
 auto json_string(const std::string &value) -> std::string {
 	constexpr char hexadecimal[]{"0123456789abcdef"};
@@ -310,74 +271,6 @@ auto json_string_array(const std::vector<std::string> &values) -> std::string {
 	return result;
 }
 
-auto is_valid_box_id(const std::string &id) -> bool {
-	constexpr auto prefix = "obj-";
-	if(id.rfind(prefix, 0) != 0 || id.size() == 4) return false;
-
-	for(std::size_t index{4}; index < id.size(); index++) {
-		if(!is_word_character(id[index])) return false;
-	}
-	return true;
-}
-
-auto expected_variable_name(
-	const std::string &scope,
-	const std::string &id
-) -> std::string
-{
-	return "maxforge_" + scope + "_obj_" + id.substr(4);
-}
-
-auto managed_id_from_variable_name(
-	const std::string &scope,
-	const std::string &variable_name
-) -> std::string
-{
-	const auto prefix = "maxforge_" + scope + "_obj_";
-	if(variable_name.rfind(prefix, 0) != 0 || variable_name.size() == prefix.size()) {
-		return {};
-	}
-
-	const auto name = variable_name.substr(prefix.size());
-	for(const auto character : name) {
-		if(!is_word_character(character)) return {};
-	}
-	return "obj-" + name;
-}
-
-auto is_revision(const std::string &revision) -> bool {
-	if(revision.size() != 64) return false;
-	for(const auto character : revision) {
-		if(
-			!('0' <= character && character <= '9') &&
-			!('a' <= character && character <= 'f')
-		) {
-			return false;
-		}
-	}
-	return true;
-}
-
-auto path_key(const std::vector<std::string> &path) -> std::string {
-	std::string key;
-	for(const auto &component : path) {
-		if(!key.empty()) key += "/";
-		key += component;
-	}
-	return key;
-}
-
-auto child_path_key(
-	const std::vector<std::string> &path,
-	const std::string &variable_name
-) -> std::string
-{
-	auto key = path_key(path);
-	if(!key.empty()) key += "/";
-	key += variable_name;
-	return key;
-}
-
 auto dictionary_string(
 	const c74::max::t_dictionary *dictionary,
 	const char *key
@@ -532,19 +425,6 @@ auto rectangle_array(
 	return values;
 }
 
-void validate_identity(
-	const std::string &scope,
-	const std::string &id,
-	const std::string &variable_name
-) {
-	if(!is_valid_box_id(id)) {
-		throw std::runtime_error("invalid managed box id: " + id);
-	}
-	if(variable_name != expected_variable_name(scope, id)) {
-		throw std::runtime_error("managed box identity mismatch: " + variable_name);
-	}
-}
-
 auto parse_endpoint(
 	const c74::max::t_dictionary *dictionary,
 	const std::string &scope
@@ -555,21 +435,9 @@ auto parse_endpoint(
 		dictionary_string(dictionary, "varName"),
 		dictionary_long(dictionary, "port")
 	};
-	validate_identity(scope, result.id, result.variable_name);
+	sync_protocol::validate_identity(scope, result.id, result.variable_name);
 	if(result.port < 0) throw std::runtime_error("endpoint port must not be negative");
 	return result;
-}
-
-auto text_creates_subpatcher(
-	const std::string &max_class,
-	const std::string &text
-) -> bool
-{
-	if(max_class != "newobj") return false;
-	return text == "p" ||
-		text.rfind("p ", 0) == 0 ||
-		text == "patcher" ||
-		text.rfind("patcher ", 0) == 0;
 }
 
 void validate_attribute_dictionary(const c74::max::t_dictionary *attributes) {
@@ -604,7 +472,7 @@ auto parse_box_definition(
 	result.has_comment = dictionary_optional_string(dictionary, "comment", result.comment);
 	result.attributes = dictionary_child(dictionary, "attributes");
 
-	validate_identity(scope, result.id, result.variable_name);
+	sync_protocol::validate_identity(scope, result.id, result.variable_name);
 	if(result.max_class.empty()) throw std::runtime_error("maxclass must not be empty");
 	if(result.inlet_count < 0 || result.outlet_count < 0) {
 		throw std::runtime_error("inlet and outlet counts must not be negative");
@@ -614,7 +482,7 @@ auto parse_box_definition(
 	}
 	validate_attribute_dictionary(result.attributes);
 	result.creates_subpatcher = result.has_text &&
-		text_creates_subpatcher(result.max_class, result.text);
+		sync_protocol::text_creates_subpatcher(result.max_class, result.text);
 	return result;
 }
 
@@ -627,7 +495,7 @@ auto parse_operation(
 	const auto operation_name = dictionary_string(dictionary, "op");
 	result.target_path = string_array(dictionary, "targetPath");
 	for(const auto &component : result.target_path) {
-		const auto id = managed_id_from_variable_name(scope, component);
+		const auto id = sync_protocol::managed_id_from_variable_name(scope, component);
 		if(id.empty()) {
 			throw std::runtime_error("targetPath is outside the managed scope: " + component);
 		}
@@ -649,7 +517,7 @@ auto parse_operation(
 		result.kind = operation_kind::delete_box;
 		result.id = dictionary_string(dictionary, "id");
 		result.variable_name = dictionary_string(dictionary, "varName");
-		validate_identity(scope, result.id, result.variable_name);
+		sync_protocol::validate_identity(scope, result.id, result.variable_name);
 		return result;
 	}
 
@@ -665,7 +533,7 @@ auto parse_operation(
 		result.variable_name = dictionary_string(dictionary, "varName");
 		result.attribute = dictionary_string(dictionary, "attribute");
 		result.value = rectangle_array(dictionary, "value");
-		validate_identity(scope, result.id, result.variable_name);
+		sync_protocol::validate_identity(scope, result.id, result.variable_name);
 		if(result.attribute != "patching_rect") {
 			throw std::runtime_error("unsupported set attribute: " + result.attribute);
 		}
@@ -676,7 +544,7 @@ auto parse_operation(
 }
 
 auto parse_plan(c74::max::t_dictionary *dictionary) -> patch_plan {
-	if(dictionary_long(dictionary, "protocolVersion") != protocol_version) {
+	if(dictionary_long(dictionary, "protocolVersion") != sync_protocol::protocol_version) {
 		throw std::runtime_error("unsupported patch protocol version");
 	}
 
@@ -684,11 +552,11 @@ auto parse_plan(c74::max::t_dictionary *dictionary) -> patch_plan {
 	result.scope = dictionary_string(dictionary, "scope");
 	result.base_revision = dictionary_string(dictionary, "baseRevision");
 	result.target_revision = dictionary_string(dictionary, "targetRevision");
-	if(!is_valid_scope(result.scope)) throw std::runtime_error("invalid plan scope");
-	if(!is_revision(result.base_revision)) {
+	if(!sync_protocol::is_valid_scope(result.scope)) throw std::runtime_error("invalid plan scope");
+	if(!sync_protocol::is_revision(result.base_revision)) {
 		throw std::runtime_error("invalid base revision");
 	}
-	if(!is_revision(result.target_revision)) {
+	if(!sync_protocol::is_revision(result.target_revision)) {
 		throw std::runtime_error("invalid target revision");
 	}
 
@@ -706,17 +574,6 @@ auto parse_plan(c74::max::t_dictionary *dictionary) -> patch_plan {
 		));
 	}
 	return result;
-}
-
-auto operation_phase(operation_kind kind) -> long {
-	switch(kind) {
-		case operation_kind::disconnect: return 0;
-		case operation_kind::delete_box: return 1;
-		case operation_kind::create: return 2;
-		case operation_kind::set: return 3;
-		case operation_kind::connect: return 4;
-	}
-	return 5;
 }
 
 auto child_patcher(c74::max::t_object *box) -> c74::max::t_object * {
@@ -836,7 +693,7 @@ auto snapshot_box_from_object(
 	result.runtime_id = box_runtime_id(box);
 	result.variable_name = symbol_string(c74::max::jbox_get_varname(box));
 	result.max_class = symbol_string(c74::max::jbox_get_maxclass(box));
-	result.managed = !managed_id_from_variable_name(
+	result.managed = !sync_protocol::managed_id_from_variable_name(
 		scope,
 		result.variable_name
 	).empty();
@@ -953,8 +810,8 @@ auto make_patch_snapshot(
 		result.boxes.begin(),
 		result.boxes.end(),
 		[](const snapshot_box &left, const snapshot_box &right) {
-			const auto left_path = path_key(left.target_path);
-			const auto right_path = path_key(right.target_path);
+			const auto left_path = sync_protocol::path_key(left.target_path);
+			const auto right_path = sync_protocol::path_key(right.target_path);
 			if(left_path != right_path) return left_path < right_path;
 			return left.runtime_id < right.runtime_id;
 		}
@@ -963,8 +820,8 @@ auto make_patch_snapshot(
 		result.connections.begin(),
 		result.connections.end(),
 		[](const snapshot_connection &left, const snapshot_connection &right) {
-			const auto left_path = path_key(left.target_path);
-			const auto right_path = path_key(right.target_path);
+			const auto left_path = sync_protocol::path_key(left.target_path);
+			const auto right_path = sync_protocol::path_key(right.target_path);
 			if(left_path != right_path) return left_path < right_path;
 			if(left.source.runtime_id != right.source.runtime_id) {
 				return left.source.runtime_id < right.source.runtime_id;
@@ -1053,9 +910,9 @@ void seed_virtual_patch(
 	c74::max::t_object *patcher,
 	const std::string &scope,
 	const std::vector<std::string> &path,
-	virtual_patch &state
+	sync_protocol::virtual_patch &state
 ) {
-	const auto current_path = path_key(path);
+	const auto current_path = sync_protocol::path_key(path);
 	state[current_path];
 	for(
 		auto *box = c74::max::jpatcher_get_firstobject(patcher);
@@ -1065,7 +922,7 @@ void seed_virtual_patch(
 		const auto *variable_symbol = c74::max::jbox_get_varname(box);
 		if(!variable_symbol) continue;
 		const std::string variable_name{variable_symbol->s_name};
-		if(managed_id_from_variable_name(scope, variable_name).empty()) continue;
+		if(sync_protocol::managed_id_from_variable_name(scope, variable_name).empty()) continue;
 
 		state[current_path].insert(variable_name);
 		auto *nested_patcher = child_patcher(box);
@@ -1077,31 +934,29 @@ void seed_virtual_patch(
 	}
 }
 
-void remove_virtual_descendants(
-	virtual_patch &state,
-	const std::string &parent_path
-) {
-	std::vector<std::string> paths_to_remove;
-	for(const auto &[path, _boxes] : state) {
-		if(path == parent_path || path.rfind(parent_path + "/", 0) == 0) {
-			paths_to_remove.push_back(path);
-		}
-	}
-	for(const auto &path : paths_to_remove) state.erase(path);
-}
+auto validation_plan_from_patch_plan(const patch_plan &plan)
+	-> sync_protocol::validation_plan
+{
+	sync_protocol::validation_plan result;
+	result.scope = plan.scope;
+	result.base_revision = plan.base_revision;
+	result.operations.reserve(plan.operations.size());
 
-void require_virtual_box(
-	const virtual_patch &state,
-	const std::vector<std::string> &path,
-	const std::string &variable_name
-) {
-	const auto patcher = state.find(path_key(path));
-	if(patcher == state.end()) {
-		throw std::runtime_error("target patcher does not exist: " + path_key(path));
+	for(const auto &operation : plan.operations) {
+		sync_protocol::validation_operation validation_operation;
+		validation_operation.kind = operation.kind;
+		validation_operation.target_path = operation.target_path;
+		validation_operation.source_variable_name =
+			operation.source.variable_name;
+		validation_operation.destination_variable_name =
+			operation.destination.variable_name;
+		validation_operation.variable_name = operation.variable_name;
+		validation_operation.created_variable_name = operation.box.variable_name;
+		validation_operation.creates_subpatcher =
+			operation.box.creates_subpatcher;
+		result.operations.push_back(validation_operation);
 	}
-	if(patcher->second.count(variable_name) == 0) {
-		throw std::runtime_error("managed box does not exist: " + variable_name);
-	}
+	return result;
 }
 
 void validate_plan_against_patch(
@@ -1110,92 +965,14 @@ void validate_plan_against_patch(
 	const std::string &configured_scope,
 	const std::string &current_revision
 ) {
-	if(plan.scope != configured_scope) {
-		throw std::runtime_error(
-			"plan scope \"" + plan.scope +
-			"\" does not match @scope \"" + configured_scope + "\""
-		);
-	}
-
-	virtual_patch state;
+	sync_protocol::virtual_patch state;
 	seed_virtual_patch(root_patcher, plan.scope, {}, state);
-	if(current_revision.empty()) {
-		if(!state[""].empty()) {
-			throw std::runtime_error(
-				"revision state is empty but managed boxes already exist"
-			);
-		}
-	} else if(plan.base_revision != current_revision) {
-		throw std::runtime_error("base revision does not match current revision");
-	}
-
-	long previous_phase{};
-	bool is_first{true};
-	for(const auto &operation : plan.operations) {
-		const auto phase = operation_phase(operation.kind);
-		if(!is_first && phase < previous_phase) {
-			throw std::runtime_error("patch operations are out of protocol order");
-		}
-		is_first = false;
-		previous_phase = phase;
-
-		const auto target_key = path_key(operation.target_path);
-		const auto patcher = state.find(target_key);
-		if(patcher == state.end()) {
-			throw std::runtime_error("target patcher does not exist: " + target_key);
-		}
-
-		switch(operation.kind) {
-			case operation_kind::disconnect:
-			case operation_kind::connect:
-				require_virtual_box(
-					state,
-					operation.target_path,
-					operation.source.variable_name
-				);
-				require_virtual_box(
-					state,
-					operation.target_path,
-					operation.destination.variable_name
-				);
-				break;
-			case operation_kind::delete_box: {
-				require_virtual_box(
-					state,
-					operation.target_path,
-					operation.variable_name
-				);
-				state[target_key].erase(operation.variable_name);
-				remove_virtual_descendants(
-					state,
-					child_path_key(operation.target_path, operation.variable_name)
-				);
-				break;
-			}
-			case operation_kind::create: {
-				if(patcher->second.count(operation.box.variable_name) != 0) {
-					throw std::runtime_error(
-						"managed box already exists: " + operation.box.variable_name
-					);
-				}
-				state[target_key].insert(operation.box.variable_name);
-				if(operation.box.creates_subpatcher) {
-					state[child_path_key(
-						operation.target_path,
-						operation.box.variable_name
-					)];
-				}
-				break;
-			}
-			case operation_kind::set:
-				require_virtual_box(
-					state,
-					operation.target_path,
-					operation.variable_name
-				);
-				break;
-		}
-	}
+	sync_protocol::validate_plan(
+		validation_plan_from_patch_plan(plan),
+		state,
+		configured_scope,
+		current_revision
+	);
 }
 
 auto resolve_target_patcher(
@@ -1740,7 +1517,7 @@ private:
 	auto configured_patcher_id() const -> std::string {
 		const c74::min::symbol value_symbol = patcher_id;
 		const std::string value{value_symbol.c_str()};
-		if(!is_valid_patcher_id(value)) {
+		if(!sync_protocol::is_valid_patcher_id(value)) {
 			throw std::runtime_error("invalid @patcher_id: " + value);
 		}
 		return value;
@@ -1749,7 +1526,7 @@ private:
 	auto configured_scope() const -> std::string {
 		const c74::min::symbol value_symbol = scope;
 		const std::string value{value_symbol.c_str()};
-		if(!is_valid_scope(value)) {
+		if(!sync_protocol::is_valid_scope(value)) {
 			throw std::runtime_error("invalid @scope: " + value);
 		}
 		return value;
@@ -1812,13 +1589,13 @@ private:
 					throw std::runtime_error("invalid MCP request id");
 				}
 				event_patcher_id = dictionary_string(dictionary, "patcherId");
-				if(!is_valid_patcher_id(event_patcher_id)) {
+				if(!sync_protocol::is_valid_patcher_id(event_patcher_id)) {
 					throw std::runtime_error("invalid request patcherId");
 				}
 
 				if(message_type == "maxforge.create_patch.request") {
 					event_scope = dictionary_string(dictionary, "scope");
-					if(!is_valid_scope(event_scope)) {
+					if(!sync_protocol::is_valid_scope(event_scope)) {
 						throw std::runtime_error("invalid requested patch scope");
 					}
 					const long is_controller = controller;
@@ -2050,18 +1827,18 @@ private:
 		status_output.send("error", message);
 		std::string resolved_patcher_id{event_patcher_id};
 		std::string resolved_scope{event_scope};
-		if(!is_valid_patcher_id(resolved_patcher_id)) {
+		if(!sync_protocol::is_valid_patcher_id(resolved_patcher_id)) {
 			const c74::min::symbol value_symbol = patcher_id;
 			resolved_patcher_id = value_symbol.c_str();
 		}
-		if(!is_valid_patcher_id(resolved_patcher_id)) {
+		if(!sync_protocol::is_valid_patcher_id(resolved_patcher_id)) {
 			resolved_patcher_id = "default";
 		}
-		if(!is_valid_scope(resolved_scope)) {
+		if(!sync_protocol::is_valid_scope(resolved_scope)) {
 			const c74::min::symbol value_symbol = scope;
 			resolved_scope = value_symbol.c_str();
 		}
-		if(!is_valid_scope(resolved_scope)) resolved_scope = "default";
+		if(!sync_protocol::is_valid_scope(resolved_scope)) resolved_scope = "default";
 		send_event(
 			"{\"type\":\"maxforge.error\",\"requestId\":" +
 			json_string(request_id) +
