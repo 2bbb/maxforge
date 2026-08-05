@@ -55,6 +55,10 @@ Published-package MCP configuration:
 }
 ```
 
+The npm package installs the `maxforge-mcp` Node.js executable. It does not
+install the native `maxforge.sync` external into Max. A working live setup needs
+both processes and at least one open, registered Max patch.
+
 Environment variables:
 
 | Name | Default | Meaning |
@@ -67,7 +71,60 @@ The host is rejected unless it is exactly `127.0.0.1` or `::1`. Hostnames are
 not accepted because a hostname is not itself proof of a loopback bind. There
 is no supported public-network mode.
 
+## AI agent guidance
+
+The MCP server advertises an agent workflow in its server instructions. Every
+tool also publishes a structured input and output schema; agents should not
+guess field names from prose or parse human-readable text when
+`structuredContent` is available.
+
+Start an unfamiliar session by calling `maxforge_help` with:
+
+```json
+{ "topic": "workflow" }
+```
+
+Available topics are:
+
+| Topic | Use it when |
+|---|---|
+| `workflow` | selecting, previewing, applying, and verifying a live target |
+| `setup` | the server runs but Max does not register a usable patch |
+| `recovery` | restart, timeout, baseline warning, or managed manual drift occurred |
+| `safety` | checking identity, ownership, transport, and mutation boundaries |
+
+For agents that support installable skills, add the dedicated live-control
+workflow:
+
+```bash
+npx skills add 2bbb/maxforge --skill maxforge-mcp
+```
+
+Use the separate `maxforge` skill for offline DSL authoring and `.maxpat`
+compilation. A skill supplies instructions only: it does not install or start
+`maxforge-mcp`, and it does not install the native external.
+
+The safe live sequence is fixed:
+
+1. `maxforge_help` (`workflow`)
+2. `maxforge_status` when connection/process state is uncertain
+3. `maxforge_list_patches`
+4. `maxforge_inspect_patch`
+5. `maxforge_compile_plan` with complete desired DSL
+6. review warnings and destructive operations
+7. `maxforge_apply_dsl` with the same target and desired DSL
+8. verify acknowledgement revision and inspect again
+
+Do not collapse this into a direct apply. Titles are not identities, DSL is not
+an imperative edit, and a timeout is not proof that Max remained unchanged.
+
 ## Tools
+
+### `maxforge_help`
+
+Returns structured agent instructions for one of the four topics above. It does
+not require Max to be running and is safe to call before any target registers.
+Call `recovery` before retrying an ambiguous failure.
 
 ### `maxforge_status`
 
@@ -168,8 +225,65 @@ the already-applied mutation as a failure would invite an unsafe retry.
 
 When a baseline exists, apply first inspects Max. Any manual structural change
 that touches a managed box or one of its patch cords rejects mutation until the
-caller inspects and reconciles the state. Standalone unmanaged edits are
+caller inspects and manually restores the post-apply managed structure.
+Inspection does not accept or reset the baseline, and there is currently no MCP
+operation that adopts managed manual edits. Standalone unmanaged edits are
 reported but do not block managed mutation.
+
+## Tool call examples
+
+MCP clients normally render the tool schema directly. The following objects are
+tool arguments, not raw JSON-RPC envelopes.
+
+Inspect a target selected from `maxforge_list_patches`:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated"
+}
+```
+
+Preview and then apply the same complete desired state:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "desiredDsl": "patch \"Generated\"\nbutton_0 = button at(40, 80)\nvalue_0 = number at(80, 80)\nbutton_0 -> value_0"
+}
+```
+
+Review `plan.operations` and `warnings` from `maxforge_compile_plan`. A
+successful `maxforge_apply_dsl` result has this top-level shape:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "baseRevision": "<64 lowercase hex characters>",
+  "targetRevision": "<64 lowercase hex characters>",
+  "operationCount": 3,
+  "acknowledgement": {
+    "type": "maxforge.applied",
+    "revision": "<same value as targetRevision>",
+    "operations": 3
+  },
+  "baselineCaptured": true,
+  "warnings": []
+}
+```
+
+Treat success as all of the following:
+
+- the tool result is not an MCP error;
+- `acknowledgement.revision` equals `targetRevision`;
+- the acknowledgement operation count matches `operationCount`;
+- post-apply inspection reports the expected graph.
+
+If `baselineCaptured` is `false`, the acknowledged apply still succeeded. Read
+`baselineWarning`, inspect explicitly, and do not repeat the apply merely to
+obtain a comparison baseline.
 
 ## Max patch object
 
@@ -217,6 +331,23 @@ returns `comparisonAvailable: false` until an apply establishes a new baseline.
 
 Do not guess `currentDsl`, reset the revision attribute, or pretend the scope is
 empty. Those actions defeat optimistic concurrency.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Required action |
+|---|---|---|
+| `maxforge_list_patches` returns no targets | Max is closed, the controller patch is closed, the external is missing, or registration has not completed | Call `maxforge_status`; open the controller patch and verify `maxforge.sync` in Max |
+| Raw client count is nonzero but no patch is registered | WebSocket connected before a valid registration event | Check `patcherId`, scope, and Max console errors; do not target the raw connection |
+| Port 8766 is already in use | Another MCP server owns the bridge port | Stop the duplicate server or set the same alternate `MAXFORGE_WS_PORT`/`@port` on both sides |
+| Patch creation reports no controller | No registered patch has `controller: true` | Open the distributed controller patch and list patches again |
+| Patch creation reports multiple controllers | More than one controller patch is open | Leave exactly one controller registered before creating a patch |
+| Duplicate `patcherId` | Two live patches advertise the same transport identity | Change one `@patcher_id`; titles are irrelevant |
+| Process has no graph state for an initialized revision | `maxforge-mcp` restarted while Max stayed open | Pass the exact previous complete DSL as `currentDsl` once |
+| Current DSL revision does not match Max | `currentDsl`, scope, or target is wrong | Stop; recover the exact prior DSL instead of forcing empty state |
+| Managed manual changes block apply | A managed box or a cord touching it changed after the baseline | Inspect the exact changes and manually restore the post-apply structure; there is no adopt operation |
+| Apply times out or transport disconnects | Acknowledgement is missing; Max may be unchanged, applied, or partially mutated | Do not retry; call status and inspect first |
+| `baselineCaptured: false` | Max acknowledged apply but the follow-up snapshot failed | Treat apply as successful, inspect explicitly, and do not repeat solely for baseline capture |
+| `comparisonAvailable: false` | No baseline exists in this MCP process | Use the full snapshot; do not invent historical changes |
 
 ## Failure contract
 

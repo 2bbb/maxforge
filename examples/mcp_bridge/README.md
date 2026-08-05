@@ -17,6 +17,10 @@ The boundary is deliberately narrow:
 - Node.js 20 or newer.
 - The built `maxforge.sync` external from this repository.
 
+Installing `maxforge` from npm provides the `maxforge-mcp` executable but does
+not install the native external into Max. The external remains a separate
+runtime prerequisite.
+
 The external compiles the reusable WebSocket client source pinned through the
 `bbb.agent` submodule. Neither the `bbb.agent.hub` external nor the
 `bbb.agent` helper process is a runtime dependency.
@@ -77,6 +81,15 @@ For repository development, use an absolute path:
 }
 ```
 
+For an AI agent that supports installable skills, add the live-control workflow:
+
+```bash
+npx skills add 2bbb/maxforge --skill maxforge-mcp
+```
+
+The skill provides target selection and recovery rules. It does not replace the
+MCP server configuration or native external installation above.
+
 ## Run
 
 1. Start or reconnect the MCP client so `maxforge-mcp` is running.
@@ -102,21 +115,40 @@ For repository development, use an absolute path:
    ~/Library/Application Support/Cycling '74/Max 9/Logs/Max.log
    ```
 
-3. Call `maxforge_list_patches`; it must report `maxforge_bridge` with scope
+3. Call `maxforge_help` with `topic: "workflow"`. This returns the current
+   agent-facing mutation and verification rules without requiring a live target.
+4. Call `maxforge_list_patches`; it must report `maxforge_bridge` with scope
    `agent_demo` and `controller: true`.
-4. To work in the controller itself, call `maxforge_inspect_patch` with
+5. To work in the controller itself, call `maxforge_inspect_patch` with
    `patcherId: maxforge_bridge` and scope `agent_demo`. This reads the live
    patch graph without looking at the Max window. Before the first apply,
    `comparisonAvailable` is false.
-5. Call `maxforge_compile_plan` with the same `patcherId` and scope plus the
-   full contents of `desired.maxdsl`.
-6. Inspect the plan, then call `maxforge_apply_dsl` with the same target and
-   DSL.
-7. Confirm eight managed toggle/number pairs appear and the tool returns a
-   matching `maxforge.applied` acknowledgement.
-8. Move, edit, connect, create, or delete a box manually, then call
+6. Call `maxforge_compile_plan` with the following arguments, replacing the
+   placeholder with the full contents of `desired.maxdsl`:
+
+   ```json
+   {
+     "patcherId": "maxforge_bridge",
+     "scope": "agent_demo",
+     "desiredDsl": "<complete desired.maxdsl source>"
+   }
+   ```
+
+7. Inspect every operation and warning, then call `maxforge_apply_dsl` with the
+   same arguments. Do not reduce `desiredDsl` to only the new object; it owns the
+   complete managed scope.
+8. Confirm eight managed toggle/number pairs appear and all of these are true:
+   `acknowledgement.revision === targetRevision`, acknowledgement operations
+   equal `operationCount`, and `baselineCaptured` is true.
+9. Call `maxforge_inspect_patch` again and verify the expected boxes and cords.
+10. Move, edit, connect, create, or delete a box manually, then call
    `maxforge_inspect_patch` again. The response reports the exact structural
    change and whether it touches maxforge-managed state.
+
+Inspection does not adopt a managed manual change. Restore a managed edit to
+the last post-apply structure before another apply. On timeout, transport error,
+or baseline warning, call `maxforge_help` with `topic: "recovery"`; do not
+blindly repeat the mutation.
 
 To work in a separate window instead, call `maxforge_create_patch`:
 

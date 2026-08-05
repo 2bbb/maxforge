@@ -215,18 +215,26 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 
 MCPクライアントからMaxを変更する場合は、次の順序を崩さない。
 
-1. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
-2. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
+1. 初回操作では`maxforge_help`へ`topic: "workflow"`を渡し、serverが返す
+   最新の操作規約を読む。失敗後は`topic: "recovery"`を読む。
+2. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
+3. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
    scope、titleを指定し、登録完了まで待つ。
-3. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
-4. 同じ`patcherId`とscopeを指定して`maxforge_compile_plan`で完全なdesired
+4. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
+5. 同じ`patcherId`とscopeを指定して`maxforge_compile_plan`で完全なdesired
    DSLから差分を確認する。
-5. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。
-6. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
+6. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。
+7. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いする。
+8. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
 
 MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
+
+managed manual changeをinspectしてもbaselineは更新されない。現行MCP APIには
+手動変更を新baselineとして採用するoperationが無いため、次のapply前にMax上で
+post-apply状態へ戻す。timeout、transport error、`baselineCaptured: false`を理由に
+同じapplyを即時再送してはいけない。statusとlive inspectを先に行う。
 
 Max側は`examples/mcp_bridge/`の通り、接続設定を持つnative
 `maxforge.sync`を1個だけ置く。接続、再接続、登録、request/eventの
@@ -234,6 +242,16 @@ Max側は`examples/mcp_bridge/`の通り、接続設定を持つnative
 複数パッチをタイトルで推測せず、必ず`patcherId`で指定する。Max内で
 JavaScriptを追加したり、agentに生の`thispatcher`コマンドを生成させたり
 しない。
+
+live操作を継続的にagentへ任せる場合は、汎用DSL skillとは別に安全規約を持つ
+専用skillを導入する。
+
+```bash
+npx skills add 2bbb/maxforge --skill maxforge-mcp
+```
+
+skillはagentへのinstructionsであり、`maxforge-mcp` serverやnative externalを
+インストールするものではない。
 
 詳細は`docs/mcp.md`を参照。
 

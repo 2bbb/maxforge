@@ -209,6 +209,7 @@ available for human-readable status and local diagnostics. See
 
 `maxforge-mcp` exposes the managed workflow to MCP clients over stdio:
 
+- `maxforge_help`
 - `maxforge_status`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
@@ -220,6 +221,11 @@ It listens for native `maxforge.sync` clients only on `127.0.0.1:8766`. Each
 live patch contains one `maxforge.sync`, registers a stable `patcherId`, and can
 therefore be created or operated as an independent Max window without
 ambiguity. No JavaScript or helper patch wiring runs inside Max.
+
+The npm package supplies the `maxforge-mcp` Node.js server, but it does **not**
+install the native `maxforge.sync` external into Max. Build/install the external
+and open a controller patch before expecting `maxforge_list_patches` to return a
+target.
 
 ```json
 {
@@ -234,19 +240,38 @@ ambiguity. No JavaScript or helper patch wiring runs inside Max.
 
 Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing the
 native external. The patch contains exactly one configured object and no patch
-cords. See [`docs/mcp.md`](docs/mcp.md) for transport lifecycle, state
-recovery, security boundaries, and the acknowledgement contract.
+cords. Agents should call `maxforge_help` with `topic: "workflow"` before their
+first mutation and `topic: "recovery"` after an ambiguous failure. See
+[`docs/mcp.md`](docs/mcp.md) for tool arguments and result contracts,
+transport lifecycle, troubleshooting, state recovery, security boundaries, and
+the acknowledgement contract.
 
-## AI agent skill
+## AI agent skills
 
-Install the maxforge skill into supported agents with:
+List the skills exposed by this repository:
+
+```bash
+npx skills add 2bbb/maxforge --list
+```
+
+Install the offline DSL/compiler skill when the agent creates or validates
+`.maxdsl`, `.maxpat`, or `.maxhelp` files:
 
 ```bash
 npx skills add 2bbb/maxforge --skill maxforge
 ```
 
-Then ask the agent to use the `maxforge` skill when creating, validating, or
-compiling Max/MSP patches from `.maxdsl`.
+Install the stricter live-control skill when the agent will inspect or mutate an
+open Max patch through MCP:
+
+```bash
+npx skills add 2bbb/maxforge --skill maxforge-mcp
+```
+
+The `maxforge-mcp` skill encodes target selection, complete desired-state
+semantics, plan review, revision acknowledgement, post-apply inspection, and
+restart/timeout/manual-drift recovery. A skill supplies agent instructions only;
+it does not install the npm server or native Max external.
 
 ## CLI Reference
 
@@ -421,6 +446,11 @@ src/
   max/
     patch-graph.ts     Managed desired graph and PatchPlan diff
     thispatcher.ts     thispatcher command generation
+  mcp/
+    server.ts          stdio MCP executable
+    mcp-server.ts      Agent-facing tools, help, and schemas
+    service.ts         Desired-state and inspection baseline service
+    bridge.ts          Loopback WebSocket transport to Max
 source/projects/
   maxforge.sync/       Native min-api PatchPlan consumer
 deps/
@@ -430,15 +460,22 @@ data/
 docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   agent-guide.md       AI agent documentation
+  mcp.md               MCP setup, tools, recovery, and troubleshooting
+  patch-sync.md        Native PatchPlan ownership protocol
+skills/
+  maxforge/            Offline DSL/compiler agent skill
+  maxforge-mcp/        Live MCP control agent skill
 tests/
-  compiler.test.ts     compiler/parser/decompiler test suite
-  block.test.ts        brace block parsing regression tests
+  mcp-*.test.ts        MCP server, service, bridge, and example tests
+  compiler.test.ts     Compiler/parser/decompiler test suite
+  block.test.ts        Brace block parsing regression tests
   expander.test.ts     for/if/${expr} expansion test suite
   fixtures/            DSL fixture files for snapshot testing
 examples/
   basic_synth.maxdsl   Example patch
   voice_bank.maxdsl    Repeated-object generation example
   max_sync/            Native external end-to-end example
+  mcp_bridge/          MCP-to-native-Max controller example
 ```
 
 ## Development
