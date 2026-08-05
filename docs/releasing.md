@@ -50,6 +50,11 @@ on Linux after CI: that can damage macOS bundle metadata and permissions.
 - manual `workflow_dispatch`: build and upload the Actions artifact without
   changing a release.
 
+Push and pull-request runs use one concurrency group per event and ref. A newer
+commit cancels an older run for the same branch so an obsolete package cannot
+overwrite the moving `latest` release after a newer build. Published-release
+and manual runs are not auto-cancelled.
+
 The package combines both platforms, matching the other bbb Max packages. Max
 ignores the external extension for the other platform.
 
