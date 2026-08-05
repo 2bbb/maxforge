@@ -23,7 +23,7 @@ It supports:
 - **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
 - **Clipboard output** — compressed text pasteable directly into Max
 - **Clipboard input** — decompress pasted patches back to DSL
-- **323 Max 9-recognized object names and aliases**, checked against the application's bundled indexes, references, and saved patches
+- **320 Max 9 object names/aliases with local identity evidence**, plus the project-owned `maxforge.sync` external; port metadata has explicit fixed, argument-dependent, and dynamic categories
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
 - **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
@@ -101,7 +101,7 @@ async function compileToThispatcher(dsl) {
   const result = compileDslToThispatcherCommands(dsl, db);
 
   if (!result.success) {
-    maxApi.post(JSON.stringify(result.errors));
+    maxApi.error(JSON.stringify(result.errors));
     return;
   }
 
@@ -321,6 +321,11 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 maxforge compile input.maxdsl --allow-unknown -o output.maxpat
 ```
 
+`--allow-unknown` creates a `newobj` with representative 1-inlet/1-outlet
+metadata and skips upper-bound port rejection. It does not verify the external's
+real shape. Use it only when Max or the external's own documentation is the
+source of truth.
+
 ## DSL Syntax
 
 ### Patch Declaration (optional)
@@ -340,8 +345,9 @@ name = type [args...] [@attr value...] [at(x, y)]
 ```
 
 - `name` — identifier, unique within scope
-- `type args` — resolved against the object database; `numinlets`/`numoutlets` auto-derived
+- `type args` — resolved using audited fixed metadata, an explicit argument rule, or a dynamic-port marker
 - `@attr value` — optional attributes; emitted directly as box JSON properties
+- escape a literal Max object-text attribute as `\@attr`; otherwise maxforge treats it as a box JSON property
 - `at(x, y)` — optional position override; omit for auto-layout
 - structural keys such as `id`, `maxclass`, `patching_rect`, `text`, and `patcher` are reserved and cannot be set with `@`
 
@@ -431,12 +437,18 @@ Some objects change inlet/outlet count based on arguments:
 | Object | Rule |
 |--------|------|
 | `gate 4` | outlets = 4 |
-| `route 1 2 3` | outlets = args + 1 |
+| `route 1 2 3` | inlets = outlets = args + 1 in current Max 9 saved patches |
+| `sel 1 2 3` | inlets = outlets = args + 1; matched outlets are bang |
 | `pack 0 0. 0` | inlets = arg count |
 | `unpack 0 0 0` | outlets = arg count |
 | `trigger b b f` | outlets = arg count, types from args |
-| `matrix~ 4 4` | inlets = first arg, outlets = second |
+| `matrix~ 4 4` | 4 inlets, 4 signal outlets, plus a status outlet |
 | `selector~ 4` | inlets = first arg + 1 |
+
+This table is representative, not exhaustive. `dynamicPorts` objects such as
+`poly~`, `bpatcher`, `gen~`, and `jit.gl.slab` do not have a trustworthy fixed
+upper port bound. See [Object catalog: evidence and limits](docs/object-catalog.md)
+before extending the catalog or relying on generated port metadata.
 
 ## Project Structure
 
@@ -474,16 +486,18 @@ source/projects/
 deps/
   bbb.agent/           Pinned reusable WebSocket transport source
 data/
-  objects.json         323-entry Max object catalog
+  objects.json         321-entry audited compiler metadata catalog
 docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   agent-guide.md       AI agent documentation
+  object-catalog.md    Catalog evidence, dynamic ports, and non-claims
   mcp.md               MCP setup, tools, recovery, and troubleshooting
   patch-sync.md        Native PatchPlan ownership protocol
   releasing.md         Max package CI and release procedure
   website.md           GitHub Pages source and deployment procedure
 scripts/
   assemble-max-package.sh Build the Max package directory
+  audit-object-catalog.py Compare catalog identity/static metadata with local Max 9 resources
   verify-max-package.py   Validate source, package, and ZIP contents
   verify-pages.py         Validate static Pages files and local references
 .github/workflows/

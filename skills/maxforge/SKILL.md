@@ -87,11 +87,27 @@ for i in 0..7 {
 ## Syntax reminders
 
 - Object: `name = object args... [@attr values...] [at(x, y)]`
+- Escape a literal Max object-text attribute as `\@attr`; plain `@attr` is a maxforge box property.
 - Connection: `a -> b -> c`, or `src[1] -> dst[2]` for outlet/inlet indices.
 - Subpatcher: `fx = p name { ... }` with `inlet`/`outlet` objects inside.
+- Signal subpatch ports: `inlet signal` / `outlet signal`; never invent `inlet~` or `outlet~`.
 - `for i in 0..7 { ... }` is inclusive; `step` is supported.
 - Expressions are numeric only: loop variables, `+ - * /`, parentheses, and comparisons.
 - Inline comments are not supported; put comments on their own line.
+
+## Object metadata boundaries
+
+- Do not invent an object name by analogy or by adding/removing `~`.
+- Catalog entries use fixed metadata, explicit argument rules, or
+  `dynamicPorts`. For dynamic entries, a stored port count is representative,
+  not a safe upper bound.
+- `--allow-unknown` is a dynamic 1-inlet/1-outlet fallback. It permits explicit
+  higher indices but does not prove that those ports exist.
+- `defaultSize` and `category` are maxforge layout/grouping data, not official
+  Cycling '74 facts.
+- When changing the catalog locally, run
+  `python3 scripts/audit-object-catalog.py` against Max 9 and add a unit case for
+  every `argRule` entry.
 
 ## References in this repo
 
@@ -102,3 +118,4 @@ for i in 0..7 {
 - Managed synchronization protocol: `docs/patch-sync.md`
 - MCP control and restart contract: `docs/mcp.md`
 - Object database used by the compiler: `data/objects.json`
+- Object evidence and limits: `docs/object-catalog.md`

@@ -37,6 +37,8 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    never infer patch state from the screen.
 6. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
+   Use real Max object names only. Signal subpatch ports are `inlet signal` and
+   `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
 7. Call `maxforge_compile_plan` with the target and complete `desiredDsl`.
    Review warnings and every `delete`, `disconnect`, and replacement operation.
 8. State the target, operation count, destructive operations, and stop

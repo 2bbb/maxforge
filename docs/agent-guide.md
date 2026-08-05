@@ -55,8 +55,9 @@ name = type [args...] [@attr val ...] [at(x, y)]
 
 - `name` — 英字/アンダースコア始まりの識別子。スコープ内で一意。
 - `=` 以降がMaxのtextフィールドになる。
-- `numinlets`/`numoutlets`/`outlettype` はオブジェクトDBから**自動解決**。書く必要なし。
+- `numinlets`/`numoutlets`/`outlettype` は、監査済み固定値・引数ルール・dynamic markerのいずれかで解決する。DSLに直接書かない。
 - `@attr val` — **省略可**の属性指定。box JSONに直接出力される。
+- newobjの`text`にMax attributeを残す場合は`\@attr`と書く。未escapeの`@attr`はbox JSON propertyとして解釈される。
 - `at(x, y)` — **省略可**の座標指定。指定するとauto-layoutを上書き。省略時は自動配置。
 
 **属性の書き方:**
@@ -159,7 +160,7 @@ src[0] -> dst[1]
 
 **注意事項:**
 - 接続先のオブジェクトは**先に定義**されている必要がある。
-- outlet/inletの範囲は**コンパイル時に検証**される。
+- 固定形状または引数解決済みオブジェクトのoutlet/inlet範囲はコンパイル時に検証される。`dynamicPorts`と`--allow-unknown`は根拠のない上限判定を行わない。
 - 同じ接続の重複は警告のみ（エラーではない）。
 
 ### Subpatcher
@@ -304,12 +305,13 @@ env -> mul[1]
 | オブジェクト | ルール |
 |-------------|--------|
 | `gate N` | outlets = N |
-| `route a b c` | outlets = 引数の数 + 1 |
+| `route a b c` | current Max 9 saved patchではinlets = outlets = 引数の数 + 1 |
+| `sel a b c` | inlets = outlets = 引数の数 + 1、match側はbang |
 | `pack a b c` | inlets = 引数の数 |
 | `unpack a b c` | outlets = 引数の数 |
 | `switch N` | inlets = N + 1 |
 | `selector~ N` | inlets = N + 1 |
-| `matrix~ N M` | inlets = N, outlets = M |
+| `matrix~ N M` | inlets = N、signal outlets = M、さらにstatus outletが1つ |
 | `gate~ N` | outlets = N |
 | `zl mode N` | inlets = 2, outlets = 2 (固定) |
 | `funnel N` | inlets = N |
@@ -317,12 +319,12 @@ env -> mul[1]
 
 ### 詳細リファレンス
 
-オブジェクトの全仕様は以下を参照:
-- 音声: `docs/agent-guide.md` / bundled object database notes
-- ロジック: `docs/agent-guide.md` / bundled object database notes
-- MIDI: `docs/agent-guide.md` / bundled object database notes
-- Jitter: `docs/agent-guide.md` / bundled object database notes
-- フォーマット: `docs/dsl-spec.md`
+`data/objects.json`はMaxオブジェクトの全仕様書ではない。identityとport metadataの
+根拠・限界は`docs/object-catalog.md`、DSL形式は`docs/dsl-spec.md`を参照する。
+各オブジェクトのmessage、attribute、runtime behaviorは対象Maxバージョンの
+Max Object Referenceで確認する。名前に`~`を足し引きして未確認オブジェクトを
+作らない。特に信号subpatch portは`inlet signal` / `outlet signal`であり、
+`inlet~` / `outlet~`ではない。
 
 ## Error Messages
 

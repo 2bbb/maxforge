@@ -40,6 +40,7 @@
       <a href="#first-patch">First patch</a>
       <a href="#cli">CLI</a>
       <a href="#dsl">DSL syntax</a>
+      <a href="#catalog">Object catalog</a>
       <a href="#generation">for / if / arithmetic</a>
       <a href="#mcp">MCP setup</a>
       <a href="#mcp-workflow">Safe MCP workflow</a>
@@ -62,6 +63,7 @@
         <span>Author patches</span>
         <a href="#cli">CLI</a>
         <a href="#dsl">DSL syntax</a>
+        <a href="#catalog">Object catalog</a>
         <a href="#generation">for / if / arithmetic</a>
         <a href="#connections">Connections</a>
         <a href="#subpatchers">Subpatchers</a>
@@ -246,7 +248,8 @@ vol[1] -&gt; dac[1]</code></pre>
         <p>
           Unknown objects fail by default because maxforge cannot safely infer
           their port shape. Use <code>--allow-unknown</code> only when you accept
-          that reduced validation.
+          representative 1-inlet/1-outlet metadata and no upper-bound port
+          rejection; Max must validate the real external.
         </p>
       </section>
 
@@ -263,8 +266,9 @@ patch "Title" | "Description" | 800x600</code></pre>
         <pre><code>name = type [arguments...] [@attribute value...] [at(x, y)]</code></pre>
         <ul>
           <li><code>name</code> is unique inside its patcher and becomes a stable generated box ID.</li>
-          <li>The catalog contains 323 object names and aliases whose identities were checked against bundled Max 9 resources.</li>
+          <li>The catalog contains 320 Max names/aliases with local identity evidence plus the project-owned <code>maxforge.sync</code> external.</li>
           <li>Attributes become Max box properties; structural keys such as <code>id</code>, <code>maxclass</code>, <code>text</code>, and <code>patching_rect</code> are reserved.</li>
+          <li>Write <code>\@attribute</code> when the literal <code>@attribute</code> must remain inside a <code>newobj</code> text string.</li>
           <li>Omit <code>at(x, y)</code> for automatic topological layout.</li>
         </ul>
         <pre><code>osc = cycle~ 440
@@ -276,6 +280,26 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           <strong>Comments</strong>
           <p>Lines beginning with <code>#</code> are comments. Inline comments after a statement are not supported.</p>
         </div>
+
+        <h3 id="catalog">Catalog evidence and limits</h3>
+        <p>
+          The 321 catalog entries are compiler metadata, not a complete Max
+          Object Reference: 239 use a fixed base shape, 45 use explicit
+          argument rules, and 37 are marked dynamic. Dynamic examples include
+          <code>poly~</code>, <code>bpatcher</code>, <code>gen~</code>, and
+          <code>jit.gl.slab</code>; their stored port counts are representative.
+        </p>
+        <ul>
+          <li>Identity evidence comes from Max 9 reference XML, object indexes/mappings, and saved patchers.</li>
+          <li>Embedded Gen, Jitter Gen, and RNBO operators are excluded; they are not ordinary Max patcher boxes.</li>
+          <li><code>defaultSize</code> and <code>category</code> are maxforge layout/grouping values, not Cycling '74 facts.</li>
+          <li>Use <code>python3 scripts/audit-object-catalog.py</code> in a checkout to repeat the local audit.</li>
+        </ul>
+        <p>
+          See the repository's
+          <a href="https://github.com/2bbb/maxforge/blob/main/docs/object-catalog.md">catalog evidence and limits</a>
+          before adding names or relying on dynamic port metadata.
+        </p>
       </section>
 
       <section id="generation" class="docs-section">
@@ -314,7 +338,9 @@ source[1] -&gt; destination[2]</code></pre>
         <p>
           Ports are zero-indexed from the left. A source suffix selects an outlet;
           a destination suffix selects an inlet. maxforge validates indices when
-          it knows the object shape.
+          it knows the object shape. It deliberately skips a fabricated upper
+          bound for <code>dynamicPorts</code> and <code>--allow-unknown</code>
+          objects; Max remains the final authority for those connections.
         </p>
         <p>
           Objects such as <code>gate</code>, <code>route</code>, <code>pack</code>,

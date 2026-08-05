@@ -8,7 +8,7 @@ It compiles to Max patcher JSON that can be saved as `.maxpat` or `.maxhelp`.
 Design principles:
 - **Minimal syntax** — only describe WHAT (objects + connections), not HOW (IDs, boilerplate)
 - **Strict grammar** — no ambiguity, every valid program has exactly one parse tree
-- **Object database resolution** — `numinlets`, `numoutlets`, `outlettype` are auto-derived
+- **Object database resolution** — port metadata comes from audited fixed records, explicit argument rules, or a declared dynamic shape
 - **Optional position override** — `at(x, y)` pins an object to a specific coordinate; un-pinned objects use auto-layout
 - **Object attributes** — `@key value` pairs set arbitrary box properties (minimum, maximum, size, etc.)
 - **Macro expansion for repetition** — `for`, `if`, and `${expr}` generate repetitive object graphs before parsing
@@ -357,8 +357,8 @@ name[1:2] -> name
 
 **Validation rules (enforced at compile time):**
 1. Every name in a connection must reference a defined object.
-2. Outlet index must be < source object's `numoutlets`.
-3. Inlet index must be < destination object's `numinlets`.
+2. For a non-dynamic source, outlet index must be < source object's `numoutlets`.
+3. For a non-dynamic destination, inlet index must be < destination object's `numinlets`.
 4. Duplicate connections (same source+outlet, same dest+inlet) are ignored with a warning.
 5. Connections are resolved in source order, so objects must be defined before a connection that references them.
 
@@ -385,13 +385,17 @@ in_audio = inlet signal "audio input"
 When the compiler encounters `name = type_text`, it:
 1. Extracts the first token (delimited by whitespace) as the **object type key**.
 2. Looks up the key in the object database.
-3. Resolves: `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `default_size`.
+3. Resolves `maxclass`, port metadata, and layout size from one of three
+   catalog classes: fixed, argument-dependent, or dynamic.
 
-The bundled catalog contains 323 object names and aliases whose identities were
-checked against the Max 9 resources shipped with the installed application.
-Third-party or locally installed objects require `--allow-unknown`; catalog
-membership is not a claim that an optional package is installed on every Max
-system.
+The bundled catalog contains 321 entries: 320 Max object names or aliases with
+identity evidence in the locally audited Max 9 resources, plus the project-owned
+`maxforge.sync` external. This is not a complete Max API. Catalog membership is
+also not a claim that an optional package is installed on every Max system.
+
+The exact evidence hierarchy, generated-metadata limits, dynamic-port behavior,
+and known identity-only alias warnings are documented in
+[`object-catalog.md`](object-catalog.md).
 
 ### 5.2 Argument-dependent inlets/outlets
 
@@ -401,20 +405,35 @@ Some objects have inlet/outlet counts that depend on arguments:
 |--------|------|
 | `gate` | outlets = first arg value |
 | `switch` | inlets = first arg value + 1 |
-| `route` | outlets = arg count + 1 |
+| `route` | inlets = outlets = arg count + 1 in current Max 9 saved patches |
+| `sel` | inlets = outlets = arg count + 1; matched outlets are bang |
 | `pack` | inlets = arg count |
 | `unpack` | outlets = arg count |
 | `selector~` | inlets = first arg value + 1 |
-| `matrix~` | inlets = first arg, outlets = second arg |
+| `matrix~` | inlets = first arg; signal outlets = second arg; plus one status outlet |
 | `gate~` | outlets = first arg value |
+| `tapout~` | one inlet/outlet signal pair per delay argument |
+| `adc~` / `dac~` | signal outlets/inlets = channel argument count |
 
-These are handled by special-case logic in the compiler.
+These are handled by named rules in `src/core/object-db.ts`. Quoted arguments
+count as one argument. Every catalog entry carrying `argRule` has a unit-test
+case; the table above is only representative.
 
-### 5.3 Unknown objects
+### 5.3 Dynamic ports
+
+Some objects derive their shape from attributes, embedded code, channel
+settings, a referenced patcher, or runtime configuration. Their catalog record
+uses `dynamicPorts: true` and stores only a representative base shape. The
+compiler does not reject an explicit index above that representative bound.
+Examples include `poly~`, `bpatcher`, `gen~`, and `jit.gl.slab`.
+
+### 5.4 Unknown objects
 
 If an object type is NOT found in the database:
 - **Error by default** — compilation fails.
-- **`--allow-unknown` flag** — creates the object with `numinlets=1, numoutlets=1, outlettype=[""]` as a fallback.
+- **`--allow-unknown` flag** — creates a dynamic `newobj` with representative
+  `numinlets=1`, `numoutlets=1`, `outlettype=[""]` metadata. Upper-bound index
+  rejection is skipped because the real shape is unknown.
 
 ## 6. Auto-Layout Algorithm
 
@@ -457,7 +476,7 @@ The decompiler emits `at(x, y)` from the first two values of `patching_rect` so 
 
 The compiler outputs a JSON object matching the Max `.maxpat` format:
 - `fileversion`: 1
-- `appversion`: `{ major: 8, minor: 6, revision: 4 }`
+- `appversion`: `{ major: 9, minor: 0, revision: 0, architecture: "x64", modernui: 1 }`
 - IDs: `"obj-1"`, `"obj-2"`, ... (sequential per scope)
 - 2-space indentation
 - UTF-8, LF line endings

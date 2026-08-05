@@ -47,6 +47,7 @@
     "docs/dsl-spec.md",
     "docs/agent-guide.md",
     "docs/mcp.md",
+    "docs/object-catalog.md",
     "docs/patch-sync.md",
     "docs/releasing.md",
     "examples/**/*.maxdsl",
