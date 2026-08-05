@@ -13,9 +13,10 @@ python3 scripts/verify-pages.py site
 node --check site/main.js
 ```
 
-The verifier rejects a missing entry page, stylesheet, script, favicon,
-`.nojekyll` marker, local asset, local anchor, unofficial-project disclaimer,
-or npx quickstart.
+The verifier rejects a missing entry page, stylesheet, script, favicon, local
+asset, local anchor, unofficial-project disclaimer, or npx quickstart. The
+site uses the Pages artifact workflow, so it does not pass through Jekyll and
+does not need a `.nojekyll` marker.
 
 For a local visual preview:
 

@@ -78,7 +78,7 @@ def verify_site(site_directory: Path) -> list[str]:
         if not asset_path.is_file():
             errors.append(f"missing local asset: {reference}")
 
-    for required_name in [".nojekyll", "styles.css", "main.js", "favicon.svg"]:
+    for required_name in ["styles.css", "main.js", "favicon.svg"]:
         required_path = site_directory / required_name
         if not required_path.is_file():
             errors.append(f"missing required site file: {required_name}")
