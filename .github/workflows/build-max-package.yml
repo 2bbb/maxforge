@@ -80,14 +80,15 @@ jobs:
           test -x "$binary"
           lipo "$binary" -verify_arch x86_64 arm64
           test "$(plutil -extract CFBundleIdentifier raw "$bundle/Contents/Info.plist")" = "jp.2bit.maxforge.sync"
-          test "$(plutil -extract CFBundleShortVersionString raw "$bundle/Contents/Info.plist")" = "$(node -p "require('./package.json').version")"
+          version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+          test "$(plutil -extract CFBundleShortVersionString raw "$bundle/Contents/Info.plist")" = "$version"
           codesign --verify --deep --strict --verbose=2 "$bundle"
 
       - name: Upload macOS external
         uses: actions/upload-artifact@v7
         with:
           name: maxforge-macos
-          path: externals/maxforge.sync.mxo
+          path: externals/
           if-no-files-found: error
 
   build-windows:
@@ -140,7 +141,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: maxforge-windows
-          path: externals/maxforge.sync.mxe64
+          path: externals/
           if-no-files-found: error
 
   package:

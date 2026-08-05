@@ -10,6 +10,16 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 package_dir="$1"
 
+if [[ ! -d "$package_dir" ]]; then
+  echo "package directory does not exist: $package_dir" >&2
+  exit 1
+fi
+package_dir="$(cd "$package_dir" && pwd)"
+if [[ "$package_dir" == "$repo_root" || "$package_dir" == "/" ]]; then
+  echo "refusing unsafe package directory: $package_dir" >&2
+  exit 1
+fi
+
 if [[ ! -d "$package_dir/externals/maxforge.sync.mxo" ]]; then
   echo "missing macOS external: $package_dir/externals/maxforge.sync.mxo" >&2
   exit 1

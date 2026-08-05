@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import plistlib
 import stat
 import sys
 import xml.etree.ElementTree as ET
@@ -122,6 +122,27 @@ def validate_package(root: Path) -> None:
     executable = root / "externals/maxforge.sync.mxo/Contents/MacOS/maxforge.sync"
     if executable.stat().st_mode & stat.S_IXUSR == 0:
         fail(f"macOS external binary is not executable: {executable}")
+    if executable.read_bytes()[:4] not in (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf"):
+        fail(f"macOS external is not a universal Mach-O binary: {executable}")
+
+    windows_external = root / "externals/maxforge.sync.mxe64"
+    if windows_external.read_bytes()[:2] != b"MZ":
+        fail(f"Windows external is not a PE binary: {windows_external}")
+
+    plist_path = root / "externals/maxforge.sync.mxo/Contents/Info.plist"
+    try:
+        with plist_path.open("rb") as stream:
+            plist = plistlib.load(stream)
+    except (OSError, plistlib.InvalidFileException) as error:
+        fail(f"invalid macOS Info.plist at {plist_path}: {error}")
+    if plist.get("CFBundleIdentifier") != "jp.2bit.maxforge.sync":
+        fail(f"invalid maxforge.sync bundle identifier in {plist_path}")
+
+    package_info = read_json(root / "package-info.json")
+    if not isinstance(package_info, dict):
+        fail("package-info.json must contain an object")
+    if plist.get("CFBundleShortVersionString") != package_info.get("version"):
+        fail("macOS bundle version does not match package-info.json")
 
 
 def validate_archive(path: Path) -> None:
