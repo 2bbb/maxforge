@@ -70,6 +70,24 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      const initialStatus = await client.request(30, "tools/call", {
+        name: "maxforge_status",
+        arguments: {},
+      });
+      expect(initialStatus).toMatchObject({
+        result: {
+          structuredContent: {
+            bridge: {
+              host: "127.0.0.1",
+              port: 8766,
+              connectedClients: 0,
+            },
+            managedRevisions: {},
+            inspectionBaselineScopes: [],
+          },
+        },
+      });
+
       const result = await client.request(4, "tools/call", {
         name: "maxforge_compile_plan",
         arguments: {
@@ -104,6 +122,33 @@ describe("maxforge MCP protocol surface", () => {
               patcherId: "patch_a",
               scope: "voices",
             },
+          },
+        },
+      });
+
+      const applied = await client.request(31, "tools/call", {
+        name: "maxforge_apply_dsl",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "voices",
+          desiredDsl: "osc = cycle~ 440",
+        },
+      });
+      expect(applied).toMatchObject({
+        result: {
+          structuredContent: {
+            patcherId: "patch_a",
+            scope: "voices",
+            operationCount: 1,
+            acknowledgement: {
+              type: "maxforge.applied",
+              patcherId: "patch_a",
+              scope: "voices",
+              operations: 1,
+            },
+            baselineCaptured: false,
+            baselineWarning: expect.stringContaining("Max applied the patch"),
+            warnings: [],
           },
         },
       });
