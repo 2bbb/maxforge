@@ -48,6 +48,7 @@
     "docs/agent-guide.md",
     "docs/mcp.md",
     "docs/patch-sync.md",
+    "docs/releasing.md",
     "examples/**/*.maxdsl",
     "examples/**/*.maxpat",
     "examples/**/*.json",
