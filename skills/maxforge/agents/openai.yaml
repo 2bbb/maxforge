@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maxforge DSL"
+  short_description: "Generate and compile Max/MSP patches from concise DSL"
+  default_prompt: "Use Maxforge DSL to generate, validate, or compile this Max/MSP patch without hand-editing maxpat JSON."

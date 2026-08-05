@@ -43,7 +43,7 @@
     "dist/",
     "data/objects.json",
     "README.md",
-    "SKILL.md",
+    "skills/",
     "docs/dsl-spec.md",
     "docs/agent-guide.md",
     "docs/mcp.md",

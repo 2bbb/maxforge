@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maxforge MCP"
+  short_description: "Safely inspect and modify live Max patches over MCP"
+  default_prompt: "Use Maxforge MCP to inspect the live Max patch, preview the desired DSL diff, apply it safely, and verify the acknowledged result."
