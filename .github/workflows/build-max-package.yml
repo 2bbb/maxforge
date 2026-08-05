@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: false
+          submodules: true
           ssh-key: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
 
       - name: Require bbb.agent deploy key
@@ -58,9 +58,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git submodule sync -- deps/min-api deps/bbb.agent
-          git submodule update --init deps/min-api
-          git submodule update --init deps/bbb.agent
           git -C deps/min-api submodule update --init --recursive
           git -C deps/bbb.agent submodule update --init deps/IXWebSocket
 
@@ -96,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: false
+          submodules: true
           ssh-key: ${{ secrets.BBB_AGENT_DEPLOY_KEY }}
 
       - name: Require bbb.agent deploy key
@@ -114,9 +111,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git submodule sync -- deps/min-api deps/bbb.agent
-          git submodule update --init deps/min-api
-          git submodule update --init deps/bbb.agent
           git -C deps/min-api submodule update --init --recursive
           git -C deps/bbb.agent submodule update --init deps/IXWebSocket
 
