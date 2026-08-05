@@ -1,6 +1,7 @@
 # maxforge
 
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
+[![Build Max package](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml)
 
 Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
 Write compact text, get valid Max patch JSON.
@@ -194,6 +195,20 @@ mkdir -p "$HOME/Documents/Max 9/Packages"
 ln -s "$PWD" "$HOME/Documents/Max 9/Packages/maxforge"
 # Restart Max after installing an external.
 ```
+
+Prebuilt Max packages are available from
+[GitHub Releases](https://github.com/2bbb/maxforge/releases). `maxforge.zip`
+contains both the universal macOS `maxforge.sync.mxo` and x64 Windows
+`maxforge.sync.mxe64`, together with `package-info.json`, the `.maxhelp`, its
+supporting plan, the Max reference XML, documentation, and examples. Extract
+the top-level `maxforge` directory into the Max `Packages` directory. The
+moving `latest` release follows successful `main` builds; use a versioned
+release when the exact build must remain pinned.
+
+The macOS external is ad-hoc signed but is not notarized. It must not be
+described as Gatekeeper-safe. See [`docs/releasing.md`](docs/releasing.md) for
+CI triggers, archive validation, private-submodule credentials, and the
+versioned release procedure.
 
 Open `examples/max_sync/maxforge_sync_demo.maxpat` for an end-to-end native
 example, including managed objects inside a generated subpatcher.
@@ -462,6 +477,12 @@ docs/
   agent-guide.md       AI agent documentation
   mcp.md               MCP setup, tools, recovery, and troubleshooting
   patch-sync.md        Native PatchPlan ownership protocol
+  releasing.md         Max package CI and release procedure
+scripts/
+  assemble-max-package.sh Build the Max package directory
+  verify-max-package.py   Validate source, package, and ZIP contents
+.github/workflows/
+  build-max-package.yml Cross-platform external build and release CI
 skills/
   maxforge/            Offline DSL/compiler agent skill
   maxforge-mcp/        Live MCP control agent skill
