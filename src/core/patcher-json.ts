@@ -31,9 +31,7 @@ export function buildPatcherJSON(
       b.maxclass !== "comment" &&
       b.maxclass !== "message" &&
       b.maxclass !== "inlet" &&
-      b.maxclass !== "outlet" &&
-      b.maxclass !== "inlet~" &&
-      b.maxclass !== "outlet~";
+      b.maxclass !== "outlet";
 
     if (b.text !== undefined && !isUINative) {
       box.text = b.text;

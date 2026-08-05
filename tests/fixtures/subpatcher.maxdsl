@@ -1,9 +1,9 @@
 patch "Subpatcher Test"
 
 fx = p delay_fx {
-  in = inlet~ "audio input"
-  out_l = outlet~ "audio left"
-  out_r = outlet~ "audio right"
+  in = inlet signal "audio input"
+  out_l = outlet signal "audio left"
+  out_r = outlet signal "audio right"
   buf = tapin~ 500
   tap = tapout~ 250
   fb = *~ 0.4

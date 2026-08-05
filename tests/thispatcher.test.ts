@@ -74,8 +74,8 @@ osc -> dac
   it("can wrap a root patcher as a subpatcher command stream", () => {
     const result = compileDslToThispatcherCommands(
       `
-in = inlet~ at(10, 20)
-out = outlet~ at(100, 20)
+in = inlet signal at(10, 20)
+out = outlet signal at(100, 20)
 in -> out
 `,
       db,
@@ -107,8 +107,8 @@ in -> out
     const result = compileDslToThispatcherCommands(
       `
 fx = p passthrough at(40, 50) {
-  in = inlet~ at(10, 20)
-  out = outlet~ at(100, 20)
+  in = inlet signal at(10, 20)
+  out = outlet signal at(100, 20)
   in -> out
 }
 `,

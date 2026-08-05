@@ -23,7 +23,7 @@ It supports:
 - **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
 - **Clipboard output** — compressed text pasteable directly into Max
 - **Clipboard input** — decompress pasted patches back to DSL
-- **374 built-in objects** with auto inlet/outlet resolution
+- **323 Max 9-recognized object names and aliases**, checked against the application's bundled indexes, references, and saved patches
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
 - **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
@@ -408,8 +408,8 @@ Indices are 0-based (leftmost = 0). `[N]` on a destination means destination inl
 
 ```maxdsl
 fx = p delay_fx {
-  in = inlet~ "audio input"
-  out = outlet~ "audio output"
+  in = inlet signal "audio input"
+  out = outlet signal "audio output"
   buf = tapin~ 500
   tap = tapout~ 250
   fb = *~ 0.4
@@ -419,7 +419,8 @@ fx = p delay_fx {
 }
 ```
 
-- `inlet`/`outlet`/`inlet~`/`outlet~` only valid inside subpatchers
+- `inlet` and `outlet` are the only subpatcher port objects
+- add the maxforge-only `signal` modifier (`inlet signal`, `outlet signal`) to emit the real Max `inlet`/`outlet` classes with signal metadata
 - `numinlets`/`numoutlets` auto-derived from internal inlet/outlet count
 - Nestable
 
@@ -473,7 +474,7 @@ source/projects/
 deps/
   bbb.agent/           Pinned reusable WebSocket transport source
 data/
-  objects.json         374-object database
+  objects.json         323-entry Max object catalog
 docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   agent-guide.md       AI agent documentation

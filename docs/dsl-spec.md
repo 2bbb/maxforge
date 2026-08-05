@@ -306,14 +306,17 @@ name = p subpatcher_name [@attr value...] [at(x, y)] {
 - `{ }` — contains inner statements (objects, connections, nested subpatchers).
 - `numinlets` / `numoutlets` are auto-derived from the count of `inlet`/`outlet` objects inside.
 - Inner object IDs are independently numbered (scoped).
-- `inlet`, `inlet~`, `outlet`, `outlet~` are only valid inside subpatchers.
+- `inlet` and `outlet` are only valid inside subpatchers.
+- The optional `signal` modifier marks a signal port without inventing a Max
+  object class. Both `inlet signal` and `outlet signal` serialize with the real
+  `maxclass` values `inlet` and `outlet`.
 
 **Example:**
 
 ```
 fx = p delay_fx {
-  in = inlet~ "audio input"
-  out = outlet~ "audio output"
+  in = inlet signal "audio input"
+  out = outlet signal "audio output"
   buf = tapin~ 500
   tap = tapout~ 250
   fb = *~ 0.4
@@ -363,16 +366,16 @@ name[1:2] -> name
 
 The following are recognized by the first token and have special handling:
 
-| First token | maxclass | Notes |
-|-------------|----------|-------|
+| DSL form | Max `maxclass` | Notes |
+|----------|----------------|-------|
 | `inlet` | `inlet` | numinlets=0, numoutlets=1. Subpatcher only. |
-| `inlet~` | `inlet~` | numinlets=0, numoutlets=1, outlettype=["signal"]. Subpatcher only. |
+| `inlet signal` | `inlet` | Same Max object with outlettype=["signal"]. |
 | `outlet` | `outlet` | numinlets=1, numoutlets=0. Subpatcher only. |
-| `outlet~` | `outlet~` | numinlets=1, numoutlets=0. Subpatcher only. |
+| `outlet signal` | `outlet` | Same Max object; marks the matching parent outlet as signal. |
 
-For these, optional STRING after the type is the `comment` field:
+For these, an optional STRING after the type or `signal` modifier is the `comment` field:
 ```
-in_audio = inlet~ "audio input"
+in_audio = inlet signal "audio input"
 ```
 
 ## 5. Object Database Resolution
@@ -383,6 +386,12 @@ When the compiler encounters `name = type_text`, it:
 1. Extracts the first token (delimited by whitespace) as the **object type key**.
 2. Looks up the key in the object database.
 3. Resolves: `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `default_size`.
+
+The bundled catalog contains 323 object names and aliases whose identities were
+checked against the Max 9 resources shipped with the installed application.
+Third-party or locally installed objects require `--allow-unknown`; catalog
+membership is not a claim that an optional package is installed on every Max
+system.
 
 ### 5.2 Argument-dependent inlets/outlets
 

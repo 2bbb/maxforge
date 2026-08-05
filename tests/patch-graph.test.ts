@@ -28,8 +28,8 @@ for i in 0..1 {
   osc_\${i} = cycle~ \${440 + i * 20}
 }
 fx = p pass {
-  in = inlet~
-  out = outlet~
+  in = inlet signal
+  out = outlet signal
   in -> out
 }
 `);
@@ -308,8 +308,8 @@ manual = button
   it("creates parent subpatchers before their contents", () => {
     const desired = compileGraph(`
 fx = p pass {
-  in = inlet~
-  out = outlet~
+  in = inlet signal
+  out = outlet signal
   in -> out
 }
 `);
@@ -336,15 +336,15 @@ fx = p pass {
   it("recreates subpatcher contents when the parent definition changes", () => {
     const current = compileGraph(`
 fx = p pass @hidden 0 {
-  in = inlet~
-  out = outlet~
+  in = inlet signal
+  out = outlet signal
   in -> out
 }
 `);
     const desired = compileGraph(`
 fx = p pass @hidden 1 {
-  in = inlet~
-  out = outlet~
+  in = inlet signal
+  out = outlet signal
   in -> out
 }
 `);

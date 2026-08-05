@@ -1,9 +1,13 @@
 import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
 import { extractBoxAttrStrings } from "./attributes.js";
 
-export function decompile(patch: PatcherJSON): string {
+export function decompile(
+  patch: PatcherJSON,
+  subpatcherOutletTypes: readonly string[] = []
+): string {
   const lines: string[] = [];
   const p = patch.patcher;
+  const signalPortIds = inferSignalPortIds(p, subpatcherOutletTypes);
 
   if (p.description || p.rect[2] !== 640 || p.rect[3] !== 480) {
     const sizeStr = `${Math.round(p.rect[2])}x${Math.round(p.rect[3])}`;
@@ -16,11 +20,12 @@ export function decompile(patch: PatcherJSON): string {
 
   for (const bw of p.boxes) {
     const box = bw.box;
-    const name = generateName(box, usedNames);
+    const signalPort = signalPortIds.has(box.id);
+    const name = generateName(box, usedNames, signalPort);
     idToName.set(box.id, name);
     usedNames.add(name);
 
-    const dslLine = boxToDSL(box, name);
+    const dslLine = boxToDSL(box, name, signalPort);
     lines.push(dslLine);
   }
 
@@ -35,8 +40,12 @@ export function decompile(patch: PatcherJSON): string {
   return lines.join("\n") + "\n";
 }
 
-function generateName(box: BoxJSON, usedNames: Set<string>): string {
-  const base = nameFromBox(box);
+function generateName(
+  box: BoxJSON,
+  usedNames: Set<string>,
+  signalPort: boolean
+): string {
+  const base = nameFromBox(box, signalPort);
   let name = base;
   let counter = 2;
   while (usedNames.has(name) || name === "") {
@@ -63,17 +72,12 @@ const OPERATOR_NAMES: Record<string, string> = {
   "<=": "lte",
 };
 
-const INLET_OUTLET_NAMES: Record<string, string> = {
-  inlet: "in",
-  "inlet~": "audio_in",
-  outlet: "out",
-  "outlet~": "audio_out",
-};
-
-function nameFromBox(box: BoxJSON): string {
-  if (box.maxclass === "inlet" || box.maxclass === "inlet~" ||
-      box.maxclass === "outlet" || box.maxclass === "outlet~") {
-    return INLET_OUTLET_NAMES[box.maxclass] || box.maxclass;
+function nameFromBox(box: BoxJSON, signalPort: boolean): string {
+  if (box.maxclass === "inlet") {
+    return signalPort ? "audio_in" : "in";
+  }
+  if (box.maxclass === "outlet") {
+    return signalPort ? "audio_out" : "out";
   }
 
   if (box.text) {
@@ -105,7 +109,7 @@ function sanitizeName(name: string): string {
   return n || "obj";
 }
 
-function boxToDSL(box: BoxJSON, name: string): string {
+function boxToDSL(box: BoxJSON, name: string, signalPort: boolean): string {
   const attrs = extractBoxAttrStrings(box);
   const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
   const posSuffix = positionSuffix(box);
@@ -120,21 +124,19 @@ function boxToDSL(box: BoxJSON, name: string): string {
     return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
   }
 
-  if (
-    box.maxclass === "inlet" || box.maxclass === "inlet~" ||
-    box.maxclass === "outlet" || box.maxclass === "outlet~"
-  ) {
+  if (box.maxclass === "inlet" || box.maxclass === "outlet") {
+    const signalSuffix = signalPort ? " signal" : "";
     const comment = (box.comment as string) || "";
     if (comment) {
-      return `${name} = ${box.maxclass} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
+      return `${name} = ${box.maxclass}${signalSuffix} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
     }
-    return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
+    return `${name} = ${box.maxclass}${signalSuffix}${attrSuffix}${posSuffix}`;
   }
 
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
     const subName = box.text.substring(2);
     if (box.patcher) {
-      const inner = decompile({ patcher: box.patcher });
+      const inner = decompile({ patcher: box.patcher }, box.outlettype ?? []);
       const innerLines = inner.trim().split("\n");
       const body = innerLines.map((l) => "  " + l).join("\n");
       return `${name} = p ${subName}${attrSuffix}${posSuffix} {\n${body}\n}`;
@@ -148,6 +150,40 @@ function boxToDSL(box: BoxJSON, name: string): string {
   }
 
   return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
+}
+
+function inferSignalPortIds(
+  patcher: PatcherJSON["patcher"],
+  subpatcherOutletTypes: readonly string[]
+): Set<string> {
+  const signalPortIds = new Set<string>();
+  const boxesById = new Map(patcher.boxes.map(({ box }) => [box.id, box]));
+  const outlets = patcher.boxes
+    .map(({ box }) => box)
+    .filter((box) => box.maxclass === "outlet");
+
+  for (const { box } of patcher.boxes) {
+    if (box.maxclass === "inlet" && box.outlettype?.[0] === "signal") {
+      signalPortIds.add(box.id);
+    }
+  }
+
+  for (const [index, outlet] of outlets.entries()) {
+    if (subpatcherOutletTypes[index] === "signal") {
+      signalPortIds.add(outlet.id);
+    }
+  }
+
+  for (const { patchline } of patcher.lines) {
+    const destination = boxesById.get(patchline.destination[0]);
+    if (destination?.maxclass !== "outlet") continue;
+    const source = boxesById.get(patchline.source[0]);
+    if (source?.outlettype?.[patchline.source[1]] === "signal") {
+      signalPortIds.add(destination.id);
+    }
+  }
+
+  return signalPortIds;
 }
 
 function escapeLiteralAttributeTokens(text: string): string {

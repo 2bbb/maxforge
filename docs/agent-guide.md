@@ -166,8 +166,8 @@ src[0] -> dst[1]
 
 ```
 fx = p delay_fx at(200, 300) {
-  in = inlet~ "audio in"
-  out = outlet~ "audio out"
+  in = inlet signal "audio in"
+  out = outlet signal "audio out"
   buf = tapin~ 500
   tap = tapout~ 250
   fb = *~ 0.4
@@ -177,7 +177,8 @@ fx = p delay_fx at(200, 300) {
 }
 ```
 
-- `inlet` / `inlet~` / `outlet` / `outlet~` は**サブパッチャー内でのみ使用可能**。
+- Maxオブジェクトとして存在するのは `inlet` / `outlet` のみで、**サブパッチャー内でのみ使用可能**。
+- 信号ポートはmaxforgeの修飾子 `signal` を付けて `inlet signal` / `outlet signal` と書く。生成される `maxclass` は実在する `inlet` / `outlet` のまま。
 - 親から見た `numinlets` / `numoutlets` は内部の inlet/outlet 数から自動計算。
 - `at(x, y)` は親側の subpatcher box の位置指定。
 - 内部のオブジェクトIDはDSL名から決まり、同じスコープ内で安定する。
@@ -294,9 +295,9 @@ env -> mul[1]
 | ロジック | `gate`, `route`, `sel`, `metro`, `counter`, `random`, `delay`, `pipe` |
 | データ | `pack`, `unpack`, `prepend`, `append`, `coll`, `dict`, `table` |
 | 数学 | `+`, `-`, `*`, `/`, `expr`, `scale`, `random` |
-| 通信 | `send`, `receive`, `udpsend`, `udpreceive`, `OSC-route` |
+| 通信 | `send`, `receive`, `udpsend`, `udpreceive` |
 | UI | `number`, `flonum`, `toggle`, `button`, `slider`, `umenu`, `message`, `comment` |
-| サブパッチャー | `p name { ... }`, `inlet`, `outlet`, `inlet~`, `outlet~` |
+| サブパッチャー | `p name { ... }`, `inlet`, `outlet`, `inlet signal`, `outlet signal` |
 
 ### 引数でinlet/outlet数が変わるオブジェクト
 

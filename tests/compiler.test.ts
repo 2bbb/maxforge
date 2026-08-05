@@ -236,8 +236,8 @@ osc = cycle~ 440
   it("parses subpatcher", () => {
     const source = `
 fx = p delay {
-  in = inlet~
-  out = outlet~
+  in = inlet signal
+  out = outlet signal
   dly = tapin~ 500
   tap = tapout~ 250
   in -> dly -> tap -> out
@@ -399,8 +399,8 @@ c = ezdac~
   it("compiles subpatcher correctly", () => {
     const source = `
 fx = p myfx {
-  in = inlet~ "audio"
-  out = outlet~ "audio"
+  in = inlet signal "audio"
+  out = outlet signal "audio"
   dly = tapin~ 500
   tap = tapout~ 250
   in -> dly -> tap -> out
@@ -423,7 +423,7 @@ fx = p myfx {
     const source = `
 fx = p labelled {
   in = inlet "control input"
-  out = outlet~ "audio output"
+  out = outlet signal "audio output"
   in -> out
 }
 `;
@@ -433,11 +433,63 @@ fx = p labelled {
     expect(result.success).toBe(true);
     const innerBoxes = result.output!.patcher.boxes[0].box.patcher!.boxes;
     const inlet = innerBoxes.find((b) => b.box.maxclass === "inlet")!.box;
-    const outlet = innerBoxes.find((b) => b.box.maxclass === "outlet~")!.box;
+    const outlet = innerBoxes.find((b) => b.box.maxclass === "outlet")!.box;
     expect(inlet.text).toBeUndefined();
+    expect(inlet.outlettype).toEqual([""]);
     expect(inlet.comment).toBe("control input");
     expect(outlet.text).toBeUndefined();
     expect(outlet.comment).toBe("audio output");
+  });
+
+  it("uses real Max inlet/outlet classes for signal ports", () => {
+    const source = `
+fx = p mixed_ports {
+  audio_in = inlet signal "audio input"
+  control_in = inlet "control input"
+  audio_out = outlet signal "audio output"
+  control_out = outlet "control output"
+  audio_in -> audio_out
+  control_in -> control_out
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+
+    const subpatcher = result.output!.patcher.boxes[0].box;
+    expect(subpatcher.numinlets).toBe(2);
+    expect(subpatcher.numoutlets).toBe(2);
+    expect(subpatcher.outlettype).toEqual(["signal", ""]);
+
+    const inner = subpatcher.patcher!.boxes.map(({ box }) => box);
+    expect(inner.map((box) => box.maxclass)).toEqual([
+      "inlet",
+      "inlet",
+      "outlet",
+      "outlet",
+    ]);
+    expect(inner[0].outlettype).toEqual(["signal"]);
+    expect(inner[1].outlettype).toEqual([""]);
+
+    const decompiled = decompile(result.output!);
+    expect(decompiled).toContain('audio_in = inlet signal "audio input"');
+    expect(decompiled).toContain('audio_out = outlet signal "audio output"');
+    expect(decompiled).not.toContain("inlet~");
+    expect(decompiled).not.toContain("outlet~");
+  });
+
+  it("rejects fabricated inlet~ and outlet~ object names", () => {
+    const { ast, errors } = parse(`
+fx = p invalid_ports {
+  in = inlet~
+  out = outlet~
+}
+`);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors.map((error) => error.code)).toEqual(["E003", "E003"]);
   });
 
   describe("argDependent resolution", () => {

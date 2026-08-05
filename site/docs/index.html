@@ -263,7 +263,7 @@ patch "Title" | "Description" | 800x600</code></pre>
         <pre><code>name = type [arguments...] [@attribute value...] [at(x, y)]</code></pre>
         <ul>
           <li><code>name</code> is unique inside its patcher and becomes a stable generated box ID.</li>
-          <li>Known Max object names are resolved against the bundled 374-object database.</li>
+          <li>The catalog contains 323 object names and aliases whose identities were checked against bundled Max 9 resources.</li>
           <li>Attributes become Max box properties; structural keys such as <code>id</code>, <code>maxclass</code>, <code>text</code>, and <code>patching_rect</code> are reserved.</li>
           <li>Omit <code>at(x, y)</code> for automatic topological layout.</li>
         </ul>
@@ -327,8 +327,8 @@ source[1] -&gt; destination[2]</code></pre>
         <div class="docs-section-label">08 / SUBPATCHERS</div>
         <h2>Subpatchers</h2>
         <pre><code>fx = p delay_fx {
-  input = inlet~ "audio input"
-  output = outlet~ "audio output"
+  input = inlet signal "audio input"
+  output = outlet signal "audio output"
   buffer = tapin~ 500
   tap = tapout~ 250
   feedback = *~ 0.4
@@ -337,9 +337,10 @@ source[1] -&gt; destination[2]</code></pre>
   tap -&gt; output
 }</code></pre>
         <p>
-          Subpatchers may be nested. <code>inlet</code>, <code>outlet</code>,
-          <code>inlet~</code>, and <code>outlet~</code> are only valid inside a
-          subpatcher; their count determines the parent object's visible port shape.
+          Subpatchers may be nested. Only the real Max objects <code>inlet</code> and
+          <code>outlet</code> are emitted, and they are valid only inside a subpatcher.
+          The maxforge-only <code>signal</code> modifier marks signal ports; the port
+          count determines the parent object's visible shape.
         </p>
       </section>
 

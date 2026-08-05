@@ -10,7 +10,7 @@ import {
   CompileWarning,
   ErrorCode,
 } from "./types.js";
-import { lookupObject, extractQuotedContent } from "./object-db.js";
+import { lookupObject } from "./object-db.js";
 import { autoLayout } from "./layout.js";
 import { isReservedAttributeKey } from "./attributes.js";
 import { CompiledBox, CompiledLine } from "./compiled-model.js";
@@ -19,10 +19,10 @@ import { buildPatcherJSON } from "./patcher-json.js";
 import {
   firstObjectToken,
   INLET_OBJECT_TYPES,
-  isObjectTextKind,
   isPortObjectStmt,
   isPortObjectToken,
   OUTLET_OBJECT_TYPES,
+  parsePortObject,
 } from "./port-objects.js";
 
 export function compile(
@@ -86,19 +86,20 @@ export function compile(
 
     if (!validateAttrs(stmt.attrs, stmt.line)) return;
 
-    const isPortObject = isPortObjectToken(firstToken);
+    const portSpec = parsePortObject(stmt.objectText);
+    const isPortObject = portSpec !== null;
     const box: CompiledBox = {
       id: boxId(stmt.name),
       name: stmt.name,
       maxclass: result.maxclass,
       numinlets: result.def.numinlets,
       numoutlets: result.def.numoutlets,
-      outlettype: result.def.outlettype,
+      outlettype: portSpec?.kind === "inlet" && portSpec.signal
+        ? ["signal"]
+        : result.def.outlettype,
       defaultSize: result.def.defaultSize,
       text: isPortObject ? undefined : (result.text || undefined),
-      comment: isPortObject
-        ? extractQuotedContent(stmt.objectText) || undefined
-        : undefined,
+      comment: portSpec?.comment,
       line: stmt.line,
       x: stmt.pos?.[0] ?? 0,
       y: stmt.pos?.[1] ?? 0,
@@ -159,10 +160,9 @@ export function compile(
     const outlets = stmt.body.filter((s): s is ObjectDefStmt =>
       isPortObjectStmt(s, OUTLET_OBJECT_TYPES)
     );
-    const outletType =
-      outlets.length === 1 && isObjectTextKind(outlets[0].objectText, "outlet~")
-        ? "signal"
-        : "";
+    const outletTypes = outlets.map((outlet) =>
+      parsePortObject(outlet.objectText)?.signal ? "signal" : ""
+    );
 
     if (inlets.length === 0 && outlets.length === 0) {
       errors.push({
@@ -179,7 +179,7 @@ export function compile(
       maxclass: "newobj",
       numinlets: inlets.length,
       numoutlets: outlets.length,
-      outlettype: Array(outlets.length).fill(outletType),
+      outlettype: outletTypes,
       defaultSize: [100, 22],
       text: `p ${stmt.subpatcherName}`,
       line: stmt.line,
