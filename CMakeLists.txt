@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.19)
-project(maxforge)
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" maxforge_package_json)
+string(
+	JSON maxforge_version
+	ERROR_VARIABLE maxforge_version_error
+	GET "${maxforge_package_json}" version
+)
+if(maxforge_version_error)
+	message(FATAL_ERROR "Could not read version from package.json: ${maxforge_version_error}")
+endif()
+
+project(maxforge VERSION "${maxforge_version}")
+
+set(PACKAGE_VERSION "${PROJECT_VERSION}")
+set(AUTHOR_DOMAIN "jp.2bit")
+set(COPYRIGHT_STRING "Copyright (c) 2026 2bit")
+set(EXCLUDE_FROM_COLLECTIVES "no")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

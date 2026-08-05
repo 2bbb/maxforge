@@ -44,6 +44,9 @@ macro(maxforge_add_external)
 			${MAXFORGE_EXTERNAL_DEPS}
 		)
 	endif()
+	if(APPLE)
+		set(BUNDLE_IDENTIFIER "${PROJECT_NAME}")
+	endif()
 	include(${C74_MIN_API_DIR}/script/min-posttarget.cmake)
 
 	unset(maxforge_external_sources)

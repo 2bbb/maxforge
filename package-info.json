@@ -1,6 +1,7 @@
 {
   "title": "maxforge",
   "description": "Unofficial text-first Max patch generation and synchronization tools",
+  "version": "0.1.5",
   "author": "2bit",
   "website": "https://github.com/2bbb/maxforge",
   "extends": "",
@@ -27,6 +28,9 @@
   },
   "filelist": {
     "externals/maxforge.sync.mxo": {},
-    "externals/maxforge.sync.mxe64": {}
+    "externals/maxforge.sync.mxe64": {},
+    "help/maxforge.sync.maxhelp": {},
+    "help/managed_plan.json": {},
+    "docs/maxforge.sync.maxref.xml": {}
   }
 }
