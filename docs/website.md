@@ -1,6 +1,6 @@
 # Project website
 
-The public project site is <https://2bbb.github.io/maxforge/>. Its deployable,
+The public project site is <https://2bit.jp/maxforge/>. Its deployable,
 dependency-free source lives in `site/`; it is not generated from the README and
 does not require Jekyll or a Node.js build.
 

@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
 [![Build Max package](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml)
 
-[Website](https://2bbb.github.io/maxforge/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
+[Website](https://2bit.jp/maxforge/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
 
 Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
 Write compact text, get valid Max patch JSON.
