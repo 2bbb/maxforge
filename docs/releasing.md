@@ -29,7 +29,9 @@ maxforge/
 The workflow fails before publishing if either external, the help patch, the
 help patch's plan, or the Max reference is absent or malformed. It also checks
 that `package-info.json` declares those files and has the same version as
-`package.json`.
+`package.json`. The Ubuntu validation job runs the TypeScript build and Vitest
+suite. Both native build jobs compile and run the Max-independent C++ protocol
+suite with CTest before their external artifact can be uploaded.
 
 The final archive is made on a macOS runner with `ditto`, after restoring the
 external binary's executable permission. Do not replace it with a ZIP rebuilt
@@ -103,6 +105,9 @@ For `v0.1.5`:
 ```bash
 npm test
 npm run build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build --build-config Release --output-on-failure
 python3 scripts/verify-max-package.py --source .
 git tag v0.1.5
 git push origin main v0.1.5

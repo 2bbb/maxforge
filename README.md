@@ -491,6 +491,7 @@ tests/
   compiler.test.ts     Compiler/parser/decompiler test suite
   block.test.ts        Brace block parsing regression tests
   expander.test.ts     for/if/${expr} expansion test suite
+  native/              Max-independent C++ protocol/validation tests
   fixtures/            DSL fixture files for snapshot testing
 examples/
   basic_synth.maxdsl   Example patch
@@ -506,6 +507,11 @@ npm run build          # compile TypeScript
 npm test               # run tests with vitest
 npm run dev            # watch mode
 npm run pack:dry-run   # inspect npm package contents
+
+# Native protocol tests; no Max application/runtime is required
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build --build-config Release --output-on-failure
 ```
 
 ## Error Codes

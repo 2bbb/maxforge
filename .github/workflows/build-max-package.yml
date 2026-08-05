@@ -62,10 +62,16 @@ jobs:
           git -C deps/bbb.agent submodule update --init deps/IXWebSocket
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DMAXFORGE_BUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build --config Release --parallel 2
+
+      - name: Test native protocol
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
       - name: Verify macOS external
         shell: bash
@@ -115,10 +121,17 @@ jobs:
           git -C deps/bbb.agent submodule update --init deps/IXWebSocket
 
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: >-
+          cmake -S . -B build
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DMAXFORGE_BUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build --config Release --parallel 2
+
+      - name: Test native protocol
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
       - name: Verify Windows external
         shell: pwsh
