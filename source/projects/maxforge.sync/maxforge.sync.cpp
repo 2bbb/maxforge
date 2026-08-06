@@ -94,6 +94,11 @@ struct patch_snapshot {
 	std::vector<snapshot_connection> connections;
 };
 
+struct resolved_patch_path {
+	short path_id{};
+	std::array<char, c74::max::MAX_FILENAME_CHARS> filename{};
+};
+
 auto json_string(const std::string &value) -> std::string {
 	constexpr char hexadecimal[]{"0123456789abcdef"};
 	std::string result{"\""};
@@ -217,6 +222,34 @@ auto json_number(double value) -> std::string {
 	std::ostringstream stream;
 	stream << std::setprecision(17) << value;
 	return stream.str();
+}
+
+auto resolve_patch_path(const std::string &path) -> resolved_patch_path {
+	if(path.empty() || c74::max::MAX_PATH_CHARS <= path.size()) {
+		throw std::runtime_error("patch path is empty or exceeds Max's path limit");
+	}
+	if(!sync_protocol::has_maxpat_extension(path)) {
+		throw std::runtime_error("patch path must end with .maxpat");
+	}
+	resolved_patch_path result;
+	const auto error = c74::max::path_frompathname(
+		path.c_str(),
+		&result.path_id,
+		result.filename.data()
+	);
+	if(error != 0 || result.filename.front() == '\0') {
+		throw std::runtime_error("Max could not resolve patch path: " + path);
+	}
+	return result;
+}
+
+auto patch_path_exists(const resolved_patch_path &path) -> bool {
+	c74::max::t_fileinfo information{};
+	return c74::max::path_fileinfo(
+		path.filename.data(),
+		path.path_id,
+		&information
+	) == 0;
 }
 
 auto create_bridge_patch(
@@ -1091,6 +1124,98 @@ auto apply_create(
 	return created_box != nullptr;
 }
 
+auto patcher_contains_maxforge_sync(c74::max::t_object *patcher) -> bool {
+	for(
+		auto *box = c74::max::jpatcher_get_firstobject(patcher);
+		box;
+		box = c74::max::jbox_get_nextobject(box)
+	) {
+		auto *object = c74::max::jbox_get_object(box);
+		if(
+			object &&
+			symbol_string(c74::max::object_classname(object)) == "maxforge.sync"
+		) {
+			return true;
+		}
+		bool has_text{};
+		const auto text = box_text(box, has_text);
+		if(
+			has_text &&
+			text.rfind("maxforge.sync", 0) == 0 &&
+			(text.size() == 13 || text[13] == ' ')
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void inject_bridge_object(
+	c74::max::t_object *patcher,
+	const std::string &patcher_id,
+	const std::string &scope,
+	const std::string &host,
+	long port,
+	const std::string &token
+) {
+	auto object_text =
+		"maxforge.sync @host " + host +
+		" @port " + std::to_string(port) +
+		" @scope " + scope +
+		" @patcher_id " + patcher_id +
+		" @controller 0";
+	if(!token.empty()) object_text += " @token " + token;
+
+	auto *specification = c74::max::dictionary_new();
+	if(!specification) {
+		throw std::runtime_error("Max could not allocate bridge object definition");
+	}
+	c74::max::dictionary_appendsym(
+		specification,
+		c74::max::gensym("maxclass"),
+		c74::max::gensym("newobj")
+	);
+	c74::max::dictionary_appendsym(
+		specification,
+		c74::max::gensym("varname"),
+		c74::max::gensym("maxforge_mcp_bridge")
+	);
+	std::array<c74::max::t_atom, 4> rectangle{};
+	const std::array<double, 4> values{30, 30, 680, 22};
+	for(std::size_t index{}; index < rectangle.size(); index++) {
+		c74::max::atom_setfloat(rectangle.data() + index, values[index]);
+	}
+	c74::max::dictionary_appendatoms(
+		specification,
+		c74::max::gensym("patching_rect"),
+		static_cast<long>(rectangle.size()),
+		rectangle.data()
+	);
+	c74::max::dictionary_appendstring(
+		specification,
+		c74::max::gensym("text"),
+		object_text.c_str()
+	);
+	auto *created_box = c74::max::newobject_fromdictionary(
+		patcher,
+		specification
+	);
+	c74::max::object_free(specification);
+	if(!created_box) {
+		throw std::runtime_error("Max could not inject maxforge.sync");
+	}
+}
+
+void dispose_patcher_deferred(
+	void *patcher,
+	c74::max::t_symbol *,
+	short,
+	c74::max::t_atom *
+) {
+	if(!patcher) return;
+	c74::max::object_method(patcher, c74::max::gensym("dispose"));
+}
+
 auto apply_set(
 	c74::max::t_object *patcher,
 	const patch_operation &operation
@@ -1698,6 +1823,94 @@ private:
 					return;
 				}
 
+				if(message_type == "maxforge.open_patch.request") {
+					event_scope = dictionary_string(dictionary, "scope");
+					if(!sync_protocol::is_valid_scope(event_scope)) {
+						throw std::runtime_error("invalid requested patch scope");
+					}
+					const long is_controller = controller;
+					if(is_controller == 0) {
+						throw std::runtime_error(
+							"this maxforge.sync is not a patch-creation controller"
+						);
+					}
+					const auto title = dictionary_string(dictionary, "title");
+					if(title.empty() || 256 < title.size()) {
+						throw std::runtime_error(
+							"patch title must contain between 1 and 256 characters"
+						);
+					}
+					const auto patch_path = dictionary_string(dictionary, "path");
+					const auto resolved_path = resolve_patch_path(patch_path);
+					if(!patch_path_exists(resolved_path)) {
+						throw std::runtime_error(
+							"patch file does not exist on the Max host: " + patch_path
+						);
+					}
+					const c74::min::symbol host_symbol = host;
+					const std::string host_value{host_symbol.c_str()};
+					const c74::min::symbol token_symbol = token;
+					const std::string token_value{token_symbol.c_str()};
+					const long port_value = port;
+					(void)websocket_url();
+
+					auto *opened_patcher = reinterpret_cast<c74::max::t_object *>(
+						c74::max::jpatcher_load(
+							resolved_path.filename.data(),
+							resolved_path.path_id,
+							0,
+							nullptr
+						)
+					);
+					if(!opened_patcher) {
+						throw std::runtime_error("Max could not open patch: " + patch_path);
+					}
+					if(patcher_contains_maxforge_sync(opened_patcher)) {
+						c74::max::jpatcher_set_dirty(opened_patcher, 0);
+						c74::max::object_method(
+							opened_patcher,
+							c74::max::gensym("dispose")
+						);
+						throw std::runtime_error(
+							"opened patch already contains maxforge.sync; "
+							"open it normally and use its configured patcher_id"
+						);
+					}
+					try {
+						inject_bridge_object(
+							opened_patcher,
+							event_patcher_id,
+							event_scope,
+							host_value,
+							port_value,
+							token_value
+						);
+						c74::max::jpatcher_set_title(
+							opened_patcher,
+							c74::max::gensym(title.c_str())
+						);
+						c74::max::jpatcher_set_dirty(opened_patcher, 1);
+						c74::max::jpatcher_set_locked(opened_patcher, 0);
+						c74::max::object_method(
+							opened_patcher,
+							c74::max::gensym("front")
+						);
+					} catch(...) {
+						c74::max::jpatcher_set_dirty(opened_patcher, 0);
+						c74::max::object_method(
+							opened_patcher,
+							c74::max::gensym("dispose")
+						);
+						throw;
+					}
+					send_patch_opened_event(
+						request_id,
+						event_patcher_id,
+						event_scope
+					);
+					return;
+				}
+
 				if(event_patcher_id != configured_patcher_id()) {
 					throw std::runtime_error(
 						"request patcherId \"" + event_patcher_id +
@@ -1705,16 +1918,97 @@ private:
 						configured_patcher_id() + "\""
 					);
 				}
-
-				if(message_type == "maxforge.inspect.request") {
+				if(message_type != "maxforge.apply.request") {
 					event_scope = dictionary_string(dictionary, "scope");
 					if(event_scope != configured_scope()) {
 						throw std::runtime_error(
-							"inspection scope \"" + event_scope +
+							"request scope \"" + event_scope +
 							"\" does not match @scope \"" +
 							configured_scope() + "\""
 						);
 					}
+				}
+
+				if(message_type == "maxforge.save_patch.request") {
+					auto *root_patcher = top_level_patcher();
+					std::string destination;
+					const auto has_destination = dictionary_optional_string(
+						dictionary,
+						"path",
+						destination
+					);
+					const auto overwrite = dictionary_long(dictionary, "overwrite") != 0;
+					c74::max::t_max_err write_error{};
+					if(has_destination) {
+						const auto resolved_path = resolve_patch_path(destination);
+						if(!overwrite && patch_path_exists(resolved_path)) {
+							throw std::runtime_error(
+								"save destination already exists; set overwrite=true: " +
+								destination
+							);
+						}
+						c74::max::t_atom argument{};
+						c74::max::atom_setsym(
+							&argument,
+							c74::max::gensym(destination.c_str())
+						);
+						write_error = c74::max::object_method_typed(
+							root_patcher,
+							c74::max::gensym("write"),
+							1,
+							&argument,
+							nullptr
+						);
+					} else {
+						if(symbol_string(
+							c74::max::jpatcher_get_filepath(root_patcher)
+						).empty()) {
+							throw std::runtime_error(
+								"unsaved patch requires an explicit save path"
+							);
+						}
+						write_error = c74::max::object_method_typed(
+							root_patcher,
+							c74::max::gensym("write"),
+							0,
+							nullptr,
+							nullptr
+						);
+					}
+					if(write_error != c74::max::MAX_ERR_NONE) {
+						throw std::runtime_error("Max rejected patch write request");
+					}
+					if(c74::max::jpatcher_get_dirty(root_patcher) != 0) {
+						throw std::runtime_error(
+							"Max did not complete patch save synchronously"
+						);
+					}
+					send_patch_saved_event(request_id, root_patcher);
+					return;
+				}
+
+				if(message_type == "maxforge.close_patch.request") {
+					auto *root_patcher = top_level_patcher();
+					const auto discard = dictionary_long(dictionary, "discard") != 0;
+					const auto dirty = c74::max::jpatcher_get_dirty(root_patcher) != 0;
+					if(dirty && !discard) {
+						throw std::runtime_error(
+							"patch has unsaved changes; save it or set discard=true"
+						);
+					}
+					if(dirty) c74::max::jpatcher_set_dirty(root_patcher, 0);
+					send_patch_closing_event(request_id, dirty && discard);
+					c74::max::defer_low(
+						root_patcher,
+						reinterpret_cast<c74::max::method>(dispose_patcher_deferred),
+						nullptr,
+						0,
+						nullptr
+					);
+					return;
+				}
+
+				if(message_type == "maxforge.inspect.request") {
 					send_patch_snapshot(request_id);
 					return;
 				}
@@ -1939,6 +2233,60 @@ private:
 			json_string(created_patcher_id) +
 			",\"scope\":" +
 			json_string(created_scope) +
+			"}"
+		);
+	}
+
+	void send_patch_opened_event(
+		const std::string &request_id,
+		const std::string &opened_patcher_id,
+		const std::string &opened_scope
+	) {
+		send_event(
+			"{\"type\":\"maxforge.patch.opened\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(opened_patcher_id) +
+			",\"scope\":" +
+			json_string(opened_scope) +
+			"}"
+		);
+	}
+
+	void send_patch_saved_event(
+		const std::string &request_id,
+		c74::max::t_object *patcher
+	) {
+		send_event(
+			"{\"type\":\"maxforge.patch.saved\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(configured_patcher_id()) +
+			",\"scope\":" +
+			json_string(configured_scope()) +
+			",\"filename\":" +
+			json_string(symbol_string(c74::max::jpatcher_get_filename(patcher))) +
+			",\"filepath\":" +
+			json_string(symbol_string(c74::max::jpatcher_get_filepath(patcher))) +
+			",\"dirty\":" +
+			(c74::max::jpatcher_get_dirty(patcher) == 0 ? "false" : "true") +
+			"}"
+		);
+	}
+
+	void send_patch_closing_event(
+		const std::string &request_id,
+		bool discarded
+	) {
+		send_event(
+			"{\"type\":\"maxforge.patch.closing\",\"requestId\":" +
+			json_string(request_id) +
+			",\"patcherId\":" +
+			json_string(configured_patcher_id()) +
+			",\"scope\":" +
+			json_string(configured_scope()) +
+			",\"discarded\":" +
+			(discarded ? "true" : "false") +
 			"}"
 		);
 	}

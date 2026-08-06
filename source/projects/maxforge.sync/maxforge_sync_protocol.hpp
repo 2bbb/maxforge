@@ -42,6 +42,7 @@ auto is_valid_box_id(const std::string &id) -> bool;
 auto is_loopback_host(const std::string &host) -> bool;
 auto is_valid_network_host(const std::string &host) -> bool;
 auto is_valid_auth_token(const std::string &token) -> bool;
+auto has_maxpat_extension(const std::string &path) -> bool;
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

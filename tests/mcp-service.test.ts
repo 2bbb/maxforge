@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
+  CloseMaxPatchRequest,
   CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgePatchClosingEvent,
   MaxforgePatchInfo,
+  MaxforgePatchSavedEvent,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotEvent,
+  OpenMaxPatchRequest,
   PatchPlanTransport,
+  SaveMaxPatchRequest,
 } from "../src/mcp/bridge.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
 import {
@@ -538,6 +543,42 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+    };
+  }
+
+  async openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo> {
+    return {
+      ...request,
+      revision: null,
+      controller: false,
+      filename: "opened.maxpat",
+      filepath: request.path,
+    };
+  }
+
+  async savePatch(
+    request: SaveMaxPatchRequest
+  ): Promise<MaxforgePatchSavedEvent> {
+    return {
+      type: "maxforge.patch.saved",
+      requestId: "fake-save",
+      patcherId: request.patcherId,
+      scope: request.scope,
+      filename: "saved.maxpat",
+      filepath: request.path ?? "/tmp/saved.maxpat",
+      dirty: false,
+    };
+  }
+
+  async closePatch(
+    request: CloseMaxPatchRequest
+  ): Promise<MaxforgePatchClosingEvent> {
+    return {
+      type: "maxforge.patch.closing",
+      requestId: "fake-close",
+      patcherId: request.patcherId,
+      scope: request.scope,
+      discarded: request.discard ?? false,
     };
   }
 

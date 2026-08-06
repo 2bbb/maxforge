@@ -102,6 +102,18 @@ void test_network_configuration() {
 		!sync_protocol::is_valid_auth_token(std::string(257, 'a')),
 		"oversized token accepted"
 	);
+	require(
+		sync_protocol::has_maxpat_extension("/tmp/voices.maxpat"),
+		".maxpat path rejected"
+	);
+	require(
+		sync_protocol::has_maxpat_extension("C:\\patches\\VOICES.MAXPAT"),
+		"case-insensitive .maxpat path rejected"
+	);
+	require(
+		!sync_protocol::has_maxpat_extension("/tmp/voices.maxpat.json"),
+		"non-.maxpat path accepted"
+	);
 }
 
 void test_managed_identity() {

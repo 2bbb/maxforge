@@ -132,6 +132,18 @@ const catalogStatusSchema = z.object({
 
 const helpTopicSchema = z.enum(["workflow", "setup", "recovery", "safety"]);
 
+const maxPatchPathSchema = z
+  .string()
+  .min(1)
+  .max(2047)
+  .refine(
+    (path) => path.toLowerCase().endsWith(".maxpat"),
+    "path must end with .maxpat"
+  )
+  .describe(
+    "Absolute .maxpat path on the Max host, not necessarily on the MCP host"
+  );
+
 const helpResultSchema = z.object({
   topic: helpTopicSchema,
   summary: z.string(),
@@ -187,6 +199,7 @@ const HELP_CONTENT = {
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
       "After a merged apply, update the working complete DSL to include preserved human edits or keep using reconciliation for later changes.",
+      "Use maxforge_save_patch explicitly after successful mutation; apply changes live state but does not save the document.",
     ],
     rules: [
       "DSL is complete desired state, not an imperative edit; omitted managed objects are removed.",
@@ -218,6 +231,7 @@ const HELP_CONTENT = {
       "Without MAXFORGE_WS_TOKEN the WebSocket bridge stays on 127.0.0.1:8766. Setting a URL-safe token publishes it on 0.0.0.0 and requires the same maxforge.sync @token.",
       "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
       "New patch creation requires exactly one registered controller.",
+      "maxforge_open_patch loads a .maxpat on the Max host and injects maxforge.sync; use it only for patches that do not already contain maxforge.sync.",
     ],
     relatedTools: [
       "maxforge_status",
@@ -236,6 +250,7 @@ const HELP_CONTENT = {
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
       "If baselineCaptured is false, the apply still succeeded; do not repeat it solely to obtain a baseline.",
+      "A dirty patch can only be closed by explicitly setting discard=true. Save it first if the changes must survive.",
     ],
     rules: [
       "Persistent state stores graphs and inspection baselines; a revision hash alone still cannot reconstruct either.",
@@ -263,6 +278,7 @@ const HELP_CONTENT = {
       "Apply-side inspection is bound to native mutation by a structure token; a later human edit rejects the plan instead of being overwritten.",
       "LAN mode uses token authentication over plaintext WebSocket. Keep it on a trusted LAN; it is not an Internet-facing security boundary.",
       "Catalog membership is compiler metadata and does not prove that Max can instantiate an external or find an abstraction.",
+      "Save-as refuses an existing destination unless overwrite=true. Paths are resolved by the Max host, which matters in LAN mode.",
     ],
     relatedTools: [
       "maxforge_catalog",
@@ -458,6 +474,118 @@ export function createMaxforgeMcpServer(
       try {
         const patch = await options.transport.createPatch(request);
         return toolResult({ patch });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_open_patch",
+    {
+      title: "Open Max patch",
+      description:
+        "Open an existing .maxpat on the Max host, inject a maxforge.sync object, and wait for registration. The patch becomes dirty because the bridge object is added. Refuses files that already contain maxforge.sync.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe(
+          "Unique stable ID assigned to the opened patch"
+        ),
+        scope: scopeSchema.describe("Managed scope assigned to the opened patch"),
+        title: z.string().min(1).max(256).describe("Visible patch window title"),
+        path: maxPatchPathSchema,
+      }),
+      outputSchema: z.object({ patch: patchInfoSchema }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const patch = await options.transport.openPatch(request);
+        return toolResult({ patch });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_save_patch",
+    {
+      title: "Save Max patch",
+      description:
+        "Save a registered patch. Omit path only for a patch already saved on disk. Supplying path performs save-as on the Max host and refuses an existing destination unless overwrite=true.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope of the target patch"),
+        path: maxPatchPathSchema.optional().describe(
+          "Absolute destination on the Max host; omit to save the existing file"
+        ),
+        overwrite: z.boolean().optional().describe(
+          "Allow replacing an existing save-as destination; defaults to false"
+        ),
+      }),
+      outputSchema: z.object({
+        saved: z.object({
+          type: z.literal("maxforge.patch.saved"),
+          requestId: z.string(),
+          patcherId: patcherIdSchema,
+          scope: scopeSchema,
+          filename: z.string(),
+          filepath: z.string(),
+          dirty: z.literal(false),
+        }),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
+    },
+    async (request) => {
+      try {
+        const saved = await options.transport.savePatch(request);
+        return toolResult({ saved });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_close_patch",
+    {
+      title: "Close Max patch",
+      description:
+        "Close a registered top-level Max patch. A dirty patch is rejected unless discard=true is explicitly supplied; save first to preserve changes.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope of the target patch"),
+        discard: z.boolean().optional().describe(
+          "Explicitly discard dirty changes; defaults to false"
+        ),
+      }),
+      outputSchema: z.object({
+        closing: z.object({
+          type: z.literal("maxforge.patch.closing"),
+          requestId: z.string(),
+          patcherId: patcherIdSchema,
+          scope: scopeSchema,
+          discarded: z.boolean(),
+        }),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const closing = await options.transport.closePatch(request);
+        return toolResult({ closing });
       } catch (error) {
         return toolError(error);
       }

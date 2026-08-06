@@ -181,6 +181,155 @@ describe("MaxforgeWebSocketBridge", () => {
     });
   });
 
+  it("opens an existing patch through the controller and waits for registration", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const controller = await connect(status.port);
+    await register(
+      bridge,
+      controller,
+      registration("bridge", "bootstrap", true)
+    );
+
+    controller.once("message", async (data) => {
+      const request = JSON.parse(data.toString()) as {
+        type: string;
+        requestId: string;
+        patcherId: string;
+        scope: string;
+        path: string;
+      };
+      expect(request).toMatchObject({
+        type: "maxforge.open_patch.request",
+        patcherId: "opened-a",
+        scope: "voices",
+        path: "/tmp/source.maxpat",
+      });
+      controller.send(JSON.stringify({
+        type: "maxforge.patch.opened",
+        requestId: request.requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+      }));
+
+      const opened = await connect(status.port);
+      await register(
+        bridge,
+        opened,
+        {
+          ...registration("opened-a", "voices", false, "Opened voices"),
+          filename: "source.maxpat",
+          filepath: "/tmp/source.maxpat",
+        }
+      );
+    });
+
+    await expect(bridge.openPatch({
+      patcherId: "opened-a",
+      scope: "voices",
+      title: "Opened voices",
+      path: "/tmp/source.maxpat",
+    })).resolves.toMatchObject({
+      patcherId: "opened-a",
+      filename: "source.maxpat",
+      filepath: "/tmp/source.maxpat",
+    });
+  });
+
+  it("routes save and close operations and updates registration metadata", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+    await register(bridge, client, registration("patch-a", "voices", false));
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        type: string;
+        requestId: string;
+        patcherId: string;
+        scope: string;
+        path: string;
+        overwrite: boolean;
+      };
+      expect(request).toMatchObject({
+        type: "maxforge.save_patch.request",
+        path: "/tmp/saved.maxpat",
+        overwrite: true,
+      });
+      client.send(JSON.stringify({
+        type: "maxforge.patch.saved",
+        requestId: request.requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        filename: "saved.maxpat",
+        filepath: "/tmp/saved.maxpat",
+        dirty: false,
+      }));
+    });
+
+    await expect(bridge.savePatch({
+      patcherId: "patch-a",
+      scope: "voices",
+      path: "/tmp/saved.maxpat",
+      overwrite: true,
+    })).resolves.toMatchObject({
+      type: "maxforge.patch.saved",
+      filepath: "/tmp/saved.maxpat",
+      dirty: false,
+    });
+    expect(bridge.listPatches()[0]).toMatchObject({
+      filename: "saved.maxpat",
+      filepath: "/tmp/saved.maxpat",
+    });
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        requestId: string;
+        patcherId: string;
+        scope: string;
+        discard: boolean;
+      };
+      client.send(JSON.stringify({
+        type: "maxforge.patch.closing",
+        requestId: request.requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        discarded: request.discard,
+      }));
+    });
+
+    await expect(bridge.closePatch({
+      patcherId: "patch-a",
+      scope: "voices",
+      discard: true,
+    })).resolves.toMatchObject({ discarded: true });
+    expect(bridge.listPatches()).toEqual([]);
+  });
+
+  it("validates Max-host patch paths before sending file requests", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const controller = await connect(status.port);
+    await register(
+      bridge,
+      controller,
+      registration("bridge", "bootstrap", true)
+    );
+
+    await expect(bridge.openPatch({
+      patcherId: "opened-a",
+      scope: "voices",
+      title: "Opened voices",
+      path: "relative.maxpat",
+    })).rejects.toThrow("absolute on the Max host");
+    await expect(bridge.openPatch({
+      patcherId: "opened-a",
+      scope: "voices",
+      title: "Opened voices",
+      path: "/tmp/source.txt",
+    })).rejects.toThrow("end with .maxpat");
+  });
+
   it("removes only the disconnected patch registration", async () => {
     const bridge = createBridge();
     const status = await bridge.start();

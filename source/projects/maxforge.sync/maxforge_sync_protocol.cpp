@@ -117,6 +117,17 @@ auto is_valid_auth_token(const std::string &token) -> bool {
 	return true;
 }
 
+auto has_maxpat_extension(const std::string &path) -> bool {
+	constexpr auto extension = ".maxpat";
+	if(path.size() <= 7) return false;
+	const auto offset = path.size() - 7;
+	for(std::size_t index{}; index < 7; index++) {
+		const auto character = static_cast<unsigned char>(path[offset + index]);
+		if(std::tolower(character) != extension[index]) return false;
+	}
+	return true;
+}
+
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

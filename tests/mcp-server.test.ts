@@ -8,12 +8,17 @@ import dbData from "../data/objects.json" with { type: "json" };
 import { LoadedObjectCatalog } from "../src/core/catalog-config.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import {
+  CloseMaxPatchRequest,
   CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgePatchClosingEvent,
   MaxforgePatchInfo,
+  MaxforgePatchSavedEvent,
   MaxforgeSnapshotEvent,
+  OpenMaxPatchRequest,
   PatchPlanTransport,
+  SaveMaxPatchRequest,
 } from "../src/mcp/bridge.js";
 import { createMaxforgeMcpServer } from "../src/mcp/mcp-server.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
@@ -66,13 +71,16 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_catalog",
         "maxforge_list_patches",
         "maxforge_create_patch",
+        "maxforge_open_patch",
+        "maxforge_save_patch",
+        "maxforge_close_patch",
         "maxforge_inspect_patch",
         "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(9);
+      expect(definitions).toHaveLength(12);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -287,6 +295,65 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      const opened = await client.request(61, "tools/call", {
+        name: "maxforge_open_patch",
+        arguments: {
+          patcherId: "opened_patch",
+          scope: "opened",
+          title: "Opened patch",
+          path: "/tmp/opened.maxpat",
+        },
+      });
+      expect(opened).toMatchObject({
+        result: {
+          structuredContent: {
+            patch: {
+              patcherId: "opened_patch",
+              filepath: "/tmp/opened.maxpat",
+            },
+          },
+        },
+      });
+
+      const saved = await client.request(62, "tools/call", {
+        name: "maxforge_save_patch",
+        arguments: {
+          patcherId: "opened_patch",
+          scope: "opened",
+          path: "/tmp/saved.maxpat",
+        },
+      });
+      expect(saved).toMatchObject({
+        result: {
+          structuredContent: {
+            saved: {
+              type: "maxforge.patch.saved",
+              filepath: "/tmp/saved.maxpat",
+              dirty: false,
+            },
+          },
+        },
+      });
+
+      const closed = await client.request(63, "tools/call", {
+        name: "maxforge_close_patch",
+        arguments: {
+          patcherId: "opened_patch",
+          scope: "opened",
+          discard: true,
+        },
+      });
+      expect(closed).toMatchObject({
+        result: {
+          structuredContent: {
+            closing: {
+              type: "maxforge.patch.closing",
+              discarded: true,
+            },
+          },
+        },
+      });
+
       const patches = await client.request(7, "tools/call", {
         name: "maxforge_list_patches",
         arguments: {},
@@ -434,6 +501,43 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+    };
+  }
+
+  async openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo> {
+    return {
+      ...request,
+      revision: null,
+      controller: false,
+      filename: request.path.split(/[\\/]/).at(-1) ?? "",
+      filepath: request.path,
+    };
+  }
+
+  async savePatch(
+    request: SaveMaxPatchRequest
+  ): Promise<MaxforgePatchSavedEvent> {
+    const filepath = request.path ?? "/tmp/test.maxpat";
+    return {
+      type: "maxforge.patch.saved",
+      requestId: "mcp-save",
+      patcherId: request.patcherId,
+      scope: request.scope,
+      filename: filepath.split(/[\\/]/).at(-1) ?? "",
+      filepath,
+      dirty: false,
+    };
+  }
+
+  async closePatch(
+    request: CloseMaxPatchRequest
+  ): Promise<MaxforgePatchClosingEvent> {
+    return {
+      type: "maxforge.patch.closing",
+      requestId: "mcp-close",
+      patcherId: request.patcherId,
+      scope: request.scope,
+      discarded: request.discard ?? false,
     };
   }
 

@@ -47,6 +47,31 @@ export interface MaxforgePatchCreatedEvent {
   readonly scope: string;
 }
 
+export interface MaxforgePatchOpenedEvent {
+  readonly type: "maxforge.patch.opened";
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+}
+
+export interface MaxforgePatchSavedEvent {
+  readonly type: "maxforge.patch.saved";
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly filename: string;
+  readonly filepath: string;
+  readonly dirty: boolean;
+}
+
+export interface MaxforgePatchClosingEvent {
+  readonly type: "maxforge.patch.closing";
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly discarded: boolean;
+}
+
 export interface MaxforgeSnapshotBox {
   readonly targetPath: readonly string[];
   readonly runtimeId: string;
@@ -96,6 +121,9 @@ export type MaxforgeBridgeEvent =
   | MaxforgeRevisionEvent
   | MaxforgeErrorEvent
   | MaxforgePatchCreatedEvent
+  | MaxforgePatchOpenedEvent
+  | MaxforgePatchSavedEvent
+  | MaxforgePatchClosingEvent
   | MaxforgeSnapshotEvent;
 
 export interface MaxforgeBridgeStatus {
@@ -112,6 +140,23 @@ export interface CreateMaxPatchRequest {
   readonly title: string;
 }
 
+export interface OpenMaxPatchRequest extends CreateMaxPatchRequest {
+  readonly path: string;
+}
+
+export interface SaveMaxPatchRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly path?: string;
+  readonly overwrite?: boolean;
+}
+
+export interface CloseMaxPatchRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly discard?: boolean;
+}
+
 export interface PatchPlanTransport {
   apply(
     patcherId: string,
@@ -122,6 +167,9 @@ export interface PatchPlanTransport {
     scope: string
   ): Promise<MaxforgeSnapshotEvent>;
   createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo>;
+  openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo>;
+  savePatch(request: SaveMaxPatchRequest): Promise<MaxforgePatchSavedEvent>;
+  closePatch(request: CloseMaxPatchRequest): Promise<MaxforgePatchClosingEvent>;
   listPatches(): readonly MaxforgePatchInfo[];
   getLiveRevision(
     patcherId: string,
@@ -177,11 +225,36 @@ interface PendingCreate {
   registration?: MaxforgePatchInfo;
 }
 
+interface PendingOpen extends PendingCreate {
+  readonly path: string;
+}
+
+interface PendingSave {
+  readonly client: WebSocket;
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly resolve: (event: MaxforgePatchSavedEvent) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout: NodeJS.Timeout;
+}
+
+interface PendingClose {
+  readonly client: WebSocket;
+  readonly requestId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly resolve: (event: MaxforgePatchClosingEvent) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout: NodeJS.Timeout;
+}
+
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
 const STRUCTURE_TOKEN_PATTERN = /^[a-f0-9]{16}$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{1,256}$/;
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
+const MAX_PATCH_PATH_LENGTH = 2047;
 
 export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly host: string;
@@ -195,6 +268,9 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly pendingApplies = new Map<string, PendingApply>();
   private readonly pendingInspections = new Map<string, PendingInspection>();
   private readonly pendingCreates = new Map<string, PendingCreate>();
+  private readonly pendingOpens = new Map<string, PendingOpen>();
+  private readonly pendingSaves = new Map<string, PendingSave>();
+  private readonly pendingCloses = new Map<string, PendingClose>();
   private readonly pendingOperations = new Map<string, string>();
   private server: WebSocketServer | undefined;
   private listeningPort: number | undefined;
@@ -371,40 +447,8 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   }
 
   async createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo> {
-    this.assertStarted();
-    if (!IDENTIFIER_PATTERN.test(request.patcherId)) {
-      throw new Error(`Invalid patcherId: "${request.patcherId}"`);
-    }
-    if (!IDENTIFIER_PATTERN.test(request.scope)) {
-      throw new Error(`Invalid scope: "${request.scope}"`);
-    }
-    if (request.title.length === 0 || 256 < request.title.length) {
-      throw new Error("Patch title must contain between 1 and 256 characters");
-    }
-    if (this.registrations.has(request.patcherId)) {
-      throw new Error(`Max patch "${request.patcherId}" is already registered`);
-    }
-    if (
-      [...this.pendingCreates.values()].some(
-        (pending) => pending.patcherId === request.patcherId
-      )
-    ) {
-      throw new Error(
-        `Creation of Max patch "${request.patcherId}" is already pending`
-      );
-    }
-
-    const controllers = [...this.registrations.values()].filter(
-      ({ client, info }) =>
-        info.controller && client.readyState === WebSocket.OPEN
-    );
-    if (controllers.length !== 1) {
-      throw new Error(
-        "Exactly one patch-creation controller is required, " +
-        `registered: ${controllers.length}`
-      );
-    }
-    const controller = controllers[0];
+    this.validateNewPatchRequest(request, "Creation");
+    const controller = this.getSingleController();
     const requestId = randomUUID();
 
     return new Promise<MaxforgePatchInfo>((resolve, reject) => {
@@ -442,6 +486,139 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         port: this.listeningPort,
       }), (error) => {
         if (error) this.rejectCreate(requestId, error);
+      });
+    });
+  }
+
+  async openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo> {
+    this.validateNewPatchRequest(request, "Opening");
+    validatePatchPath(request.path);
+    const controller = this.getSingleController();
+    const requestId = randomUUID();
+
+    return new Promise<MaxforgePatchInfo>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const pending = this.pendingOpens.get(requestId);
+        const missing = pending?.created
+          ? "registration"
+          : "open acknowledgement and registration";
+        this.rejectOpen(
+          requestId,
+          new Error(
+            `Timed out waiting for Max patch "${request.patcherId}" to be ` +
+            `opened and registered; missing ${missing}`
+          )
+        );
+      }, this.applyTimeoutMs);
+      this.pendingOpens.set(requestId, {
+        client: controller.client,
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        path: request.path,
+        resolve,
+        reject,
+        timeout,
+        created: false,
+      });
+
+      controller.client.send(JSON.stringify({
+        type: "maxforge.open_patch.request",
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        title: request.title,
+        path: request.path,
+        host: this.host,
+        port: this.listeningPort,
+      }), (error) => {
+        if (error) this.rejectOpen(requestId, error);
+      });
+    });
+  }
+
+  async savePatch(
+    request: SaveMaxPatchRequest
+  ): Promise<MaxforgePatchSavedEvent> {
+    const registration = this.getRegisteredClient(
+      request.patcherId,
+      request.scope
+    );
+    this.assertPatchIsIdle(request.patcherId);
+    if (request.path !== undefined) validatePatchPath(request.path);
+    const requestId = randomUUID();
+
+    return new Promise<MaxforgePatchSavedEvent>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.rejectSave(
+          requestId,
+          new Error(
+            `Timed out waiting for Max patch "${request.patcherId}" to save`
+          )
+        );
+      }, this.applyTimeoutMs);
+      this.pendingSaves.set(requestId, {
+        client: registration.client,
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        resolve,
+        reject,
+        timeout,
+      });
+      this.pendingOperations.set(request.patcherId, requestId);
+
+      registration.client.send(JSON.stringify({
+        type: "maxforge.save_patch.request",
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        ...(request.path === undefined ? {} : { path: request.path }),
+        overwrite: request.overwrite ?? false,
+      }), (error) => {
+        if (error) this.rejectSave(requestId, error);
+      });
+    });
+  }
+
+  async closePatch(
+    request: CloseMaxPatchRequest
+  ): Promise<MaxforgePatchClosingEvent> {
+    const registration = this.getRegisteredClient(
+      request.patcherId,
+      request.scope
+    );
+    this.assertPatchIsIdle(request.patcherId);
+    const requestId = randomUUID();
+
+    return new Promise<MaxforgePatchClosingEvent>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.rejectClose(
+          requestId,
+          new Error(
+            `Timed out waiting for Max patch "${request.patcherId}" to close`
+          )
+        );
+      }, this.applyTimeoutMs);
+      this.pendingCloses.set(requestId, {
+        client: registration.client,
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        resolve,
+        reject,
+        timeout,
+      });
+      this.pendingOperations.set(request.patcherId, requestId);
+
+      registration.client.send(JSON.stringify({
+        type: "maxforge.close_patch.request",
+        requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        discard: request.discard ?? false,
+      }), (error) => {
+        if (error) this.rejectClose(requestId, error);
       });
     });
   }
@@ -534,6 +711,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       case "maxforge.patch.created":
         this.handlePatchCreated(client, event);
         return;
+      case "maxforge.patch.opened":
+        this.handlePatchOpened(client, event);
+        return;
+      case "maxforge.patch.saved":
+        this.handlePatchSaved(client, event);
+        return;
+      case "maxforge.patch.closing":
+        this.handlePatchClosing(client, event);
+        return;
       case "maxforge.error":
         this.handleError(client, event);
         return;
@@ -569,6 +755,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       ) {
         pending.registration = info;
         this.resolveCreateIfReady(pending);
+      }
+    }
+    for (const pending of this.pendingOpens.values()) {
+      if (
+        pending.patcherId === event.patcherId &&
+        pending.scope === event.scope
+      ) {
+        pending.registration = info;
+        this.resolveOpenIfReady(pending);
       }
     }
   }
@@ -652,6 +847,85 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     this.resolveCreateIfReady(pending);
   }
 
+  private handlePatchOpened(
+    client: WebSocket,
+    event: MaxforgePatchOpenedEvent
+  ): void {
+    const pending = this.pendingOpens.get(event.requestId);
+    if (!pending) return;
+    if (
+      pending.client !== client ||
+      pending.patcherId !== event.patcherId ||
+      pending.scope !== event.scope
+    ) {
+      this.rejectOpen(
+        event.requestId,
+        new Error("Max returned a mismatched patch open acknowledgement")
+      );
+      return;
+    }
+    pending.created = true;
+    this.resolveOpenIfReady(pending);
+  }
+
+  private handlePatchSaved(
+    client: WebSocket,
+    event: MaxforgePatchSavedEvent
+  ): void {
+    const pending = this.pendingSaves.get(event.requestId);
+    if (!pending) return;
+    const mismatch = validatePendingResponse(pending, client, event);
+    if (mismatch) {
+      this.rejectSave(event.requestId, new Error(mismatch));
+      return;
+    }
+    if (event.dirty || event.filepath.length === 0) {
+      this.rejectSave(
+        event.requestId,
+        new Error(
+          `Max patch "${event.patcherId}" acknowledged save without a clean file path`
+        )
+      );
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pendingSaves.delete(event.requestId);
+    this.pendingOperations.delete(event.patcherId);
+    const registration = this.registrations.get(event.patcherId);
+    if (registration?.client === client) {
+      registration.info = {
+        ...registration.info,
+        filename: event.filename,
+        filepath: event.filepath,
+      };
+    }
+    pending.resolve(event);
+  }
+
+  private handlePatchClosing(
+    client: WebSocket,
+    event: MaxforgePatchClosingEvent
+  ): void {
+    const pending = this.pendingCloses.get(event.requestId);
+    if (!pending) return;
+    const mismatch = validatePendingResponse(pending, client, event);
+    if (mismatch) {
+      this.rejectClose(event.requestId, new Error(mismatch));
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pendingCloses.delete(event.requestId);
+    this.pendingOperations.delete(event.patcherId);
+    const registration = this.registrations.get(event.patcherId);
+    if (registration?.client === client) {
+      this.registrations.delete(event.patcherId);
+      this.clientPatcherIds.delete(client);
+    }
+    pending.resolve(event);
+  }
+
   private handleError(client: WebSocket, event: MaxforgeErrorEvent): void {
     if (!event.requestId) return;
     const pendingApply = this.pendingApplies.get(event.requestId);
@@ -685,6 +959,37 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         new Error(
           `Max controller rejected patch creation for ` +
           `"${pendingCreate.patcherId}": ${event.message}`
+        )
+      );
+      return;
+    }
+    const pendingOpen = this.pendingOpens.get(event.requestId);
+    if (pendingOpen?.client === client) {
+      this.rejectOpen(
+        event.requestId,
+        new Error(
+          `Max controller rejected patch open for ` +
+          `"${pendingOpen.patcherId}": ${event.message}`
+        )
+      );
+      return;
+    }
+    const pendingSave = this.pendingSaves.get(event.requestId);
+    if (pendingSave?.client === client) {
+      this.rejectSave(
+        event.requestId,
+        new Error(
+          `Max patch "${pendingSave.patcherId}" rejected save: ${event.message}`
+        )
+      );
+      return;
+    }
+    const pendingClose = this.pendingCloses.get(event.requestId);
+    if (pendingClose?.client === client) {
+      this.rejectClose(
+        event.requestId,
+        new Error(
+          `Max patch "${pendingClose.patcherId}" rejected close: ${event.message}`
         )
       );
     }
@@ -743,10 +1048,59 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
   }
 
+  private validateNewPatchRequest(
+    request: CreateMaxPatchRequest,
+    operation: string
+  ): void {
+    this.assertStarted();
+    if (!IDENTIFIER_PATTERN.test(request.patcherId)) {
+      throw new Error(`Invalid patcherId: "${request.patcherId}"`);
+    }
+    if (!IDENTIFIER_PATTERN.test(request.scope)) {
+      throw new Error(`Invalid scope: "${request.scope}"`);
+    }
+    if (request.title.length === 0 || 256 < request.title.length) {
+      throw new Error("Patch title must contain between 1 and 256 characters");
+    }
+    if (this.registrations.has(request.patcherId)) {
+      throw new Error(`Max patch "${request.patcherId}" is already registered`);
+    }
+    if (
+      [...this.pendingCreates.values(), ...this.pendingOpens.values()].some(
+        (pending) => pending.patcherId === request.patcherId
+      )
+    ) {
+      throw new Error(
+        `${operation} of Max patch "${request.patcherId}" is already pending`
+      );
+    }
+  }
+
+  private getSingleController(): RegisteredClient {
+    const controllers = [...this.registrations.values()].filter(
+      ({ client, info }) =>
+        info.controller && client.readyState === WebSocket.OPEN
+    );
+    if (controllers.length !== 1) {
+      throw new Error(
+        "Exactly one patch-creation controller is required, " +
+        `registered: ${controllers.length}`
+      );
+    }
+    return controllers[0];
+  }
+
   private resolveCreateIfReady(pending: PendingCreate): void {
     if (!pending.created || !pending.registration) return;
     clearTimeout(pending.timeout);
     this.pendingCreates.delete(pending.requestId);
+    pending.resolve(pending.registration);
+  }
+
+  private resolveOpenIfReady(pending: PendingOpen): void {
+    if (!pending.created || !pending.registration) return;
+    clearTimeout(pending.timeout);
+    this.pendingOpens.delete(pending.requestId);
     pending.resolve(pending.registration);
   }
 
@@ -776,6 +1130,32 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     pending.reject(error);
   }
 
+  private rejectOpen(requestId: string, error: Error): void {
+    const pending = this.pendingOpens.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingOpens.delete(requestId);
+    pending.reject(error);
+  }
+
+  private rejectSave(requestId: string, error: Error): void {
+    const pending = this.pendingSaves.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingSaves.delete(requestId);
+    this.pendingOperations.delete(pending.patcherId);
+    pending.reject(error);
+  }
+
+  private rejectClose(requestId: string, error: Error): void {
+    const pending = this.pendingCloses.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingCloses.delete(requestId);
+    this.pendingOperations.delete(pending.patcherId);
+    pending.reject(error);
+  }
+
   private rejectPendingForClient(client: WebSocket, error: Error): void {
     for (const pending of [...this.pendingApplies.values()]) {
       if (pending.client === client) this.rejectApply(pending.requestId, error);
@@ -788,6 +1168,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     for (const pending of [...this.pendingCreates.values()]) {
       if (pending.client === client) this.rejectCreate(pending.requestId, error);
     }
+    for (const pending of [...this.pendingOpens.values()]) {
+      if (pending.client === client) this.rejectOpen(pending.requestId, error);
+    }
+    for (const pending of [...this.pendingSaves.values()]) {
+      if (pending.client === client) this.rejectSave(pending.requestId, error);
+    }
+    for (const pending of [...this.pendingCloses.values()]) {
+      if (pending.client === client) this.rejectClose(pending.requestId, error);
+    }
   }
 
   private rejectAllPending(error: Error): void {
@@ -799,6 +1188,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
     for (const requestId of [...this.pendingCreates.keys()]) {
       this.rejectCreate(requestId, error);
+    }
+    for (const requestId of [...this.pendingOpens.keys()]) {
+      this.rejectOpen(requestId, error);
+    }
+    for (const requestId of [...this.pendingSaves.keys()]) {
+      this.rejectSave(requestId, error);
+    }
+    for (const requestId of [...this.pendingCloses.keys()]) {
+      this.rejectClose(requestId, error);
     }
   }
 }
@@ -899,6 +1297,50 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   }
 
   if (
+    value.type === "maxforge.patch.opened" &&
+    isRequestId(value.requestId)
+  ) {
+    return {
+      type: value.type,
+      requestId: value.requestId,
+      patcherId: value.patcherId,
+      scope: value.scope,
+    };
+  }
+
+  if (
+    value.type === "maxforge.patch.saved" &&
+    isRequestId(value.requestId) &&
+    typeof value.filename === "string" &&
+    typeof value.filepath === "string" &&
+    typeof value.dirty === "boolean"
+  ) {
+    return {
+      type: value.type,
+      requestId: value.requestId,
+      patcherId: value.patcherId,
+      scope: value.scope,
+      filename: value.filename,
+      filepath: value.filepath,
+      dirty: value.dirty,
+    };
+  }
+
+  if (
+    value.type === "maxforge.patch.closing" &&
+    isRequestId(value.requestId) &&
+    typeof value.discarded === "boolean"
+  ) {
+    return {
+      type: value.type,
+      requestId: value.requestId,
+      patcherId: value.patcherId,
+      scope: value.scope,
+      discarded: value.discarded,
+    };
+  }
+
+  if (
     value.type === "maxforge.snapshot" &&
     isRequestId(value.requestId) &&
     isRevisionOrNull(value.revision) &&
@@ -922,9 +1364,13 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
 }
 
 function validatePendingResponse(
-  pending: PendingApply | PendingInspection,
+  pending: PendingApply | PendingInspection | PendingSave | PendingClose,
   client: WebSocket,
-  event: MaxforgeAppliedEvent | MaxforgeSnapshotEvent
+  event:
+    | MaxforgeAppliedEvent
+    | MaxforgeSnapshotEvent
+    | MaxforgePatchSavedEvent
+    | MaxforgePatchClosingEvent
 ): string | undefined {
   if (pending.client !== client) {
     return "Received a response from an unexpected Max client";
@@ -939,6 +1385,30 @@ function validatePendingResponse(
     );
   }
   return undefined;
+}
+
+function validatePatchPath(path: string): void {
+  if (
+    path.length === 0 ||
+    MAX_PATCH_PATH_LENGTH < path.length ||
+    path.includes("\0")
+  ) {
+    throw new Error(
+      `Patch path must contain between 1 and ${MAX_PATCH_PATH_LENGTH} characters`
+    );
+  }
+  if (!path.toLowerCase().endsWith(".maxpat")) {
+    throw new Error(`Patch path must end with .maxpat: "${path}"`);
+  }
+  if (!isAbsoluteHostPath(path)) {
+    throw new Error(`Patch path must be absolute on the Max host: "${path}"`);
+  }
+}
+
+function isAbsoluteHostPath(path: string): boolean {
+  return path.startsWith("/") ||
+    path.startsWith("\\\\") ||
+    /^[A-Za-z]:[\\/]/.test(path);
 }
 
 function patchInfo(event: MaxforgePatchRegistration): MaxforgePatchInfo {
