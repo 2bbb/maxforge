@@ -154,8 +154,15 @@ export class MaxforgePatchService {
       const current = this.resolveCurrentGraph(request);
       this.assertLiveRevision(request.patcherId, request.scope, current.graph);
       this.assertNoPreservedManualEdits(request, current.graph);
-      await this.assertNoManagedDrift(request.patcherId, request.scope);
-      plan = diffPatchGraphs(current.graph, desired.graph);
+      const baseStructureToken = await this.assertNoManagedDrift(
+        request.patcherId,
+        request.scope,
+        current.graph
+      );
+      plan = {
+        ...diffPatchGraphs(current.graph, desired.graph),
+        baseStructureToken,
+      };
       nextGraph = desired.graph;
       intentGraph = desired.graph;
       warnings = [...current.warnings, ...desired.warnings];
@@ -231,13 +238,19 @@ export class MaxforgePatchService {
           conflict.kind === "managed_identity_changed" ||
           conflict.kind === "duplicate_managed_identity"
         ).length;
+    const plan = reconciliation.plan
+      ? {
+          ...reconciliation.plan,
+          baseStructureToken: snapshot.structureToken,
+        }
+      : undefined;
 
     return {
       canApply:
         reconciliation.conflicts.length === 0 &&
-        reconciliation.plan !== undefined &&
+        plan !== undefined &&
         reconciliation.graph !== undefined,
-      plan: reconciliation.plan,
+      plan,
       mergedGraph: reconciliation.graph,
       intentGraph: desired.graph,
       conflicts: reconciliation.conflicts,
@@ -280,14 +293,41 @@ export class MaxforgePatchService {
 
   private async assertNoManagedDrift(
     patcherId: string,
-    scope: string
-  ): Promise<void> {
-    if (!this.baselineSnapshots.has(targetKey(patcherId, scope))) return;
-    const inspection = await this.inspectPatch(patcherId, scope);
-    if (inspection.managedChangeCount === 0) return;
+    scope: string,
+    current: PatchGraph
+  ): Promise<string> {
+    const key = targetKey(patcherId, scope);
+    const baseline = this.baselineSnapshots.get(key);
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    this.assertInspectionRevision(patcherId, scope, current, snapshot);
+
+    let managedChangeCount = 0;
+    if (baseline) {
+      managedChangeCount = diffPatcherSnapshots(
+        baseline,
+        snapshot.patcher
+      ).filter((change) => change.managed).length;
+    } else if (
+      snapshot.revision !== null ||
+      current.patcher.boxes.length > 0 ||
+      current.patcher.connections.length > 0
+    ) {
+      const observed = reconstructManagedGraph(
+        current,
+        snapshot.patcher,
+        undefined,
+        (box, baseBox) => this.resolveLiveBox(box, baseBox)
+      );
+      managedChangeCount =
+        diffPatchGraphs(current, observed.graph).operations.length +
+        observed.conflicts.length +
+        observed.externalConnections.length;
+    }
+
+    if (managedChangeCount === 0) return snapshot.structureToken;
     throw new Error(
       `Max patch "${patcherId}" scope "${scope}" has ` +
-      `${inspection.managedChangeCount} managed ` +
+      `${managedChangeCount} managed ` +
       "manual change(s) since the last acknowledged apply. Inspect the live " +
       "patch and reconcile it before applying new DSL."
     );

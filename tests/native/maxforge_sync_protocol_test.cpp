@@ -121,6 +121,21 @@ void test_revisions_paths_and_subpatchers() {
 	require(!sync_protocol::is_revision(revision('A')), "uppercase revision accepted");
 	require(!sync_protocol::is_revision(std::string(63, 'a')), "short revision accepted");
 	require(!sync_protocol::is_revision(std::string(64, 'g')), "non-hex revision accepted");
+	require(sync_protocol::is_structure_token(std::string(16, 'a')), "structure token rejected");
+	require(!sync_protocol::is_structure_token(std::string(15, 'a')), "short structure token accepted");
+	require(!sync_protocol::is_structure_token(std::string(16, 'G')), "invalid structure token accepted");
+	const auto empty_token = sync_protocol::structure_token("");
+	require(empty_token == "cbf29ce484222325", "empty FNV-1a token mismatch");
+	require(sync_protocol::is_structure_token(empty_token), "generated token is invalid");
+	require(
+		sync_protocol::structure_token("{\"boxes\":[],\"connections\":[]}") ==
+			"84ba46f66327d22f",
+		"canonical structure token mismatch"
+	);
+	require(
+		sync_protocol::structure_token("a") != sync_protocol::structure_token("b"),
+		"different structures produced the same fixture token"
+	);
 
 	const std::vector<std::string> path{"maxforge_default_obj_group", "inner"};
 	require(

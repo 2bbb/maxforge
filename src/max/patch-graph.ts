@@ -101,6 +101,7 @@ export interface PatchPlan {
   readonly scope: string;
   readonly baseRevision: string;
   readonly targetRevision: string;
+  readonly baseStructureToken?: string;
   readonly operations: readonly PatchOperation[];
 }
 

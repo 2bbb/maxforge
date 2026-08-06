@@ -6,7 +6,6 @@
 #include <array>
 #include <cstdint>
 #include <cmath>
-#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -56,6 +55,8 @@ struct patch_plan {
 	std::string scope;
 	std::string base_revision;
 	std::string target_revision;
+	bool has_base_structure_token{};
+	std::string base_structure_token;
 	std::vector<patch_operation> operations;
 };
 
@@ -552,12 +553,23 @@ auto parse_plan(c74::max::t_dictionary *dictionary) -> patch_plan {
 	result.scope = dictionary_string(dictionary, "scope");
 	result.base_revision = dictionary_string(dictionary, "baseRevision");
 	result.target_revision = dictionary_string(dictionary, "targetRevision");
+	result.has_base_structure_token = dictionary_optional_string(
+		dictionary,
+		"baseStructureToken",
+		result.base_structure_token
+	);
 	if(!sync_protocol::is_valid_scope(result.scope)) throw std::runtime_error("invalid plan scope");
 	if(!sync_protocol::is_revision(result.base_revision)) {
 		throw std::runtime_error("invalid base revision");
 	}
 	if(!sync_protocol::is_revision(result.target_revision)) {
 		throw std::runtime_error("invalid target revision");
+	}
+	if(
+		result.has_base_structure_token &&
+		!sync_protocol::is_structure_token(result.base_structure_token)
+	) {
+		throw std::runtime_error("invalid base structure token");
 	}
 
 	long operation_count{};
@@ -848,16 +860,8 @@ auto snapshot_endpoint_json(const snapshot_endpoint &endpoint) -> std::string {
 		"}";
 }
 
-auto patch_snapshot_json(const patch_snapshot &snapshot) -> std::string {
-	std::string result{
-		"{\"title\":" + json_string(snapshot.title) +
-		",\"filename\":" + json_string(snapshot.filename) +
-		",\"filepath\":" + json_string(snapshot.filepath) +
-		",\"dirty\":" + (snapshot.dirty ? "true" : "false") +
-		",\"locked\":" + (snapshot.locked ? "true" : "false") +
-		",\"presentation\":" + (snapshot.presentation ? "true" : "false") +
-		",\"boxes\":["
-	};
+auto patch_structure_json(const patch_snapshot &snapshot) -> std::string {
+	std::string result{"{\"boxes\":["};
 	for(std::size_t index{}; index < snapshot.boxes.size(); index++) {
 		if(0 < index) result += ",";
 		const auto &box = snapshot.boxes[index];
@@ -890,6 +894,22 @@ auto patch_snapshot_json(const patch_snapshot &snapshot) -> std::string {
 	}
 	result += "]}";
 	return result;
+}
+
+auto patch_structure_token(const patch_snapshot &snapshot) -> std::string {
+	return sync_protocol::structure_token(patch_structure_json(snapshot));
+}
+
+auto patch_snapshot_json(const patch_snapshot &snapshot) -> std::string {
+	const auto structure = patch_structure_json(snapshot);
+	return
+		"{\"title\":" + json_string(snapshot.title) +
+		",\"filename\":" + json_string(snapshot.filename) +
+		",\"filepath\":" + json_string(snapshot.filepath) +
+		",\"dirty\":" + (snapshot.dirty ? "true" : "false") +
+		",\"locked\":" + (snapshot.locked ? "true" : "false") +
+		",\"presentation\":" + (snapshot.presentation ? "true" : "false") +
+		"," + structure.substr(1);
 }
 
 auto find_named_box(
@@ -1671,6 +1691,17 @@ private:
 			const auto current_scope = configured_scope();
 			const c74::min::symbol revision_symbol = revision_state;
 			const std::string current_revision{revision_symbol.c_str()};
+			if(plan.has_base_structure_token) {
+				const auto snapshot = make_patch_snapshot(
+					root_patcher,
+					current_scope
+				);
+				if(patch_structure_token(snapshot) != plan.base_structure_token) {
+					throw std::runtime_error(
+						"live patch structure changed since inspection"
+					);
+				}
+			}
 			validate_plan_against_patch(
 				plan,
 				root_patcher,
@@ -1743,6 +1774,8 @@ private:
 				json_string(current_scope) +
 				",\"revision\":" +
 				(revision.empty() ? "null" : json_string(revision)) +
+				",\"structureToken\":" +
+				json_string(patch_structure_token(snapshot)) +
 				",\"patcher\":" +
 				patch_snapshot_json(snapshot) +
 				"}"

@@ -21,6 +21,10 @@ const revisionSchema = z
   .string()
   .regex(/^[a-f0-9]{64}$/, "revision must be a 64-character lowercase SHA-256 hash");
 
+const structureTokenSchema = z
+  .string()
+  .regex(/^[a-f0-9]{16}$/, "structure token must be 16 lowercase hex characters");
+
 const patchInfoSchema = z.object({
   patcherId: patcherIdSchema.describe("Stable transport ID; use this instead of a window title"),
   scope: scopeSchema.describe("Managed namespace advertised by this patch"),
@@ -42,6 +46,7 @@ const patchPlanSchema = z.object({
   scope: scopeSchema,
   baseRevision: revisionSchema,
   targetRevision: revisionSchema,
+  baseStructureToken: structureTokenSchema.optional(),
   operations: z.array(
     z.object({
       op: z.enum(["disconnect", "delete", "create", "set", "connect"]),
@@ -78,6 +83,7 @@ const snapshotEventSchema = z.object({
   patcherId: patcherIdSchema,
   scope: scopeSchema,
   revision: revisionSchema.nullable(),
+  structureToken: structureTokenSchema,
   patcher: z.object({
     title: z.string(),
     filename: z.string(),
@@ -159,6 +165,7 @@ const HELP_CONTENT = {
     rules: [
       "DSL is complete desired state, not an imperative edit; omitted managed objects are removed.",
       "Ordinary compile/apply is rejected while the acknowledged graph still differs from the agent's last desired DSL due to preserved human edits.",
+      "Apply binds the inspected live structure token; Max rejects the plan if the patch changes before native mutation.",
       "Never mutate an unlisted patcherId or a scope different from the registration.",
       "Never retry a timeout or baseline warning blindly; inspect live state first.",
     ],
@@ -218,6 +225,7 @@ const HELP_CONTENT = {
       "Only exact maxforge_<scope>_obj_... scripting names belong to the managed scope.",
       "Titles and filenames are display metadata and are not stable identities.",
       "Unmanaged standalone edits do not block apply, but cords touching managed boxes do.",
+      "Apply-side inspection is bound to native mutation by a structure token; a later human edit rejects the plan instead of being overwritten.",
       "The loopback WebSocket transport is unauthenticated; do not expose it on a public interface.",
     ],
     relatedTools: ["maxforge_list_patches", "maxforge_compile_plan", "maxforge_inspect_patch"],
@@ -418,7 +426,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Reconcile live Max edits with desired DSL",
       description:
-        "Preview a three-way merge of the last acknowledged graph, the current live patch, and complete desired DSL. Returns structured conflicts and never mutates Max.",
+        "Preview a three-way merge of the agent's previous desired graph, the current live patch, and complete next desired DSL. Returns structured conflicts and never mutates Max.",
       inputSchema: dslRequestSchema,
       outputSchema: z.object({
         patcherId: patcherIdSchema,

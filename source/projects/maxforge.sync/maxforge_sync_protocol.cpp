@@ -1,6 +1,9 @@
 #include "maxforge_sync_protocol.hpp"
 
 #include <cctype>
+#include <cstdint>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 
 namespace maxforge::sync_protocol {
@@ -113,6 +116,33 @@ auto is_revision(const std::string &revision) -> bool {
 		}
 	}
 	return true;
+}
+
+auto is_structure_token(const std::string &token) -> bool {
+	if(token.size() != 16) return false;
+	for(const auto character : token) {
+		if(
+			!('0' <= character && character <= '9') &&
+			!('a' <= character && character <= 'f')
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+auto structure_token(const std::string &canonical_structure) -> std::string {
+	constexpr std::uint64_t offset_basis{14695981039346656037ULL};
+	constexpr std::uint64_t prime{1099511628211ULL};
+	std::uint64_t hash{offset_basis};
+	for(const auto character : canonical_structure) {
+		hash ^= static_cast<unsigned char>(character);
+		hash *= prime;
+	}
+
+	std::ostringstream stream;
+	stream << std::hex << std::setfill('0') << std::setw(16) << hash;
+	return stream.str();
 }
 
 auto path_key(const std::vector<std::string> &path) -> std::string {

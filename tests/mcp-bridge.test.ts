@@ -26,10 +26,13 @@ describe("MaxforgeWebSocketBridge", () => {
     const second = await connect(status.port);
     await register(bridge, first, registration("patch-a", "voices", true));
     await register(bridge, second, registration("patch-b", "meters", false));
-    const plan = diffPatchGraphs(
-      createEmptyPatchGraph("meters"),
-      createEmptyPatchGraph("meters")
-    );
+    const plan = {
+      ...diffPatchGraphs(
+        createEmptyPatchGraph("meters"),
+        createEmptyPatchGraph("meters")
+      ),
+      baseStructureToken: "f".repeat(16),
+    };
 
     const unexpected = new Promise<never>((_, reject) => {
       first.once("message", () => reject(new Error("apply reached patch-a")));
@@ -87,6 +90,7 @@ describe("MaxforgeWebSocketBridge", () => {
         patcherId: "patch-a",
         scope: "voices",
         revision: null,
+        structureToken: "0".repeat(16),
         patcher: snapshotEvent("unused").patcher,
       }));
     });
@@ -248,6 +252,12 @@ describe("parseBridgeEvent", () => {
       },
     };
     expect(parseBridgeEvent(JSON.stringify(value))).toBeUndefined();
+    expect(parseBridgeEvent(JSON.stringify({
+      ...malformed,
+      structureToken: "not-a-token",
+    }))).toBeUndefined();
+    const { structureToken: _structureToken, ...withoutToken } = malformed;
+    expect(parseBridgeEvent(JSON.stringify(withoutToken))).toBeUndefined();
   });
 });
 
@@ -314,6 +324,7 @@ function snapshotEvent(requestId: string) {
     patcherId: "patch-a",
     scope: "voices",
     revision: null,
+    structureToken: "0".repeat(16),
     patcher: {
       title: "inspection test",
       filename: "inspection.maxpat",

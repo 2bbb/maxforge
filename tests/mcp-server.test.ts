@@ -321,6 +321,7 @@ class FakeTransport implements PatchPlanTransport {
       patcherId,
       scope,
       revision: null,
+      structureToken: "0".repeat(16),
       patcher: {
         title: "MCP test",
         filename: "test.maxpat",

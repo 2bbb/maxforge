@@ -26,17 +26,18 @@ describe("MaxforgePatchService", () => {
     const first = await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
-      desiredDsl: "osc_0 = cycle~ 440",
+      desiredDsl: "osc = cycle~ 440",
     });
     const second = await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
-      desiredDsl: "osc_0 = cycle~ 440\nosc_1 = cycle~ 660",
+      desiredDsl: "osc = cycle~ 440\nosc_1 = cycle~ 660",
     });
 
     expect(first.plan.operations.map((operation) => operation.op)).toEqual([
       "create",
     ]);
+    expect(first.plan.baseStructureToken).toBe("0".repeat(16));
     expect(second.plan.operations.map((operation) => operation.op)).toEqual([
       "create",
     ]);
@@ -212,6 +213,7 @@ describe("MaxforgePatchService", () => {
       conflicts: [],
       plan: {
         baseRevision: transport.plans[0].targetRevision,
+        baseStructureToken: "0".repeat(16),
         operations: [{ op: "create", box: { id: "obj-gain" } }],
       },
       mergedGraph: {
@@ -360,7 +362,7 @@ describe("MaxforgePatchService", () => {
   it("does not misreport an acknowledged apply as failed when baseline capture fails", async () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(database, transport);
-    transport.inspectionFailure = new Error("snapshot timeout");
+    transport.postApplyInspectionFailure = new Error("snapshot timeout");
 
     const result = await service.applyDsl({
       patcherId: "patch-a",
@@ -399,6 +401,12 @@ describe("MaxforgePatchService", () => {
       "post-apply snapshot does not match"
     );
     expect(service.getBaselineScopes()).toEqual([]);
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)\ngain = *~ 0.5",
+    })).rejects.toThrow("managed manual change");
+    expect(transport.plans).toHaveLength(1);
   });
 });
 
@@ -407,6 +415,7 @@ class FakeTransport implements PatchPlanTransport {
   readonly liveRevisions = new Map<string, string | null>();
   failure: Error | undefined;
   inspectionFailure: Error | undefined;
+  postApplyInspectionFailure: Error | undefined;
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
 
@@ -436,12 +445,19 @@ class FakeTransport implements PatchPlanTransport {
     scope: string
   ): Promise<MaxforgeSnapshotEvent> {
     if (this.inspectionFailure) throw this.inspectionFailure;
+    if (
+      this.postApplyInspectionFailure &&
+      this.liveRevisions.has(`${patcherId}:${scope}`)
+    ) {
+      throw this.postApplyInspectionFailure;
+    }
     return {
       type: "maxforge.snapshot",
       requestId: "fake-request",
       patcherId,
       scope,
       revision: this.liveRevisions.get(`${patcherId}:${scope}`) ?? null,
+      structureToken: "0".repeat(16),
       patcher: this.snapshot,
     };
   }

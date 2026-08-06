@@ -86,6 +86,7 @@ export interface MaxforgeSnapshotEvent {
   readonly patcherId: string;
   readonly scope: string;
   readonly revision: string | null;
+  readonly structureToken: string;
   readonly patcher: MaxforgePatcherSnapshot;
 }
 
@@ -176,6 +177,7 @@ interface PendingCreate {
 }
 
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
+const STRUCTURE_TOKEN_PATTERN = /^[a-f0-9]{16}$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 
@@ -872,7 +874,9 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   if (
     value.type === "maxforge.snapshot" &&
     isRequestId(value.requestId) &&
-    isRevisionOrNull(value.revision)
+    isRevisionOrNull(value.revision) &&
+    typeof value.structureToken === "string" &&
+    STRUCTURE_TOKEN_PATTERN.test(value.structureToken)
   ) {
     const patcher = parsePatcherSnapshot(value.patcher);
     if (!patcher) return undefined;
@@ -882,6 +886,7 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
       patcherId: value.patcherId,
       scope: value.scope,
       revision: value.revision,
+      structureToken: value.structureToken,
       patcher,
     };
   }
