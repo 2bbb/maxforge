@@ -69,6 +69,7 @@ Environment variables:
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
 | `MAXFORGE_CONFIG` | unset | Explicit project object catalog; no MCP working-directory discovery |
+| `MAXFORGE_STATE_FILE` | `~/.maxforge/mcp-state-<port>-v1.json` | Atomic graph/baseline state file; set to `off` only to disable restart recovery |
 
 When custom externals or reusable abstractions appear in desired DSL, set
 `MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
@@ -438,35 +439,30 @@ directly to that patch rather than through the controller.
 `bbb.agent` is a recursive build-time submodule only. Max users do not install
 `bbb.agent.hub` or run the `bbb.agent` helper for this flow.
 
-## Restart and stale-state rule
+## Persistent state and restart recovery
 
-A revision hash proves identity but cannot reconstruct a graph.
+Maxforge atomically persists acknowledged managed graphs, agent-intent graphs,
+inspection baselines, and in-flight apply records. The default file is scoped by
+WebSocket port under `~/.maxforge`; set an absolute `MAXFORGE_STATE_FILE` when an
+MCP client needs an explicit location.
 
-If `maxforge-mcp` restarts while a registered patch retains an initialized
-scope, the server has no graph from which to produce a safe diff. The next
-`maxforge_apply_dsl` for that `patcherId:scope` target must include the previous
-complete DSL as `currentDsl`. The server verifies its revision against Max
-before sending a plan and then resumes remembered-state operation after
-acknowledgement.
+Before sending a plan, Maxforge writes an in-flight record containing both base
+and target revisions. If acknowledgement is lost, the next process waits for the
+same patch to reconnect and accepts only those two outcomes: base means no
+mutation was committed; target means the acknowledged graph is promoted. Any
+third revision is reported as ambiguous rather than guessed.
 
-The seeded graph can also serve as the base for reconciliation. A post-restart
-live text, position, deletion, or connection edit can therefore be merged, but
-only when `currentDsl` is the exact previously acknowledged DSL. Without a
-baseline, ownership-name changes are less reliably distinguishable from a
-deletion plus an unmanaged box.
+`maxforge_status` reports the persistence path and unresolved scopes. A normal
+restart retains comparison history and does not require `currentDsl`.
 
-If the previous session performed a merged apply, the old agent-intent DSL is
-not sufficient: it hashes to a different revision because it omits the
-preserved human edits. Before restart, update the complete DSL from the verified
-post-apply snapshot. Otherwise safe recovery may require reconstructing that
-exact merged DSL before mutation.
+If persistence was explicitly disabled, the state file was removed, or the MCP
+client switched ports/files, the old fallback still applies: provide the exact
+previous complete DSL as `currentDsl` once. A malformed state file fails startup
+instead of silently discarding concurrency state.
 
-The same limitation applies to inspection history. A restarted process can
-read the complete current patch, but it has no pre-restart snapshot, so it
-returns `comparisonAvailable: false` until an apply establishes a new baseline.
-
-Do not guess `currentDsl`, reset the revision attribute, or pretend the scope is
-empty. Those actions defeat optimistic concurrency.
+Do not guess `currentDsl`, reset the Max revision attribute, delete state merely
+to bypass a conflict, or pretend the scope is empty. Those actions defeat
+optimistic concurrency.
 
 ## Troubleshooting
 
@@ -478,7 +474,8 @@ empty. Those actions defeat optimistic concurrency.
 | Patch creation reports no controller | No registered patch has `controller: true` | Open the distributed controller patch and list patches again |
 | Patch creation reports multiple controllers | More than one controller patch is open | Leave exactly one controller registered before creating a patch |
 | Duplicate `patcherId` | Two live patches advertise the same transport identity | Change one `@patcher_id`; titles are irrelevant |
-| Process has no graph state for an initialized revision | `maxforge-mcp` restarted while Max stayed open | Pass the exact previous complete DSL as `currentDsl` once |
+| Process has no graph state for an initialized revision | Persistence was disabled, removed, or pointed at another file | Restore the matching state file or pass the exact previous complete DSL as `currentDsl` once |
+| Pending scope appears in status | Apply acknowledgement was lost | Reconnect that exact patch; Maxforge resolves only the recorded base or target revision |
 | Current DSL revision does not match Max | `currentDsl`, scope, or target is wrong | Stop; recover the exact prior DSL instead of forcing empty state |
 | Managed manual changes block ordinary apply | `manualChanges` defaults to `reject` | Call `maxforge_reconcile_patch`; apply the same DSL with `manualChanges: "merge"` only when `canApply` is true |
 | Reconciliation reports conflicts | Both sides changed the same field, one changed a box the other deleted, a new reserved identity appeared, or a desired replacement would destroy an unmanaged cord | Resolve the listed conflict explicitly; do not force or retry the apply |
@@ -505,8 +502,8 @@ empty. Those actions defeat optimistic concurrency.
   patching rectangle, nesting, and patch cords. It deliberately excludes
   volatile runtime values and arbitrary object attributes to avoid reporting
   normal performance changes as patch edits.
-- A comparison baseline is process-local. Without one, Maxforge reports the
-  current graph but does not fabricate change history.
+- A comparison baseline is persisted when state persistence is enabled. Without
+  one, Maxforge reports the current graph but does not fabricate change history.
 - Reconciliation preserves observed text, position, deletion, and patch-cord
   edits on existing managed identities. It cannot reconstruct arbitrary object
   attributes omitted from inspection.

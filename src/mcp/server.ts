@@ -8,6 +8,10 @@ import { loadObjectCatalog } from "../core/catalog-config.js";
 import { MaxforgeWebSocketBridge } from "./bridge.js";
 import { createMaxforgeMcpServer } from "./mcp-server.js";
 import { MaxforgePatchService } from "./service.js";
+import {
+  JsonFilePatchStateStore,
+  stateFileFromEnvironment,
+} from "./state-store.js";
 
 export function bridgeOptionsFromEnvironment(
   environment: NodeJS.ProcessEnv
@@ -39,11 +43,14 @@ export async function main(): Promise<void> {
     loadObjectCatalog(catalogOptionsFromEnvironment(process.env)),
     packageVersion(),
   ]);
-  const bridge = new MaxforgeWebSocketBridge(
-    bridgeOptionsFromEnvironment(process.env)
-  );
+  const bridgeOptions = bridgeOptionsFromEnvironment(process.env);
+  const bridge = new MaxforgeWebSocketBridge(bridgeOptions);
   const status = await bridge.start();
-  const service = new MaxforgePatchService(catalog.database, bridge);
+  const stateFile = stateFileFromEnvironment(process.env, status.port);
+  const stateStore = stateFile
+    ? new JsonFilePatchStateStore(stateFile)
+    : undefined;
+  const service = new MaxforgePatchService(catalog.database, bridge, stateStore);
   let handle;
   try {
     handle = serveStdio(() =>
@@ -63,6 +70,11 @@ export async function main(): Promise<void> {
       catalog.configPath
     );
   }
+  console.error(
+    stateStore
+      ? `maxforge persists MCP state in ${stateStore.path}`
+      : "maxforge MCP state persistence is disabled"
+  );
 
   let isShuttingDown = false;
   const shutdown = async () => {

@@ -91,10 +91,12 @@ failure.
 
 ### MCP process restarted
 
-If Max advertises a non-null revision but the MCP process has no graph state,
-provide the exact previous complete DSL as `currentDsl` once. Never guess it,
-derive it loosely from a screenshot, reset the revision, or claim the scope is
-empty. If the exact DSL is unavailable, stop and report the blocker.
+Call `maxforge_status` and verify the persistence path, restored revision, and
+pending scopes. Normal restarts restore state automatically. If persistence was
+disabled or its file is unavailable, provide the exact previous complete DSL as
+`currentDsl` once. Never guess it, reset the revision, or claim the scope is
+empty. A pending scope must reconnect so Maxforge can compare its recorded base
+and target revisions.
 
 ### Managed manual edit detected
 

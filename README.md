@@ -252,6 +252,11 @@ machine's address and the same `@token`. Non-loopback publication without a
 token is rejected. This is plaintext trusted-LAN authentication, not a public
 Internet service. See [`docs/mcp.md`](docs/mcp.md) for configuration.
 
+Acknowledged graphs, human-edit baselines, and unresolved applies are persisted
+atomically in `~/.maxforge/mcp-state-<port>-v1.json`, so a normal MCP restart
+does not require reconstructing the previous DSL. Set `MAXFORGE_STATE_FILE` to
+an explicit path when needed; `off` deliberately disables recovery.
+
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without
 ambiguity. No JavaScript or helper patch wiring runs inside Max.

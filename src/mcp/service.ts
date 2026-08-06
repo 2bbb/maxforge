@@ -24,6 +24,10 @@ import {
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
 } from "./bridge.js";
+import {
+  PatchStateStore,
+  PendingPatchApply,
+} from "./state-store.js";
 
 export interface CompilePlanRequest {
   readonly patcherId: string;
@@ -49,6 +53,8 @@ export interface ApplyDslResult {
   readonly baselineCaptured: boolean;
   readonly baselineWarning?: string;
   readonly manualChangesMerged: number;
+  readonly statePersisted: boolean;
+  readonly stateWarning?: string;
 }
 
 export interface ReconcilePlanResult {
@@ -107,15 +113,22 @@ export interface InspectPatchResult {
 }
 
 export class MaxforgePatchService {
-  private readonly managedGraphs = new Map<string, PatchGraph>();
-  private readonly intentGraphs = new Map<string, PatchGraph>();
-  private readonly baselineSnapshots =
-    new Map<string, MaxforgePatcherSnapshot>();
+  private readonly managedGraphs: Map<string, PatchGraph>;
+  private readonly intentGraphs: Map<string, PatchGraph>;
+  private readonly baselineSnapshots: Map<string, MaxforgePatcherSnapshot>;
+  private readonly pendingApplies: Map<string, PendingPatchApply>;
 
   constructor(
     private readonly database: ObjectDatabase,
-    private readonly transport: PatchPlanTransport
-  ) {}
+    private readonly transport: PatchPlanTransport,
+    private readonly stateStore?: PatchStateStore
+  ) {
+    const state = stateStore?.load();
+    this.managedGraphs = new Map(state?.managedGraphs);
+    this.intentGraphs = new Map(state?.intentGraphs);
+    this.baselineSnapshots = new Map(state?.baselineSnapshots);
+    this.pendingApplies = new Map(state?.pendingApplies);
+  }
 
   compilePlan(request: CompilePlanRequest): CompilePlanResult {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
@@ -168,23 +181,30 @@ export class MaxforgePatchService {
       warnings = [...current.warnings, ...desired.warnings];
     }
 
-    const acknowledgement = await this.transport.apply(
-      request.patcherId,
-      plan
-    );
+    const key = targetKey(request.patcherId, request.scope);
+    this.pendingApplies.set(key, {
+      baseRevision: plan.baseRevision,
+      nextGraph,
+      intentGraph,
+    });
+    this.persistState();
+
+    const acknowledgement = await this.transport.apply(request.patcherId, plan);
     this.managedGraphs.set(
-      targetKey(request.patcherId, request.scope),
+      key,
       nextGraph
     );
     this.intentGraphs.set(
-      targetKey(request.patcherId, request.scope),
+      key,
       intentGraph
     );
+    this.pendingApplies.delete(key);
     const baseline = await this.captureBaseline(
       request.patcherId,
       request.scope,
       nextGraph
     );
+    const persistence = this.tryPersistState();
 
     return {
       plan,
@@ -192,7 +212,9 @@ export class MaxforgePatchService {
       warnings,
       baselineCaptured: baseline.captured,
       manualChangesMerged,
+      statePersisted: persistence.persisted,
       ...(baseline.warning ? { baselineWarning: baseline.warning } : {}),
+      ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
     };
   }
 
@@ -291,6 +313,16 @@ export class MaxforgePatchService {
     return [...this.baselineSnapshots.keys()].sort();
   }
 
+  getStateStatus(): {
+    readonly persistence: string | null;
+    readonly pendingScopes: readonly string[];
+  } {
+    return {
+      persistence: this.stateStore?.description ?? null,
+      pendingScopes: [...this.pendingApplies.keys()].sort(),
+    };
+  }
+
   private async assertNoManagedDrift(
     patcherId: string,
     scope: string,
@@ -382,6 +414,7 @@ export class MaxforgePatchService {
     graph: PatchGraph;
     warnings: readonly CompileWarning[];
   } {
+    this.resolvePendingApply(targetKey(request.patcherId, request.scope));
     if (request.currentDsl !== undefined) {
       return this.compileGraph(request.currentDsl, request.scope);
     }
@@ -408,6 +441,63 @@ export class MaxforgePatchService {
       graph: createEmptyPatchGraph(request.scope),
       warnings: [],
     };
+  }
+
+  private resolvePendingApply(key: string): void {
+    const pending = this.pendingApplies.get(key);
+    if (!pending) return;
+    const separator = key.lastIndexOf(":");
+    const patcherId = key.slice(0, separator);
+    const scope = key.slice(separator + 1);
+    const liveRevision = this.transport.getLiveRevision(patcherId, scope);
+    if (liveRevision === undefined) {
+      throw new Error(
+        `Pending apply for Max patch "${patcherId}" scope "${scope}" cannot ` +
+        "be resolved until that patch is connected"
+      );
+    }
+    const observedRevision = liveRevision ?? createEmptyPatchGraph(scope).revision;
+    if (observedRevision === pending.nextGraph.revision) {
+      this.managedGraphs.set(key, pending.nextGraph);
+      this.intentGraphs.set(key, pending.intentGraph);
+      this.baselineSnapshots.delete(key);
+      this.pendingApplies.delete(key);
+      this.persistState();
+      return;
+    }
+    if (observedRevision === pending.baseRevision) {
+      this.pendingApplies.delete(key);
+      this.persistState();
+      return;
+    }
+    throw new Error(
+      `Pending apply for Max patch "${patcherId}" scope "${scope}" is ` +
+      `ambiguous: Max reports ${liveRevision ?? "uninitialized"}, expected ` +
+      `${pending.baseRevision} or ${pending.nextGraph.revision}`
+    );
+  }
+
+  private persistState(): void {
+    this.stateStore?.save({
+      managedGraphs: this.managedGraphs,
+      intentGraphs: this.intentGraphs,
+      baselineSnapshots: this.baselineSnapshots,
+      pendingApplies: this.pendingApplies,
+    });
+  }
+
+  private tryPersistState(): { persisted: boolean; warning?: string } {
+    try {
+      this.persistState();
+      return { persisted: true };
+    } catch (error) {
+      return {
+        persisted: false,
+        warning:
+          "Max applied the patch, but maxforge could not persist MCP state: " +
+          (error instanceof Error ? error.message : String(error)),
+      };
+    }
   }
 
   private assertLiveRevision(

@@ -12,6 +12,10 @@ import {
 } from "../src/mcp/bridge.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
 import {
+  PatchServiceState,
+  PatchStateStore,
+} from "../src/mcp/state-store.js";
+import {
   compileDslToPatchGraph,
   PatchPlan,
 } from "../src/max/patch-graph.js";
@@ -97,6 +101,67 @@ describe("MaxforgePatchService", () => {
       desiredDsl: "osc = cycle~ 440",
     })).rejects.toThrow("this MCP process has no graph state");
     expect(transport.plans).toHaveLength(0);
+  });
+
+  it("restores managed graph and inspection baseline across MCP restarts", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const firstService = new MaxforgePatchService(database, transport, store);
+    const first = await firstService.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+    });
+
+    const restarted = new MaxforgePatchService(database, transport, store);
+    expect(restarted.getManagedRevisions()).toEqual({
+      "patch-a:voices": first.plan.targetRevision,
+    });
+    expect(restarted.getBaselineScopes()).toEqual(["patch-a:voices"]);
+
+    const preview = restarted.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440\ngain = *~ 0.5",
+    });
+    expect(preview.plan.operations).toEqual([
+      expect.objectContaining({ op: "create", box: expect.objectContaining({ id: "obj-gain" }) }),
+    ]);
+  });
+
+  it("recovers an acknowledged apply after the acknowledgement was lost", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const service = new MaxforgePatchService(database, transport, store);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+    });
+    transport.failureAfterApply = new Error("acknowledgement lost");
+    const uncertainDsl = "osc = cycle~ 440\ngain = *~ 0.5";
+
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: uncertainDsl,
+    })).rejects.toThrow("acknowledgement lost");
+    expect(store.state?.pendingApplies.size).toBe(1);
+
+    transport.failureAfterApply = undefined;
+    const restarted = new MaxforgePatchService(database, transport, store);
+    const preview = restarted.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: `${uncertainDsl}\nmeter = meter~`,
+    });
+    expect(preview.plan.baseRevision).toBe(
+      compileDslToPatchGraph(uncertainDsl, database, "voices").graph!.revision
+    );
+    expect(preview.plan.operations).toEqual([
+      expect.objectContaining({ op: "create", box: expect.objectContaining({ id: "obj-meter" }) }),
+    ]);
+    expect(store.state?.pendingApplies.size).toBe(0);
   });
 
   it("rejects caller-provided current DSL when its revision differs from Max", async () => {
@@ -414,6 +479,7 @@ class FakeTransport implements PatchPlanTransport {
   readonly plans: PatchPlan[] = [];
   readonly liveRevisions = new Map<string, string | null>();
   failure: Error | undefined;
+  failureAfterApply: Error | undefined;
   inspectionFailure: Error | undefined;
   postApplyInspectionFailure: Error | undefined;
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
@@ -429,6 +495,7 @@ class FakeTransport implements PatchPlanTransport {
       `${patcherId}:${plan.scope}`,
       plan.targetRevision
     );
+    if (this.failureAfterApply) throw this.failureAfterApply;
     if (this.snapshotAfterApply) this.snapshot = this.snapshotAfterApply;
     return {
       type: "maxforge.applied",
@@ -494,6 +561,29 @@ class FakeTransport implements PatchPlanTransport {
       liveRevisions: Object.fromEntries(this.liveRevisions),
     };
   }
+}
+
+class MemoryStateStore implements PatchStateStore {
+  readonly description = "memory";
+  state: PatchServiceState | undefined;
+
+  load(): PatchServiceState | undefined {
+    if (!this.state) return undefined;
+    return cloneServiceState(this.state);
+  }
+
+  save(state: PatchServiceState): void {
+    this.state = cloneServiceState(state);
+  }
+}
+
+function cloneServiceState(state: PatchServiceState): PatchServiceState {
+  return {
+    managedGraphs: new Map(state.managedGraphs),
+    intentGraphs: new Map(state.intentGraphs),
+    baselineSnapshots: new Map(state.baselineSnapshots),
+    pendingApplies: new Map(state.pendingApplies),
+  };
 }
 
 function patcherSnapshot(): MaxforgePatcherSnapshot {

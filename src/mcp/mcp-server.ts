@@ -154,7 +154,7 @@ const dslRequestSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Exact previous complete DSL. Required once after MCP restart when Max already has a revision; never guess or substitute empty state."
+      "Exact previous complete DSL. Normally restored from persistent MCP state; required only when persistence was disabled or the matching state file is unavailable. Never guess or substitute empty state."
     ),
 });
 
@@ -210,6 +210,7 @@ const HELP_CONTENT = {
       "Run maxforge-mcp as an MCP stdio server with Node.js 20 or newer.",
       "Install the native maxforge.sync external separately; the npm package does not install the Max external.",
       "Set MAXFORGE_CONFIG before starting MCP when the project uses third-party externals or reusable abstractions.",
+      "Keep the default ~/.maxforge per-port state file, or set MAXFORGE_STATE_FILE explicitly. Use the value off only when restart recovery is intentionally disabled.",
       "Open one controller patch containing maxforge.sync with controller enabled.",
       "Call maxforge_status and maxforge_catalog, then maxforge_list_patches to verify catalog and patch registration before creating or changing patches.",
     ],
@@ -226,17 +227,18 @@ const HELP_CONTENT = {
     ],
   },
   recovery: {
-    summary: "Recovery rules for stale process state, manual edits, timeouts, and partial failures.",
+    summary: "Recovery rules for persisted state, manual edits, timeouts, and partial failures.",
     steps: [
-      "After an MCP process restart, call maxforge_list_patches and inspect the target.",
-      "If Max reports an initialized revision but MCP has no graph, provide the exact previous complete DSL as currentDsl once.",
+      "After an MCP process restart, call maxforge_status and verify that the expected state file and managed revision were restored, then inspect the target.",
+      "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
+      "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
       "If inspect reports managed manual changes, call maxforge_reconcile_patch with the next complete desired DSL.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
       "If baselineCaptured is false, the apply still succeeded; do not repeat it solely to obtain a baseline.",
     ],
     rules: [
-      "A revision hash proves identity but cannot reconstruct DSL or graph state.",
+      "Persistent state stores graphs and inspection baselines; a revision hash alone still cannot reconstruct either.",
       "Reconciliation preserves non-conflicting managed edits but never silently chooses between conflicting changes.",
       "Protocol v1 is not transactional; a runtime mutation failure can leave a partial patch while the revision remains unchanged.",
     ],
@@ -295,9 +297,10 @@ export function createMaxforgeMcpServer(
         "live patch, preview the complete desired DSL with maxforge_compile_plan, " +
         "then pass the same complete DSL to maxforge_apply_dsl. Omitted managed " +
         "objects are deleted. Success requires acknowledgement.revision to equal " +
-        "targetRevision. Never retry a timeout or baseline warning blindly. After " +
-        "an MCP restart, an initialized patch requires its exact previous complete " +
-        "DSL as currentDsl once. Call maxforge_help with topic 'recovery' on errors " +
+        "targetRevision and statePersisted to be true. Never retry a timeout or " +
+        "baseline/state warning blindly. Persistent state normally survives MCP " +
+        "restarts; currentDsl is only a fallback when that state is unavailable. " +
+        "Call maxforge_help with topic 'recovery' on errors " +
         "or managed manual drift. Preserve managed manual edits only after " +
         "maxforge_reconcile_patch returns canApply=true, then apply with " +
         "manualChanges set to merge.",
@@ -333,7 +336,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Maxforge status",
       description:
-        "Diagnose localhost transport and process-local state. Use when no patch is listed, after restart, or after a timeout; connected clients are not usable targets until registered.",
+        "Diagnose transport, persistent state, and unresolved applies. Use when no patch is listed, after restart, or after a timeout; connected clients are not usable targets until registered.",
       inputSchema: z.object({}),
       outputSchema: z.object({
         bridge: z.object({
@@ -345,6 +348,10 @@ export function createMaxforgeMcpServer(
         }),
         managedRevisions: z.record(z.string(), revisionSchema),
         inspectionBaselineScopes: z.array(z.string()),
+        state: z.object({
+          persistence: z.string().nullable(),
+          pendingScopes: z.array(z.string()),
+        }),
         catalog: catalogStatusSchema,
       }),
       annotations: {
@@ -358,6 +365,7 @@ export function createMaxforgeMcpServer(
         bridge: options.transport.getStatus(),
         managedRevisions: options.service.getManagedRevisions(),
         inspectionBaselineScopes: options.service.getBaselineScopes(),
+        state: options.service.getStateStatus(),
         catalog: catalogStatus(options.catalog),
       };
       return toolResult(result);
@@ -605,6 +613,8 @@ export function createMaxforgeMcpServer(
         baselineCaptured: z.boolean(),
         baselineWarning: z.string().optional(),
         manualChangesMerged: z.number().int().nonnegative(),
+        statePersisted: z.boolean(),
+        stateWarning: z.string().optional(),
         warnings: z.array(warningSchema),
       }),
       annotations: {
@@ -625,8 +635,12 @@ export function createMaxforgeMcpServer(
           acknowledgement: result.acknowledgement,
           baselineCaptured: result.baselineCaptured,
           manualChangesMerged: result.manualChangesMerged,
+          statePersisted: result.statePersisted,
           ...(result.baselineWarning
             ? { baselineWarning: result.baselineWarning }
+            : {}),
+          ...(result.stateWarning
+            ? { stateWarning: result.stateWarning }
             : {}),
           warnings: result.warnings,
         });

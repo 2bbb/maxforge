@@ -3,6 +3,7 @@ import {
   bridgeOptionsFromEnvironment,
   catalogOptionsFromEnvironment,
 } from "../src/mcp/server.js";
+import { stateFileFromEnvironment } from "../src/mcp/state-store.js";
 
 describe("maxforge MCP environment", () => {
   it("keeps the unauthenticated default on loopback", () => {
@@ -46,5 +47,13 @@ describe("maxforge MCP environment", () => {
       configPath: "/project/maxforge.config.json",
       discover: false,
     });
+  });
+
+  it("uses a persistent per-port state file unless explicitly disabled", () => {
+    expect(stateFileFromEnvironment({}, 8766)).toMatch(
+      /\.maxforge\/mcp-state-8766-v1\.json$/
+    );
+    expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766))
+      .toBeUndefined();
   });
 });

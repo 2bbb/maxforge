@@ -242,13 +242,14 @@ both root objects and objects inside `p generated_bank`.
 
 ## Current limitations
 
-- MCP graph state is process-local. An initialized Max scope must be re-seeded
-  with accurate `currentDsl` after the MCP process restarts.
+- MCP graph, intent, baseline, and in-flight apply state is atomically persisted
+  by default. `currentDsl` re-seeding is only required when persistence was
+  disabled or the matching state file is unavailable.
 - New patch creation requires exactly one registered controller patch.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.
-- MCP comparison baselines are process-local and begin only after an
-  acknowledged apply. A snapshot can always report current state, but it cannot
-  reconstruct edit history that predates the baseline.
+- MCP comparison baselines begin after an acknowledged apply and survive normal
+  process restarts. A snapshot cannot reconstruct edit history predating the
+  first stored baseline.
 - Patchline metadata (`midpoints`, `color`, `hidden`, and `disabled`) is not
   managed in protocol version 1 and is lost if a connection must be recreated.
