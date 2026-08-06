@@ -50,6 +50,10 @@ auto managed_id_from_variable_name(
 auto is_revision(const std::string &revision) -> bool;
 auto is_structure_token(const std::string &token) -> bool;
 auto structure_token(const std::string &canonical_structure) -> std::string;
+void validate_structure_token(
+	const std::string &expected_token,
+	const std::string &canonical_structure
+);
 auto path_key(const std::vector<std::string> &path) -> std::string;
 auto child_path_key(
 	const std::vector<std::string> &path,

@@ -136,6 +136,19 @@ void test_revisions_paths_and_subpatchers() {
 		sync_protocol::structure_token("a") != sync_protocol::structure_token("b"),
 		"different structures produced the same fixture token"
 	);
+	sync_protocol::validate_structure_token(
+		sync_protocol::structure_token("current"),
+		"current"
+	);
+	require_throws(
+		[] {
+			sync_protocol::validate_structure_token(
+				sync_protocol::structure_token("inspected"),
+				"edited"
+			);
+		},
+		"live patch structure changed since inspection"
+	);
 
 	const std::vector<std::string> path{"maxforge_default_obj_group", "inner"};
 	require(

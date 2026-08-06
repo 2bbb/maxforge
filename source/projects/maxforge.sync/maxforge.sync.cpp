@@ -1696,11 +1696,10 @@ private:
 					root_patcher,
 					current_scope
 				);
-				if(patch_structure_token(snapshot) != plan.base_structure_token) {
-					throw std::runtime_error(
-						"live patch structure changed since inspection"
-					);
-				}
+				sync_protocol::validate_structure_token(
+					plan.base_structure_token,
+					patch_structure_json(snapshot)
+				);
 			}
 			validate_plan_against_patch(
 				plan,

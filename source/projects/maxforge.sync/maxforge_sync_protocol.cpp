@@ -145,6 +145,18 @@ auto structure_token(const std::string &canonical_structure) -> std::string {
 	return stream.str();
 }
 
+void validate_structure_token(
+	const std::string &expected_token,
+	const std::string &canonical_structure
+) {
+	if(!is_structure_token(expected_token)) {
+		throw std::runtime_error("invalid base structure token");
+	}
+	if(structure_token(canonical_structure) != expected_token) {
+		throw std::runtime_error("live patch structure changed since inspection");
+	}
+}
+
 auto path_key(const std::vector<std::string> &path) -> std::string {
 	std::string key;
 	for(const auto &component : path) {
