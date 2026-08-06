@@ -158,24 +158,8 @@ function parseSnapshotEntries(
     if (!isPatcherSnapshot(value)) {
       throw new Error(`Invalid ${field} snapshot for ${target}`);
     }
-    return [target, normalizeSnapshot(value)];
+    return [target, value];
   }));
-}
-
-function normalizeSnapshot(
-  snapshot: MaxforgePatcherSnapshot
-): MaxforgePatcherSnapshot {
-  return {
-    ...snapshot,
-    boxes: snapshot.boxes.map((box) => ({
-      ...box,
-      attributes: isRecord(box.attributes) ? box.attributes : {},
-    })) as MaxforgePatcherSnapshot["boxes"],
-    connections: snapshot.connections.map((connection) => ({
-      ...connection,
-      attributes: isRecord(connection.attributes) ? connection.attributes : {},
-    })) as MaxforgePatcherSnapshot["connections"],
-  };
 }
 
 function parseEntries(
@@ -230,7 +214,11 @@ function isPatcherSnapshot(value: unknown): value is MaxforgePatcherSnapshot {
     typeof value.locked === "boolean" &&
     typeof value.presentation === "boolean" &&
     Array.isArray(value.boxes) &&
-    Array.isArray(value.connections);
+    value.boxes.every((box) => isRecord(box) && isRecord(box.attributes)) &&
+    Array.isArray(value.connections) &&
+    value.connections.every((connection) =>
+      isRecord(connection) && isRecord(connection.attributes)
+    );
 }
 
 function mapEntries<Value>(

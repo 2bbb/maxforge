@@ -67,7 +67,7 @@ describe("JsonFilePatchStateStore", () => {
     );
   });
 
-  it("upgrades persisted v1 snapshots that predate attribute inspection", () => {
+  it("rejects persisted snapshots that predate attribute inspection", () => {
     const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
     const path = join(directory, "state.json");
     writeFileSync(path, JSON.stringify({
@@ -97,9 +97,9 @@ describe("JsonFilePatchStateStore", () => {
       pendingApplies: [],
     }));
 
-    const restored = new JsonFilePatchStateStore(path).load()!;
-    expect(restored.baselineSnapshots.get("patch:main")?.boxes[0].attributes)
-      .toEqual({});
+    expect(() => new JsonFilePatchStateStore(path).load()).toThrow(
+      "Invalid baselineSnapshots snapshot for patch:main"
+    );
   });
 
   it("uses a per-port default and supports explicit disable or override", () => {

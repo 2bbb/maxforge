@@ -485,8 +485,6 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         patcherId: request.patcherId,
         scope: request.scope,
         title: request.title,
-        host: this.host,
-        port: this.listeningPort,
       }), (error) => {
         if (error) this.rejectCreate(requestId, error);
       });
@@ -532,8 +530,6 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         scope: request.scope,
         title: request.title,
         path: request.path,
-        host: this.host,
-        port: this.listeningPort,
       }), (error) => {
         if (error) this.rejectOpen(requestId, error);
       });
@@ -1516,7 +1512,6 @@ function parseSnapshotConnection(
 function parseSnapshotAttributes(
   value: unknown
 ): Readonly<Record<string, PatchSetValue>> | undefined {
-  if (value === undefined) return {};
   if (!isRecord(value)) return undefined;
   const attributes: Record<string, PatchSetValue> = {};
   for (const [name, attribute] of Object.entries(value)) {

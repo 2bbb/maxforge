@@ -143,17 +143,15 @@ describe("MaxforgeWebSocketBridge", () => {
         patcherId: string;
         scope: string;
         title: string;
-        host: string;
-        port: number;
       };
       expect(request).toMatchObject({
         type: "maxforge.create_patch.request",
         patcherId: "generated-a",
         scope: "voices",
         title: "Generated voices",
-        host: "127.0.0.1",
-        port: status.port,
       });
+      expect(request).not.toHaveProperty("host");
+      expect(request).not.toHaveProperty("port");
       controller.send(JSON.stringify({
         type: "maxforge.patch.created",
         requestId: request.requestId,
@@ -205,6 +203,8 @@ describe("MaxforgeWebSocketBridge", () => {
         scope: "voices",
         path: "/tmp/source.maxpat",
       });
+      expect(request).not.toHaveProperty("host");
+      expect(request).not.toHaveProperty("port");
       controller.send(JSON.stringify({
         type: "maxforge.patch.opened",
         requestId: request.requestId,
@@ -468,7 +468,7 @@ describe("parseBridgeEvent", () => {
     }))).toBeUndefined();
   });
 
-  it("parses serializable box attributes and upgrades older snapshots", () => {
+  it("parses serializable box attributes and rejects snapshots without them", () => {
     const current = snapshotEvent("request-1");
     const parsedCurrent = parseBridgeEvent(JSON.stringify({
       ...current,
@@ -496,10 +496,11 @@ describe("parseBridgeEvent", () => {
       },
     });
 
-    const parsedLegacy = parseBridgeEvent(JSON.stringify(current));
-    expect(parsedLegacy).toMatchObject({
-      patcher: { boxes: [{ attributes: {} }] },
-    });
+    const { attributes: _attributes, ...withoutAttributes } = current.patcher.boxes[0];
+    expect(parseBridgeEvent(JSON.stringify({
+      ...current,
+      patcher: { ...current.patcher, boxes: [withoutAttributes] },
+    }))).toBeUndefined();
   });
 });
 
@@ -582,6 +583,7 @@ function snapshotEvent(requestId: string) {
         patchingRect: [10, 20, 60, 22],
         managed: true,
         text: "cycle~ 440",
+        attributes: {},
       }],
       connections: [],
     },

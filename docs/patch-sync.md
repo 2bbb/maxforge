@@ -197,9 +197,7 @@ A controller can receive:
   "requestId": "correlation-id",
   "patcherId": "generated_patch",
   "scope": "generated",
-  "title": "Generated patch",
-  "host": "127.0.0.1",
-  "port": 8766
+  "title": "Generated patch"
 }
 ```
 
@@ -207,8 +205,6 @@ The controller attribute must be enabled. `maxforge.sync` loads an unsaved
 top-level patch through the Max SDK, triggers its bootstrap loadbang, and
 acknowledges creation. The generated patch inherits the controller's host,
 port, and token, then registers through its own native WebSocket connection.
-The request retains `host` and `port` for compatibility with older loopback
-controllers; current controllers do not use them as LAN connection settings.
 
 The snapshot response contains root patcher metadata plus flattened boxes and
 connections, and a top-level `structureToken` derived only from that sorted
