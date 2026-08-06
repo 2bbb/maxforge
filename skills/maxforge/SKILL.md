@@ -96,7 +96,9 @@ for i in 0..7 {
 - Subpatcher: `fx = p name { ... }` with `inlet`/`outlet` objects inside.
 - Signal subpatch ports: `inlet signal` / `outlet signal`; never invent `inlet~` or `outlet~`.
 - `for i in 0..7 { ... }` is inclusive; `step` is supported.
-- Expressions are numeric only: loop variables, `+ - * /`, parentheses, and comparisons.
+- Expressions are numeric only: loop variables, `+ - * / %`, `! && ||`, parentheses, and comparisons.
+- `if` may be followed by `} else { ... }` or a next-line `else { ... }` block.
+- Expansion rejects non-finite arithmetic and is capped at 100,000 iterations per loop and 100,000 emitted lines.
 - Inline comments are not supported; put comments on their own line.
 
 ## Object metadata boundaries

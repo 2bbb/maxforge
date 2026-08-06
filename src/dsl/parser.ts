@@ -41,7 +41,15 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     if (line.startsWith("patch ")) {
       const parsed = parsePatchDecl(line);
       if (parsed) {
-        patchDecl = parsed;
+        if (patchDecl) {
+          errors.push({
+            code: ErrorCode.SYNTAX_ERROR,
+            message: "Duplicate patch declaration",
+            line: current.line,
+          });
+        } else {
+          patchDecl = parsed;
+        }
       } else {
         errors.push({
           code: ErrorCode.SYNTAX_ERROR,
@@ -124,6 +132,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
 
 function parsePatchDecl(line: string): PatchDecl | null {
   const pipeParts = line.split("|").map((s) => s.trim());
+  if (pipeParts.length > 3) return null;
 
   const firstPart = pipeParts[0];
   const nameMatch = firstPart.match(/^patch\s+"(.+)"$/);
@@ -133,15 +142,15 @@ function parsePatchDecl(line: string): PatchDecl | null {
 
   if (pipeParts.length > 1 && pipeParts[1]) {
     const descMatch = pipeParts[1].match(/^"(.*)"$/);
-    if (descMatch) result.description = descMatch[1];
-    else result.description = pipeParts[1];
+    if (!descMatch) return null;
+    result.description = descMatch[1];
   }
 
   if (pipeParts.length > 2 && pipeParts[2]) {
     const sizeMatch = pipeParts[2].match(/^(\d+)x(\d+)$/);
     if (sizeMatch) {
       result.size = [parseInt(sizeMatch[1]), parseInt(sizeMatch[2])];
-    }
+    } else return null;
   }
 
   return result;

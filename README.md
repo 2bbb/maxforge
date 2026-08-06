@@ -27,7 +27,7 @@ It supports:
 - **Project object catalogs** for third-party externals and reusable `.maxpat` abstractions
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
-- **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
+- **Bounded macro expansion** — `for`, `if`/`else`, and `${expr}` for generating large repeated patches without unbounded output
 - **Desired-state diff plans** — stable managed IDs and ordered patch operations for live patch synchronization
 
 ## Quickstart
@@ -462,7 +462,8 @@ for i in 0..7 {
 ```
 
 - `0..7` is inclusive; use `step`, e.g. `for i in 0..6 step 2`
-- expressions support loop variables, `+ - * /`, parentheses, and comparisons
+- expressions support loop variables, `+ - * / %`, `! && ||`, parentheses, and comparisons
+- expansion rejects non-finite arithmetic, loops above 100,000 iterations, and output above 100,000 lines
 - `${expr}` can be used in names, object arguments, attributes, positions, and connections
 - expressions are deliberately numeric only; there are no strings, arrays, functions, or modulo operator
 

@@ -208,6 +208,19 @@ freq -> mt -> osc -> dac
     expect(ast.patchDecl?.size).toEqual([800, 600]);
   });
 
+  it("rejects malformed and duplicate patch declarations", () => {
+    for (const source of [
+      'patch "Test" | description | 800x600',
+      'patch "Test" | "Description" | wide',
+      'patch "Test" | "Description" | 800x600 | extra',
+      'patch "First"\npatch "Second"',
+    ]) {
+      const { errors } = parse(source);
+      expect(errors, source).toHaveLength(1);
+      expect(errors[0].code).toBe("E007");
+    }
+  });
+
   it("parses connections with port specifiers", () => {
     const source = `
 a = gate 2

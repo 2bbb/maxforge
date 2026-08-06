@@ -1,4 +1,4 @@
-# maxdsl Formal Specification v1.3
+# maxdsl Formal Specification v1.4
 
 ## 1. Overview
 
@@ -47,13 +47,16 @@ port_spec         ::= INTEGER , [ ':' , INTEGER ] ;
                   (* outlet_index [ : inlet_index ] *)
 
 for_block         ::= 'for' , IDENT , 'in' , expr , '..' , expr , [ 'step' , expr ] , '{' , { statement } , '}' ;
-if_block          ::= 'if' , expr , '{' , { statement } , '}' ;
+if_block          ::= 'if' , expr , '{' , { statement } , '}' , [ else_block ] ;
+else_block        ::= 'else' , '{' , { statement } , '}' ;
 interpolation     ::= '${' , expr , '}' ;
-expr              ::= comparison ;
+expr              ::= logical_or ;
+logical_or        ::= logical_and , { '||' , logical_and } ;
+logical_and       ::= comparison , { '&&' , comparison } ;
 comparison        ::= additive , [ ( '==' | '!=' | '<=' | '>=' | '<' | '>' ) , additive ] ;
 additive          ::= multiplicative , { ( '+' | '-' ) , multiplicative } ;
-multiplicative    ::= unary , { ( '*' | '/' ) , unary } ;
-unary             ::= [ '+' | '-' ] , primary ;
+multiplicative    ::= unary , { ( '*' | '/' | '%' ) , unary } ;
+unary             ::= [ '+' | '-' | '!' ] , primary ;
 primary           ::= NUMBER | IDENT | '(' , expr , ')' ;
 
 (* Terminals *)
@@ -195,9 +198,10 @@ ${expr}
 `${expr}` can appear inside object names, object arguments, attributes, positions, and connections. Expressions support:
 
 - numbers and loop variables
-- `+`, `-`, `*`, `/`
+- `+`, `-`, `*`, `/`, `%`
 - parentheses
 - comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- logical operators: `!`, `&&`, `||`
 
 Examples:
 
@@ -218,18 +222,28 @@ for i in 0..7 {
 - Descending ranges are allowed: `3..0`.
 - Optional `step` is supported: `for i in 0..6 step 2`.
 - `step 0` is a syntax error.
+- A step pointing away from the range end is a syntax error.
+- A loop may emit at most 100,000 iterations and total expanded source may
+  contain at most 100,000 lines. Expansion fails instead of exhausting memory.
+- Every expression result must be finite; division or remainder by zero fails.
 
 #### If block
 
 ```
 for i in 0..7 {
-  if i < 4 {
+  if i % 2 == 0 {
     left_${i} = *~ 0.25
+  }
+  else {
+    right_${i} = *~ 0.25
   }
 }
 ```
 
-The block is emitted when the expression is non-zero. Comparisons return `1` for true and `0` for false.
+The `if` block is emitted when the expression is non-zero; otherwise its
+optional `else` block is emitted. `else {` may share the closing-brace line as
+`} else {`, or start on the immediately following line. Comparisons and logical
+operators return `1` for true and `0` for false.
 
 ## 4. Statement Semantics
 
@@ -243,7 +257,8 @@ patch "Patch Name" | "Description text" | 800x600
 
 - **Optional**. If omitted, defaults to `"Untitled" | "" | 640x480`.
 - Recommended position is before any object definitions or connections.
-- Use at most one `patch` declaration. If multiple declarations are present, the current parser keeps the last one; do not rely on this.
+- Exactly zero or one declaration is allowed; duplicates are syntax errors.
+- Description must be quoted and size must be a valid `WIDTHxHEIGHT` token.
 - Parameters after `|`:
   1. Description (string)
   2. Window size (`WIDTHxHEIGHT`)

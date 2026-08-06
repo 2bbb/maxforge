@@ -23,7 +23,12 @@ export function collectBlock(sourceLines: SourceLine[], startIndex: number): Col
     const current = sourceLines[i];
     const trimmed = current.text.trim();
 
-    if (trimmed.endsWith("{")) {
+    if (/^}\s*else\s*{$/.test(trimmed)) {
+      if (depth === 1) {
+        return { lines, nextIndex: i, closed: true, closeLine: current.line };
+      }
+      lines.push(current);
+    } else if (trimmed.endsWith("{")) {
       depth++;
       lines.push(current);
     } else if (trimmed === "}") {

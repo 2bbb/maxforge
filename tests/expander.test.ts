@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse, compile } from "../src/index.js";
 import { ObjectDatabase } from "../src/core/types.js";
+import { expandControlFlow } from "../src/dsl/expander.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
 const db = dbData as ObjectDatabase;
@@ -55,6 +56,49 @@ for i in 0..3 {
     expect((ast.statements[1] as any).name).toBe("n_1");
   });
 
+  it("expands else blocks and logical expressions", () => {
+    const source = `
+for i in 0..3 {
+  if i % 2 == 0 && !(i == 2) {
+    even_\${i} = number
+  }
+  else {
+    other_\${i} = button
+  }
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    expect(
+      ast.statements.map((statement) =>
+        statement.type === "object_def" ? statement.name : statement.type
+      )
+    ).toEqual(["even_0", "other_1", "other_2", "other_3"]);
+  });
+
+  it("accepts an else block on the same line as the closing brace", () => {
+    const { ast, errors } = parse(`
+if 0 {
+  no = number
+} else {
+  yes = button
+}
+`);
+    expect(errors).toHaveLength(0);
+    expect(ast.statements).toHaveLength(1);
+    expect(ast.statements[0]).toMatchObject({ type: "object_def", name: "yes" });
+  });
+
+  it("applies logical precedence before disjunction", () => {
+    const { ast, errors } = parse(`
+if 0 || 1 && 1 {
+  result = number
+}
+`);
+    expect(errors).toHaveLength(0);
+    expect(ast.statements).toHaveLength(1);
+  });
+
   it("supports arithmetic in attribute values", () => {
     const source = `
 for i in 1..2 {
@@ -73,6 +117,42 @@ for i in 1..2 {
     const { errors } = parse("n_${missing} = number");
     expect(errors).toHaveLength(1);
     expect(errors[0].code).toBe("E007");
+  });
+
+  it("rejects non-finite arithmetic", () => {
+    const { errors } = parse("n = number @value ${1 / 0}");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("finite number");
+  });
+
+  it("bounds individual loop iteration counts", () => {
+    const result = expandControlFlow(
+      "for i in 0..3 {\n  n_${i} = number\n}",
+      { maxLoopIterations: 3 }
+    );
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("exceeds 3 iterations");
+  });
+
+  it("bounds total expanded source lines across nested loops", () => {
+    const result = expandControlFlow(
+      "for i in 0..2 {\n  for j in 0..2 {\n    n_${i}_${j} = number\n  }\n}",
+      { maxExpandedLines: 8 }
+    );
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain("exceeds 8 lines");
+  });
+
+  it("rejects loop steps that move away from the end", () => {
+    const { errors } = parse("for i in 0..3 step -1 {\n  n_${i} = number\n}");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("does not advance");
+  });
+
+  it("rejects orphan else blocks", () => {
+    const { errors } = parse("else {\n  n = number\n}");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("must immediately follow");
   });
 
   it("reports unclosed control blocks", () => {

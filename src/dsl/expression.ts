@@ -7,7 +7,11 @@ type Token =
 
 export function evaluateExpression(expr: string, env: Map<string, number>): number {
   const parser = new ExpressionParser(expr, env);
-  return parser.parse();
+  const value = parser.parse();
+  if (!Number.isFinite(value)) {
+    throw new Error(`Expression must produce a finite number: ${expr}`);
+  }
+  return value;
 }
 
 class ExpressionParser {
@@ -19,9 +23,27 @@ class ExpressionParser {
   }
 
   parse(): number {
-    const value = this.parseComparison();
+    const value = this.parseLogicalOr();
     if (this.peek().type !== "eof") {
       throw new Error(`Invalid expression: ${this.input}`);
+    }
+    return value;
+  }
+
+  private parseLogicalOr(): number {
+    let value = this.parseLogicalAnd();
+    while (this.matchOperator("||")) {
+      const right = this.parseLogicalAnd();
+      value = value !== 0 || right !== 0 ? 1 : 0;
+    }
+    return value;
+  }
+
+  private parseLogicalAnd(): number {
+    let value = this.parseComparison();
+    while (this.matchOperator("&&")) {
+      const right = this.parseComparison();
+      value = value !== 0 && right !== 0 ? 1 : 0;
     }
     return value;
   }
@@ -60,20 +82,30 @@ class ExpressionParser {
     let value = this.parseUnary();
     while (true) {
       const tok = this.peek();
-      if (tok.type !== "op" || (tok.value !== "*" && tok.value !== "/")) break;
+      if (
+        tok.type !== "op" ||
+        (tok.value !== "*" && tok.value !== "/" && tok.value !== "%")
+      ) break;
       this.next();
       const rhs = this.parseUnary();
-      value = tok.value === "*" ? value * rhs : value / rhs;
+      if (tok.value === "*") value *= rhs;
+      else if (tok.value === "/") value /= rhs;
+      else value %= rhs;
     }
     return value;
   }
 
   private parseUnary(): number {
     const tok = this.peek();
-    if (tok.type === "op" && (tok.value === "+" || tok.value === "-")) {
+    if (
+      tok.type === "op" &&
+      (tok.value === "+" || tok.value === "-" || tok.value === "!")
+    ) {
       this.next();
       const value = this.parseUnary();
-      return tok.value === "-" ? -value : value;
+      if (tok.value === "-") return -value;
+      if (tok.value === "!") return value === 0 ? 1 : 0;
+      return value;
     }
     return this.parsePrimary();
   }
@@ -87,7 +119,7 @@ class ExpressionParser {
       return value;
     }
     if (tok.type === "paren" && tok.value === "(") {
-      const value = this.parseComparison();
+      const value = this.parseLogicalOr();
       const close = this.next();
       if (close.type !== "paren" || close.value !== ")") {
         throw new Error(`Unclosed parenthesis in expression: ${this.input}`);
@@ -104,6 +136,13 @@ class ExpressionParser {
   private next(): Token {
     return this.tokens[this.pos++];
   }
+
+  private matchOperator(value: string): boolean {
+    const token = this.peek();
+    if (token.type !== "op" || token.value !== value) return false;
+    this.next();
+    return true;
+  }
 }
 
 function tokenize(input: string): Token[] {
@@ -118,13 +157,13 @@ function tokenize(input: string): Token[] {
     }
 
     const two = input.slice(i, i + 2);
-    if (["==", "!=", "<=", ">="].includes(two)) {
+    if (["==", "!=", "<=", ">=", "&&", "||"].includes(two)) {
       tokens.push({ type: "op", value: two });
       i += 2;
       continue;
     }
 
-    if (["+", "-", "*", "/", "<", ">"].includes(ch)) {
+    if (["+", "-", "*", "/", "%", "!", "<", ">"].includes(ch)) {
       tokens.push({ type: "op", value: ch });
       i++;
       continue;

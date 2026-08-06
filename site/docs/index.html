@@ -364,7 +364,9 @@ for i in 0..7 {
         <ul>
           <li><code>0..7</code> is inclusive.</li>
           <li>Use <code>for i in 0..6 step 2</code> for a stepped range.</li>
-          <li>Expressions support loop variables, parentheses, comparisons, and <code>+ - * /</code>.</li>
+          <li>Expressions support loop variables, parentheses, comparisons, <code>+ - * / %</code>, and <code>! &amp;&amp; ||</code>.</li>
+          <li><code>if</code> supports an optional <code>else</code> block, including conventional <code>} else {</code> syntax.</li>
+          <li>Expansion rejects non-finite arithmetic and is capped at 100,000 loop iterations and output lines.</li>
           <li><code>${expr}</code> works in names, arguments, attributes, positions, and connections.</li>
           <li>Expressions are numeric only. There are no functions, arrays, strings, or modulo operator.</li>
         </ul>
