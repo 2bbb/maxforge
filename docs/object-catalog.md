@@ -72,7 +72,9 @@ The MCP process deliberately has no working-directory discovery because an MCP
 client's process directory is often unrelated to the patch project. Set
 `MAXFORGE_CONFIG` explicitly, preferably to an absolute path. `maxforge_status`
 reports the effective digest and source files; `maxforge_catalog` exposes the
-loaded metadata to agents.
+loaded metadata to agents. After editing configured files, call
+`maxforge_reload_catalog` and verify the replacement digest; a failed reload
+leaves the previous database active.
 
 ### External declarations
 

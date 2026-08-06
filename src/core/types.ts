@@ -195,7 +195,6 @@ export enum ErrorCode {
 
 export enum WarningCode {
   DUPLICATE_CONNECTION = "W001",
-  UNCONNECTED_OBJECT = "W002",
 }
 
 export interface CompileError {

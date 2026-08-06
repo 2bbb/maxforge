@@ -406,8 +406,6 @@ install、abstraction search path、binary architecture、内部dependencyの存
 |------|------|
 | W001 | 接続の重複 |
 
-`W002` は型定義上は存在するが、現時点の compiler は未接続オブジェクト警告を出さない。
-
 ## CLI Usage
 
 ローカル開発時は `npm run build` 後に `node dist/cli/index.js ...` を使う。

@@ -327,7 +327,8 @@ name = p subpatcher_name [@attr value...] [at(x, y)] {
 - `at(x, y)` pins the parent subpatcher box position.
 - `{ }` — contains inner statements (objects, connections, nested subpatchers).
 - `numinlets` / `numoutlets` are auto-derived from the count of `inlet`/`outlet` objects inside.
-- Inner object IDs are independently numbered (scoped).
+- Inner object IDs use the same `obj-<DSL name>` derivation in the nested
+  patcher's local ID namespace.
 - `inlet` and `outlet` are only valid inside subpatchers.
 - The optional `signal` modifier marks a signal port without inventing a Max
   object class. Both `inlet signal` and `outlet signal` serialize with the real
@@ -435,8 +436,9 @@ concrete paths into a Max package directory; it still does not prove runtime
 compatibility. See [`object-catalog.md`](object-catalog.md#project-object-catalogs)
 and the published `config-v1.json` schema.
 
-The MCP server never performs input-path discovery. Its database is fixed when
-the process starts and is extended only when `MAXFORGE_CONFIG` is set.
+The MCP server never performs input-path discovery. Its initial database uses
+only the explicit `MAXFORGE_CONFIG` setting; after those catalog files change,
+`maxforge_reload_catalog` can atomically replace the loaded database.
 
 ### 5.3 Argument-dependent inlets/outlets
 
@@ -522,7 +524,7 @@ The decompiler emits `at(x, y)` from the first two values of `patching_rect` so 
 The compiler outputs a JSON object matching the Max `.maxpat` format:
 - `fileversion`: 1
 - `appversion`: `{ major: 9, minor: 0, revision: 0, architecture: "x64", modernui: 1 }`
-- IDs: `"obj-1"`, `"obj-2"`, ... (sequential per scope)
+- IDs: `"obj-<DSL name>"`, stable within each patcher's local namespace
 - 2-space indentation
 - UTF-8, LF line endings
 - Box keys are generated in compiler order: structural fields first, then optional fields such as `outlettype`, `text`, `comment`, `patcher`, and attributes.
@@ -553,8 +555,6 @@ The compiler outputs a JSON object matching the Max `.maxpat` format:
 | Code | Message |
 |------|---------|
 | W001 | `Duplicate connection: {src}[{out}] -> {dst}[{in}]` |
-
-`W002` exists in the TypeScript enum but is not currently emitted.
 
 ## 9. Complete Example
 
