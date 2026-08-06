@@ -16,7 +16,7 @@
     "mcp": "node dist/mcp/server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
-    "cli": "node --loader ts-node/esm src/cli/index.ts",
+    "cli": "npm run build --silent && node dist/cli/index.js",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [
