@@ -113,7 +113,8 @@ generated patch. The file must exist even when ports are explicit.
 omitted) reads only the abstraction's root patcher:
 
 - root `inlet` and `outlet` boxes determine counts;
-- explicit numeric `index` values determine order when present on both boxes;
+- explicit numeric `index` values determine order when present on every port
+  box of that kind;
 - otherwise patching position, then box ID, determines order;
 - an outlet is marked `signal` when an incoming source outlet has signal
   metadata; all other outlet types are `""`.

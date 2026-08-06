@@ -68,18 +68,21 @@ async function compileCommand(cmdArgs: string[]) {
   let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
-      outputFile = cmdArgs[i + 1];
+    const argument = cmdArgs[i];
+    if (argument === "-o") {
+      outputFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--allow-unknown") {
+    } else if (argument === "--allow-unknown") {
       allowUnknown = true;
-    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
-      configFile = cmdArgs[i + 1];
+    } else if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--clipboard") {
+    } else if (argument === "--clipboard") {
       clipboard = true;
-    } else if (!inputFile) {
-      inputFile = cmdArgs[i];
+    } else if (!inputFile && !argument.startsWith("-")) {
+      inputFile = argument;
+    } else {
+      throw new Error(`Unknown compile argument: ${argument}`);
     }
   }
 
@@ -135,13 +138,16 @@ async function validateCommand(cmdArgs: string[]) {
   let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "--allow-unknown") {
+    const argument = cmdArgs[i];
+    if (argument === "--allow-unknown") {
       allowUnknown = true;
-    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
-      configFile = cmdArgs[i + 1];
+    } else if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (!inputFile) {
-      inputFile = cmdArgs[i];
+    } else if (!inputFile && !argument.startsWith("-")) {
+      inputFile = argument;
+    } else {
+      throw new Error(`Unknown validate argument: ${argument}`);
     }
   }
 
@@ -190,24 +196,27 @@ async function planCommand(cmdArgs: string[]) {
   let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
-      outputFile = cmdArgs[i + 1];
+    const argument = cmdArgs[i];
+    if (argument === "-o") {
+      outputFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--scope" && cmdArgs[i + 1]) {
-      scope = cmdArgs[i + 1];
+    } else if (argument === "--scope") {
+      scope = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--current" && cmdArgs[i + 1]) {
-      currentFile = cmdArgs[i + 1];
+    } else if (argument === "--current") {
+      currentFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--allow-unknown") {
+    } else if (argument === "--allow-unknown") {
       allowUnknown = true;
-    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
-      configFile = cmdArgs[i + 1];
+    } else if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--compact") {
+    } else if (argument === "--compact") {
       compact = true;
-    } else if (!inputFile) {
-      inputFile = cmdArgs[i];
+    } else if (!inputFile && !argument.startsWith("-")) {
+      inputFile = argument;
+    } else {
+      throw new Error(`Unknown plan argument: ${argument}`);
     }
   }
 
@@ -263,14 +272,15 @@ async function doctorCommand(cmdArgs: string[]) {
   let inputFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
-      configFile = cmdArgs[i + 1];
+    const argument = cmdArgs[i];
+    if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (cmdArgs[i] === "--input" && cmdArgs[i + 1]) {
-      inputFile = cmdArgs[i + 1];
+    } else if (argument === "--input") {
+      inputFile = requiredOptionValue(cmdArgs, i);
       i++;
     } else {
-      throw new Error(`Unknown doctor option: ${cmdArgs[i]}`);
+      throw new Error(`Unknown doctor option: ${argument}`);
     }
   }
 
@@ -290,6 +300,15 @@ async function doctorCommand(cmdArgs: string[]) {
   console.log(`Custom externals: ${externalCount}`);
   console.log(`Abstractions: ${abstractionCount}`);
   for (const source of catalog.sources) console.log(`Source: ${source}`);
+}
+
+function requiredOptionValue(cmdArgs: string[], index: number): string {
+  const option = cmdArgs[index];
+  const value = cmdArgs[index + 1];
+  if (!value || value.startsWith("-")) {
+    throw new Error(`${option} requires a value`);
+  }
+  return value;
 }
 
 function reportDiagnostics(
@@ -401,6 +420,6 @@ Options:
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

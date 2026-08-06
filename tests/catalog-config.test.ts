@@ -6,7 +6,9 @@ import {
   findObjectCatalogConfig,
   loadObjectCatalog,
 } from "../src/core/catalog-config.js";
+import { compile } from "../src/core/compiler.js";
 import { lookupObject } from "../src/core/object-db.js";
+import { parse } from "../src/dsl/parser.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -75,6 +77,21 @@ describe("project object catalogs", () => {
         { name: "vendor.dynamic~", ports: "dynamic" },
         { name: "vendor.fixed~", ports: "fixed" },
       ]);
+
+    const parsed = parse("source = vendor.fixed~ mode\nsink = vendor.dynamic~\nsource[1] -> sink[3]");
+    const compiled = compile(parsed.ast, catalog.database);
+    expect(parsed.errors).toEqual([]);
+    expect(compiled.errors).toEqual([]);
+    expect(compiled.output?.patcher.boxes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        box: expect.objectContaining({
+          maxclass: "newobj",
+          text: "vendor.fixed~ mode",
+          numinlets: 3,
+          numoutlets: 2,
+        }),
+      }),
+    ]));
   });
 
   it("imports reusable catalogs before local definitions", async () => {

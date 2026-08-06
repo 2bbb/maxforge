@@ -314,11 +314,10 @@ async function deriveAbstractionPorts(path: string): Promise<PortDeclaration> {
 }
 
 function orderedPorts(boxes: BoxJSON[]): BoxJSON[] {
+  const allIndexed = boxes.every((box) => finiteNumber(box.index) !== undefined);
   return [...boxes].sort((left, right) => {
-    const leftIndex = finiteNumber(left.index);
-    const rightIndex = finiteNumber(right.index);
-    if (leftIndex !== undefined && rightIndex !== undefined) {
-      return leftIndex - rightIndex;
+    if (allIndexed) {
+      return finiteNumber(left.index)! - finiteNumber(right.index)!;
     }
     const leftRect = left.patching_rect;
     const rightRect = right.patching_rect;

@@ -179,6 +179,7 @@ const HELP_CONTENT = {
   workflow: {
     summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
     steps: [
+      "Before using a project external or abstraction, call maxforge_catalog and confirm the loaded definition.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
       "If managed edits exist, call maxforge_reconcile_patch and require canApply=true before preserving them.",
@@ -195,6 +196,7 @@ const HELP_CONTENT = {
       "Never retry a timeout or baseline warning blindly; inspect live state first.",
     ],
     relatedTools: [
+      "maxforge_catalog",
       "maxforge_list_patches",
       "maxforge_inspect_patch",
       "maxforge_reconcile_patch",
@@ -258,8 +260,14 @@ const HELP_CONTENT = {
       "Unmanaged standalone edits do not block apply, but cords touching managed boxes do.",
       "Apply-side inspection is bound to native mutation by a structure token; a later human edit rejects the plan instead of being overwritten.",
       "LAN mode uses token authentication over plaintext WebSocket. Keep it on a trusted LAN; it is not an Internet-facing security boundary.",
+      "Catalog membership is compiler metadata and does not prove that Max can instantiate an external or find an abstraction.",
     ],
-    relatedTools: ["maxforge_list_patches", "maxforge_compile_plan", "maxforge_inspect_patch"],
+    relatedTools: [
+      "maxforge_catalog",
+      "maxforge_list_patches",
+      "maxforge_compile_plan",
+      "maxforge_inspect_patch",
+    ],
   },
 } as const;
 
@@ -281,6 +289,8 @@ export function createMaxforgeMcpServer(
     {
       instructions:
         "Call maxforge_help with topic 'workflow' before the first live mutation. " +
+        "Before using a project external or abstraction, confirm it with " +
+        "maxforge_catalog; membership is metadata, not a Max runtime probe. " +
         "Always select patcherId and scope from maxforge_list_patches, inspect the " +
         "live patch, preview the complete desired DSL with maxforge_compile_plan, " +
         "then pass the same complete DSL to maxforge_apply_dsl. Omitted managed " +

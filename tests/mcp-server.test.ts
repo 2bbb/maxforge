@@ -157,6 +157,28 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      const customPlan = await client.request(35, "tools/call", {
+        name: "maxforge_compile_plan",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "custom",
+          desiredDsl: "filter = vendor.test~",
+        },
+      });
+      expect(customPlan).toMatchObject({
+        result: {
+          structuredContent: {
+            operationCount: 1,
+            plan: {
+              operations: [{
+                op: "create",
+                box: { text: "vendor.test~", numinlets: 2, numoutlets: 1 },
+              }],
+            },
+          },
+        },
+      });
+
       const result = await client.request(4, "tools/call", {
         name: "maxforge_compile_plan",
         arguments: {
