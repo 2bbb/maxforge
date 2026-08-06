@@ -57,6 +57,7 @@ describe("object catalog integrity", () => {
       expect(definition.numinlets, name).toBeGreaterThanOrEqual(0);
       expect(definition.numoutlets, name).toBeGreaterThanOrEqual(0);
       expect(Boolean(definition.dynamicPorts && definition.argRule), name).toBe(false);
+      expect(definition, name).not.toHaveProperty("argDependent");
     }
   });
 

@@ -309,13 +309,11 @@ def validate_definition(name: str, definition: dict[str, Any]) -> list[str]:
         errors.append(
             f"{name}: outlettype length {len(outlet_types)} does not match numoutlets {outlets}"
         )
-    if definition.get("dynamicPorts") and (definition.get("argDependent") or definition.get("argRule")):
-        errors.append(f"{name}: use either dynamicPorts or an explicit argDependent rule, not both")
+    if definition.get("dynamicPorts") and definition.get("argRule"):
+        errors.append(f"{name}: use either dynamicPorts or an explicit argument rule, not both")
     rule = definition.get("argRule")
     if rule is not None and rule not in SUPPORTED_ARG_RULES:
         errors.append(f"{name}: unsupported argRule {rule!r}")
-    if bool(definition.get("argDependent")) != (rule is not None):
-        errors.append(f"{name}: argDependent must be true exactly when argRule is present")
     if isinstance(outlet_types, list) and not all(isinstance(value, str) for value in outlet_types):
         errors.append(f"{name}: every outlettype entry must be a string")
     default_size = definition.get("defaultSize")
@@ -339,7 +337,6 @@ def write_static_metadata(
     for name, definition in catalog.items():
         if (
             definition.get("dynamicPorts")
-            or definition.get("argDependent")
             or definition.get("argRule")
             or name in PROJECT_OBJECTS
         ):
@@ -397,7 +394,6 @@ def main() -> int:
 
         if (
             definition.get("dynamicPorts")
-            or definition.get("argDependent")
             or definition.get("argRule")
             or name in PROJECT_OBJECTS
         ):

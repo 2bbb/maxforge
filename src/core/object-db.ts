@@ -55,8 +55,8 @@ export function lookupObject(
 
   const entry = database[firstToken];
   if (entry) {
-    if (entry.argDependent || entry.argRule || entry.argumentPortRules) {
-      const resolved = resolveArgDependent(objectText, entry);
+    if (entry.argRule || entry.argumentPortRules) {
+      const resolved = resolveArgumentPorts(objectText, entry);
       return { def: resolved, text: objectText, maxclass: entry.maxclass };
     }
     return { def: entry, text: objectText, maxclass: entry.maxclass };
@@ -105,7 +105,7 @@ function extractArgs(objectText: string): string[] {
   return beforeAttr;
 }
 
-function resolveArgDependent(
+function resolveArgumentPorts(
   objectText: string,
   base: ObjectDef
 ): ObjectDef {

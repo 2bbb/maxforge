@@ -531,7 +531,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = outlets = arg count, default 1 signal"
   },
   "delay~": {
@@ -585,7 +584,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "outlets = arg count, default 2 signals"
   },
   "dac~": {
@@ -598,7 +596,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = arg count, default 2"
   },
   "sfplay~": {
@@ -614,7 +611,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "signal outlets = channel arg + completion bang"
   },
   "groove~": {
@@ -630,7 +626,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "signal outlets = second arg + sync outlet"
   },
   "buffer~": {
@@ -689,7 +684,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "signal outlets = second arg + completion bang"
   },
   "record~": {
@@ -704,7 +698,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = second arg + 2"
   },
   "wave~": {
@@ -1038,7 +1031,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = first arg, outlets = second arg + status"
   },
   "selector~": {
@@ -1053,7 +1045,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = first arg + 1"
   },
   "gate~": {
@@ -1068,7 +1059,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "signal outlets = first arg"
   },
   "scope~": {
@@ -1134,7 +1124,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "outlets = first arg value"
   },
   "switch": {
@@ -1149,7 +1138,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = first arg + 1"
   },
   "route": {
@@ -1165,7 +1153,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = outlets = arg count + 1"
   },
   "routepass": {
@@ -1181,7 +1168,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = outlets = arg count + 1"
   },
   "zl": {
@@ -1210,7 +1196,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = first arg"
   },
   "spray": {
@@ -1226,7 +1211,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "outlets = first arg"
   },
   "forward": {
@@ -1274,7 +1258,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "one inlet without name, zero with name"
   },
   "r": {
@@ -1289,7 +1272,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "one inlet without name, zero with name"
   },
   "send~": {
@@ -1352,7 +1334,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = arg count"
   },
   "unpack": {
@@ -1368,7 +1349,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "outlets = arg count, value types from args"
   },
   "spell": {
@@ -1448,7 +1428,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "outlets = first arg"
   },
   "thresh": {
@@ -1476,7 +1455,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = arg count"
   },
   "+": {
@@ -1491,7 +1469,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "-": {
@@ -1506,7 +1483,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "*": {
@@ -1521,7 +1497,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "/": {
@@ -1536,7 +1511,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "expr": {
@@ -1551,7 +1525,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = max $i/$f/$s reference index"
   },
   "vexpr": {
@@ -1566,7 +1539,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = max $i/$f/$s reference index"
   },
   "random": {
@@ -1621,7 +1593,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "scale": {
@@ -1742,7 +1713,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = outlets = arg count + 1, matched outlets bang"
   },
   "match": {
@@ -1785,7 +1755,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "ports from variable and outN references"
   },
   "speedlim": {
@@ -1852,7 +1821,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = second arg + 1, outlets = second arg"
   },
   "pipe": {
@@ -1867,7 +1835,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = arg count, outlets = arg count - 1"
   },
   "clocker": {
@@ -2086,7 +2053,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = format conversion count"
   },
   "regexp": {
@@ -3015,7 +2981,6 @@
       22
     ],
     "category": "jitter",
-    "argDependent": true,
     "argRule": "jit.movie output type from output_texture attribute"
   },
   "jit.qt.movie": {
@@ -3129,7 +3094,6 @@
       22
     ],
     "category": "jitter",
-    "argDependent": true,
     "argRule": "inlets = first arg"
   },
   "jit.unpack": {
@@ -3148,7 +3112,6 @@
       22
     ],
     "category": "jitter",
-    "argDependent": true,
     "argRule": "outlets = first arg + status"
   },
   "jit.spill": {
@@ -3729,8 +3692,7 @@
       22
     ],
     "category": "logic",
-    "argRule": "outlets = arg count, outlettype from args",
-    "argDependent": true
+    "argRule": "outlets = arg count, outlettype from args"
   },
   "t": {
     "maxclass": "newobj",
@@ -3745,8 +3707,7 @@
       22
     ],
     "category": "logic",
-    "argRule": "outlets = arg count, outlettype from args",
-    "argDependent": true
+    "argRule": "outlets = arg count, outlettype from args"
   },
   "b": {
     "maxclass": "newobj",
@@ -3761,7 +3722,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "outlets = first arg, default 2 bangs"
   },
   "loadbang": {
@@ -3855,7 +3815,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "inlets = arg count, default 1"
   },
   "maxforge.sync": {
@@ -3884,7 +3843,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from numeric arguments"
   },
   "past": {
@@ -3942,7 +3900,6 @@
       22
     ],
     "category": "logic",
-    "argDependent": true,
     "argRule": "fixed ports, outlettype from first arg"
   },
   "bondo": {
@@ -3958,8 +3915,7 @@
       22
     ],
     "category": "logic",
-    "argRule": "inlets = outlets = first arg",
-    "argDependent": true
+    "argRule": "inlets = outlets = first arg"
   },
   "key": {
     "maxclass": "newobj",
@@ -4392,7 +4348,6 @@
       22
     ],
     "category": "msp",
-    "argDependent": true,
     "argRule": "inlets = first arg"
   },
   "peakamp~": {

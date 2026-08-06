@@ -576,7 +576,7 @@ src/
     port-objects.ts    inlet/outlet object classification helpers
     decompiler.ts      maxpat JSON → DSL text
     attributes.ts      Shared box attribute helpers
-    object-db.ts       Object lookup + argDependent resolution
+    object-db.ts       Object lookup + argument-dependent port resolution
     catalog-config.ts  Project external/abstraction catalog loading
     layout.ts          Auto-layout via topological sort
     clipboard.ts       Compress/decompress for Max clipboard

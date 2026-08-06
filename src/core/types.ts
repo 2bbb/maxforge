@@ -103,7 +103,6 @@ export interface ObjectDef {
   outlettype: string[];
   defaultSize: [number, number];
   category: string;
-  argDependent?: boolean;
   argRule?: string;
   /** Safe project-catalog rules for deriving port counts from object arguments. */
   argumentPortRules?: ArgumentPortRules;

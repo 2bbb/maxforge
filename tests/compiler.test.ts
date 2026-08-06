@@ -531,7 +531,7 @@ fx = p invalid_ports {
     expect(result.errors.map((error) => error.code)).toEqual(["E003", "E003"]);
   });
 
-  describe("argDependent resolution", () => {
+  describe("argument-dependent port resolution", () => {
     it("resolves gate outlets from arg", () => {
       const source = `
 tog = toggle
