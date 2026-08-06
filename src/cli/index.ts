@@ -45,6 +45,11 @@ async function main() {
     return;
   }
 
+  if (command === "doctor") {
+    await doctorCommand(args.slice(1));
+    return;
+  }
+
   if (command === "from-clipboard") {
     fromClipboardCommand(args.slice(1));
     return;
@@ -253,6 +258,40 @@ async function planCommand(cmdArgs: string[]) {
   }
 }
 
+async function doctorCommand(cmdArgs: string[]) {
+  let configFile = "";
+  let inputFile = "";
+
+  for (let i = 0; i < cmdArgs.length; i++) {
+    if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
+      configFile = cmdArgs[i + 1];
+      i++;
+    } else if (cmdArgs[i] === "--input" && cmdArgs[i + 1]) {
+      inputFile = cmdArgs[i + 1];
+      i++;
+    } else {
+      throw new Error(`Unknown doctor option: ${cmdArgs[i]}`);
+    }
+  }
+
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath: inputFile || undefined,
+  });
+  const abstractionCount = catalog.customObjects.filter(
+    ({ kind }) => kind === "abstraction"
+  ).length;
+  const externalCount = catalog.customObjects.length - abstractionCount;
+
+  console.log("Object catalog validation passed.");
+  console.log(`Config: ${catalog.configPath ?? "built-in only"}`);
+  console.log(`Digest: ${catalog.digest}`);
+  console.log(`Effective objects: ${Object.keys(catalog.database).length}`);
+  console.log(`Custom externals: ${externalCount}`);
+  console.log(`Abstractions: ${abstractionCount}`);
+  for (const source of catalog.sources) console.log(`Source: ${source}`);
+}
+
 function reportDiagnostics(
   errors: Array<{ line?: number; code: string; message: string }>,
   warnings: Array<{ line?: number; code: string; message: string }>
@@ -339,6 +378,7 @@ Usage:
   maxforge from-clipboard [-o output.maxdsl]
   maxforge validate <input.maxdsl> [--config path] [--allow-unknown]
   maxforge plan <desired.maxdsl> [--config path] [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
+  maxforge doctor [--config path] [--input input.maxdsl]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
@@ -346,6 +386,7 @@ Commands:
   from-clipboard  Read compressed patcher from stdin, output .maxdsl
   validate        Validate .maxdsl without writing output
   plan            Build a managed PatchPlan for maxforge.sync
+  doctor          Validate project catalog files and abstraction metadata
 
 Options:
   -o <file>          Output file path
@@ -355,6 +396,7 @@ Options:
   --scope <name>     Managed scope for plan generation (default: default)
   --current <file>   Current managed .maxdsl or scoped .maxpat snapshot
   --compact          Emit a single-line JSON plan
+  --input <file>     Input path used for doctor config discovery
 `);
 }
 
