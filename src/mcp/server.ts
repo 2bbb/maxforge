@@ -39,8 +39,9 @@ export function catalogOptionsFromEnvironment(
 }
 
 export async function main(): Promise<void> {
+  const catalogOptions = catalogOptionsFromEnvironment(process.env);
   const [catalog, version] = await Promise.all([
-    loadObjectCatalog(catalogOptionsFromEnvironment(process.env)),
+    loadObjectCatalog(catalogOptions),
     packageVersion(),
   ]);
   const bridgeOptions = bridgeOptionsFromEnvironment(process.env);
@@ -54,7 +55,13 @@ export async function main(): Promise<void> {
   let handle;
   try {
     handle = serveStdio(() =>
-      createMaxforgeMcpServer({ service, transport: bridge, version, catalog })
+      createMaxforgeMcpServer({
+        service,
+        transport: bridge,
+        version,
+        catalog,
+        reloadCatalog: () => loadObjectCatalog(catalogOptions),
+      })
     );
   } catch (error) {
     await bridge.close();

@@ -230,6 +230,7 @@ available for human-readable status and local diagnostics. See
 - `maxforge_help`
 - `maxforge_status`
 - `maxforge_catalog`
+- `maxforge_reload_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_open_patch`

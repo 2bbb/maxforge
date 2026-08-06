@@ -50,15 +50,47 @@ const catalog: LoadedObjectCatalog = {
   }],
 };
 
+const reloadedDatabase: ObjectDatabase = {
+  ...configuredDatabase,
+  "vendor.reloaded": {
+    maxclass: "newobj",
+    numinlets: 1,
+    numoutlets: 1,
+    outlettype: ["int"],
+    defaultSize: [100, 22],
+    category: "external",
+  },
+};
+const reloadedCatalog: LoadedObjectCatalog = {
+  ...catalog,
+  database: reloadedDatabase,
+  digest: "d".repeat(64),
+  customObjects: [
+    ...catalog.customObjects,
+    {
+      name: "vendor.reloaded",
+      kind: "external",
+      source: "/project/maxforge.config.json",
+      ports: "fixed",
+      definition: reloadedDatabase["vendor.reloaded"],
+    },
+  ],
+};
+
 describe("maxforge MCP protocol surface", () => {
   it("lists tools and compiles a plan over an MCP transport", async () => {
     const transport = new FakeTransport();
     const service = new MaxforgePatchService(configuredDatabase, transport);
+    let reloadShouldFail = false;
     const server = createMaxforgeMcpServer({
       service,
       transport,
       version: "test",
       catalog,
+      reloadCatalog: async () => {
+        if (reloadShouldFail) throw new Error("invalid replacement catalog");
+        return reloadedCatalog;
+      },
     });
     const client = new InMemoryMcpClient(server);
 
@@ -69,6 +101,7 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_help",
         "maxforge_status",
         "maxforge_catalog",
+        "maxforge_reload_catalog",
         "maxforge_list_patches",
         "maxforge_create_patch",
         "maxforge_open_patch",
@@ -80,7 +113,7 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(12);
+      expect(definitions).toHaveLength(13);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -183,6 +216,64 @@ describe("maxforge MCP protocol surface", () => {
                 box: { text: "vendor.test~", numinlets: 2, numoutlets: 1 },
               }],
             },
+          },
+        },
+      });
+
+      const reload = await client.request(36, "tools/call", {
+        name: "maxforge_reload_catalog",
+        arguments: {},
+      });
+      expect(reload).toMatchObject({
+        result: {
+          structuredContent: {
+            previous: { digest: "c".repeat(64), customObjectCount: 1 },
+            catalog: { digest: "d".repeat(64), customObjectCount: 2 },
+            changed: true,
+          },
+        },
+      });
+
+      const reloadedPlan = await client.request(37, "tools/call", {
+        name: "maxforge_compile_plan",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "reloaded",
+          desiredDsl: "item = vendor.reloaded",
+        },
+      });
+      expect(reloadedPlan).toMatchObject({
+        result: {
+          structuredContent: {
+            plan: {
+              operations: [{
+                op: "create",
+                box: { text: "vendor.reloaded", numinlets: 1, numoutlets: 1 },
+              }],
+            },
+          },
+        },
+      });
+
+      reloadShouldFail = true;
+      const rejectedReload = await client.request(38, "tools/call", {
+        name: "maxforge_reload_catalog",
+        arguments: {},
+      });
+      expect(rejectedReload).toMatchObject({
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "invalid replacement catalog" }],
+        },
+      });
+      const statusAfterRejectedReload = await client.request(39, "tools/call", {
+        name: "maxforge_status",
+        arguments: {},
+      });
+      expect(statusAfterRejectedReload).toMatchObject({
+        result: {
+          structuredContent: {
+            catalog: { digest: "d".repeat(64), customObjectCount: 2 },
           },
         },
       });

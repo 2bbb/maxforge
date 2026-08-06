@@ -15,6 +15,7 @@ Require these MCP tools:
 - `maxforge_help`
 - `maxforge_status`
 - `maxforge_catalog`
+- `maxforge_reload_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_open_patch`
@@ -36,8 +37,9 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 2. Call `maxforge_status` when registration or process state is uncertain.
 3. Before using a custom external or abstraction, call `maxforge_catalog` and
    require its configured definition. If it is absent, stop and tell the user
-   to set `MAXFORGE_CONFIG` and restart the MCP process. Do not substitute
-   `--allow-unknown` in a live mutation.
+   to set `MAXFORGE_CONFIG`. If configured files changed after startup, call
+   `maxforge_reload_catalog` and verify the new digest. A rejected reload leaves
+   the old catalog active. Do not substitute `--allow-unknown` in a live mutation.
 4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
    and filenames are display metadata, not target identities.
 5. If a separate window is required, call `maxforge_create_patch` with a unique

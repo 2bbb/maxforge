@@ -219,6 +219,15 @@ Use the catalog digest from this tool/status when diagnosing different agent
 results across process restarts. Do not treat a listed object as proof that Max
 can instantiate it; maxforge deliberately avoids side-effectful runtime probes.
 
+### `maxforge_reload_catalog`
+
+Reloads the catalog configured at MCP startup without restarting the server or
+dropping live Max registrations. Maxforge parses and validates the complete
+replacement before switching the compiler database and reported digest
+together. A failed reload leaves the previous catalog active. After editing a
+configured catalog file, reload it and verify the new digest with
+`maxforge_catalog` before compiling.
+
 ### `maxforge_list_patches`
 
 Returns the currently registered patch targets. Use this before inspection or

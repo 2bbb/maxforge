@@ -119,7 +119,7 @@ export class MaxforgePatchService {
   private readonly pendingApplies: Map<string, PendingPatchApply>;
 
   constructor(
-    private readonly database: ObjectDatabase,
+    private database: ObjectDatabase,
     private readonly transport: PatchPlanTransport,
     private readonly stateStore?: PatchStateStore
   ) {
@@ -128,6 +128,10 @@ export class MaxforgePatchService {
     this.intentGraphs = new Map(state?.intentGraphs);
     this.baselineSnapshots = new Map(state?.baselineSnapshots);
     this.pendingApplies = new Map(state?.pendingApplies);
+  }
+
+  replaceDatabase(database: ObjectDatabase): void {
+    this.database = database;
   }
 
   compilePlan(request: CompilePlanRequest): CompilePlanResult {

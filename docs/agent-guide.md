@@ -220,7 +220,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 1. 初回操作では`maxforge_help`へ`topic: "workflow"`を渡し、serverが返す
    最新の操作規約を読む。失敗後は`topic: "recovery"`を読む。
 2. custom externalまたはabstractionを使う場合は`maxforge_catalog`で、
-   MCP processが実際に読み込んだ定義を確認する。
+   MCP processが実際に読み込んだ定義を確認する。設定ファイルを変更した
+   場合は`maxforge_reload_catalog`を呼び、新digestを確認する。reload失敗時は
+   旧catalogがそのまま有効であり、部分更新とは扱わない。
 3. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
 4. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
    scope、titleを指定し、既存`.maxpat`を対象にするなら

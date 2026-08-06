@@ -192,6 +192,7 @@ const HELP_CONTENT = {
     summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
     steps: [
       "Before using a project external or abstraction, call maxforge_catalog and confirm the loaded definition.",
+      "After editing configured catalog files, call maxforge_reload_catalog and verify the replacement digest before compiling.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
       "If managed edits exist, call maxforge_reconcile_patch and require canApply=true before preserving them.",
@@ -210,6 +211,7 @@ const HELP_CONTENT = {
     ],
     relatedTools: [
       "maxforge_catalog",
+      "maxforge_reload_catalog",
       "maxforge_list_patches",
       "maxforge_inspect_patch",
       "maxforge_reconcile_patch",
@@ -298,11 +300,13 @@ export interface CreateMcpServerOptions {
   readonly transport: PatchPlanTransport;
   readonly version: string;
   readonly catalog: LoadedObjectCatalog;
+  readonly reloadCatalog: () => Promise<LoadedObjectCatalog>;
 }
 
 export function createMaxforgeMcpServer(
   options: CreateMcpServerOptions
 ): McpServer {
+  let currentCatalog = options.catalog;
   const server = new McpServer(
     {
       name: "maxforge",
@@ -386,7 +390,7 @@ export function createMaxforgeMcpServer(
         managedRevisions: options.service.getManagedRevisions(),
         inspectionBaselineScopes: options.service.getBaselineScopes(),
         state: options.service.getStateStatus(),
-        catalog: catalogStatus(options.catalog),
+        catalog: catalogStatus(currentCatalog),
       };
       return toolResult(result);
     }
@@ -424,16 +428,51 @@ export function createMaxforgeMcpServer(
     async ({ query, includeBuiltins, limit }) => {
       const maximum = limit ?? 50;
       const matches = catalogObjects(
-        options.catalog,
+        currentCatalog,
         query,
         includeBuiltins ?? false
       );
       return toolResult({
-        catalog: catalogStatus(options.catalog),
+        catalog: catalogStatus(currentCatalog),
         totalMatches: matches.length,
         truncated: maximum < matches.length,
         objects: matches.slice(0, maximum),
       });
+    }
+  );
+
+  server.registerTool(
+    "maxforge_reload_catalog",
+    {
+      title: "Reload Maxforge object catalog",
+      description:
+        "Reload the configured object catalog from disk without restarting MCP. The compiler database and reported catalog switch together only after the complete replacement validates successfully.",
+      inputSchema: z.object({}),
+      outputSchema: z.object({
+        previous: catalogStatusSchema,
+        catalog: catalogStatusSchema,
+        changed: z.boolean(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async () => {
+      try {
+        const previous = currentCatalog;
+        const replacement = await options.reloadCatalog();
+        options.service.replaceDatabase(replacement.database);
+        currentCatalog = replacement;
+        return toolResult({
+          previous: catalogStatus(previous),
+          catalog: catalogStatus(replacement),
+          changed: previous.digest !== replacement.digest,
+        });
+      } catch (error) {
+        return toolError(error);
+      }
     }
   );
 
