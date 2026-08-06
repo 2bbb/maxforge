@@ -27,22 +27,35 @@ export function applyBoxAttrs(
   }
 }
 
-export function extractBoxAttrStrings(box: BoxJSON): string[] {
-  const result: string[] = [];
+export function extractBoxAttrs(box: BoxJSON): {
+  serialized: string[];
+  omitted: string[];
+} {
+  const serialized: string[] = [];
+  const omitted: string[] = [];
   for (const [key, value] of Object.entries(box)) {
     if (STRUCTURAL_BOX_KEYS.has(key)) continue;
     if (value === undefined || value === null) continue;
-    result.push(formatAttr(key, value));
+    const formatted = formatAttr(key, value);
+    if (formatted === null) omitted.push(key);
+    else serialized.push(formatted);
   }
-  return result;
+  return { serialized, omitted };
 }
 
-function formatAttr(key: string, value: unknown): string {
+function formatAttr(key: string, value: unknown): string | null {
   if (Array.isArray(value)) {
+    if (value.length === 0 || value.some((part) => !isAttrValue(part))) return null;
     const parts = value.map(v => formatAttrValue(v));
     return `@${key} ${parts.join(" ")}`;
   }
+  if (!isAttrValue(value)) return null;
   return `@${key} ${formatAttrValue(value)}`;
+}
+
+function isAttrValue(value: unknown): value is AttrValue {
+  return typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value));
 }
 
 function formatAttrValue(value: unknown): string {

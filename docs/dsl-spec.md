@@ -187,7 +187,11 @@ freq = number @minimum 0 @maximum 127 at(100, 50)
 vol = slider @size 20 140 @min 0 @max 100
 ```
 
-The decompiler reverses this: any non-structural box key in a box JSON is emitted as `@key value`.
+The decompiler emits scalar and flat string/number-array non-structural box keys
+as `@key value`. Nested objects/arrays, booleans, empty arrays, and other opaque
+values have no lossless DSL representation; they are omitted with a preceding
+`# maxforge omitted unsupported attribute ...` comment instead of being
+silently stringified into a different value.
 
 Reserved structural keys cannot be set with attributes: `id`, `maxclass`, `numinlets`, `numoutlets`, `outlettype`, `patching_rect`, `text`, `patcher`, and `comment`.
 

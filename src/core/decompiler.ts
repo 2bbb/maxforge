@@ -1,5 +1,5 @@
 import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
-import { extractBoxAttrStrings } from "./attributes.js";
+import { extractBoxAttrs } from "./attributes.js";
 
 export function decompile(
   patch: PatcherJSON,
@@ -113,27 +113,40 @@ function sanitizeName(name: string): string {
 }
 
 function boxToDSL(box: BoxJSON, name: string, signalPort: boolean): string {
-  const attrs = extractBoxAttrStrings(box);
+  const { serialized: attrs, omitted } = extractBoxAttrs(box);
   const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
   const posSuffix = positionSuffix(box);
+  const withOmissionNotice = (line: string) => omitted.length === 0
+    ? line
+    : `${omitted.map((key) =>
+      `# maxforge omitted unsupported attribute @${key} from ${name}`
+    ).join("\n")}\n${line}`;
 
   if (box.maxclass === "comment") {
     const text = box.text || "";
-    return `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
+    return withOmissionNotice(
+      `${name} = comment "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`
+    );
   }
 
   if (box.maxclass === "message") {
     const text = box.text || "";
-    return `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
+    return withOmissionNotice(
+      `${name} = message "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`
+    );
   }
 
   if (box.maxclass === "inlet" || box.maxclass === "outlet") {
     const signalSuffix = signalPort ? " signal" : "";
     const comment = (box.comment as string) || "";
     if (comment) {
-      return `${name} = ${box.maxclass}${signalSuffix} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`;
+      return withOmissionNotice(
+        `${name} = ${box.maxclass}${signalSuffix} "${comment.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"${attrSuffix}${posSuffix}`
+      );
     }
-    return `${name} = ${box.maxclass}${signalSuffix}${attrSuffix}${posSuffix}`;
+    return withOmissionNotice(
+      `${name} = ${box.maxclass}${signalSuffix}${attrSuffix}${posSuffix}`
+    );
   }
 
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
@@ -142,17 +155,21 @@ function boxToDSL(box: BoxJSON, name: string, signalPort: boolean): string {
       const inner = decompile({ patcher: box.patcher }, box.outlettype ?? []);
       const innerLines = inner.trim().split("\n");
       const body = innerLines.map((l) => "  " + l).join("\n");
-      return `${name} = p ${subName}${attrSuffix}${posSuffix} {\n${body}\n}`;
+      return withOmissionNotice(
+        `${name} = p ${subName}${attrSuffix}${posSuffix} {\n${body}\n}`
+      );
     }
-    return `${name} = p ${subName}${attrSuffix}${posSuffix}`;
+    return withOmissionNotice(
+      `${name} = p ${subName}${attrSuffix}${posSuffix}`
+    );
   }
 
   if (box.maxclass === "newobj") {
     const objectText = escapeLiteralAttributeTokens(box.text || box.maxclass);
-    return `${name} = ${objectText}${attrSuffix}${posSuffix}`;
+    return withOmissionNotice(`${name} = ${objectText}${attrSuffix}${posSuffix}`);
   }
 
-  return `${name} = ${box.maxclass}${attrSuffix}${posSuffix}`;
+  return withOmissionNotice(`${name} = ${box.maxclass}${attrSuffix}${posSuffix}`);
 }
 
 function inferSignalPortIds(

@@ -1121,6 +1121,22 @@ describe("attributes", () => {
     expect(box1.maximum).toBe(box2.maximum);
   });
 
+  it("omits unsupported structured attributes instead of corrupting them", () => {
+    const patch = compile(parse("n = number").ast, db).output!;
+    patch.patcher.boxes[0].box.saved_object_attributes = { attr_comment: "" };
+    patch.patcher.boxes[0].box.embedstate = [["dim", 256, 256]];
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain(
+      "# maxforge omitted unsupported attribute @saved_object_attributes from number"
+    );
+    expect(dsl).toContain(
+      "# maxforge omitted unsupported attribute @embedstate from number"
+    );
+    expect(dsl).not.toContain("[object Object]");
+    expect(parse(dsl).errors).toHaveLength(0);
+  });
+
   it("handles attrs with at(x, y) position", () => {
     const { ast, errors } = parse('freq = number @minimum 0 @maximum 127 at(100, 200)');
     expect(errors).toHaveLength(0);
