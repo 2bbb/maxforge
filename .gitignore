@@ -5,3 +5,10 @@ dist/
 /externals/
 *.maxpat
 *.maxhelp
+
+# Generated examples and shipped help files are release artifacts and must be
+# reproducible from a clean checkout.
+!examples/*.maxpat
+!examples/**/*.maxpat
+!help/*.maxhelp
+!help/**/*.maxhelp
