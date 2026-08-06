@@ -213,6 +213,17 @@ def verify_site(site_directory: Path) -> list[str]:
             errors.append("docs/index.html is missing desired-state safety guidance")
         if "not notarized" not in documentation_html.lower():
             errors.append("docs/index.html is missing macOS notarization status")
+        for required_catalog_term in [
+            "maxforge.config.json",
+            "maxforge_catalog",
+            "MAXFORGE_CONFIG",
+            "runtime availability",
+        ]:
+            if required_catalog_term not in documentation_html:
+                errors.append(
+                    "docs/index.html is missing catalog guidance: "
+                    f"{required_catalog_term}"
+                )
 
     errors.extend(verify_page_references(site_directory, pages))
     errors.extend(verify_sitemap(site_directory))

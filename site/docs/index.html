@@ -242,6 +242,7 @@ vol[1] -&gt; dac[1]</code></pre>
               <tr><td><code>decompile patch.maxpat -o patch.maxdsl</code></td><td>Recover structural DSL and explicit positions.</td></tr>
               <tr><td><code>from-clipboard -o patch.maxdsl</code></td><td>Read compressed patch text from stdin and emit DSL.</td></tr>
               <tr><td><code>plan desired.maxdsl --scope voices -o plan.json</code></td><td>Create an ordered managed PatchPlan.</td></tr>
+              <tr><td><code>doctor --input input.maxdsl</code></td><td>Validate project catalogs and derive abstraction ports.</td></tr>
             </tbody>
           </table>
         </div>
@@ -299,6 +300,44 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           See the repository's
           <a href="https://github.com/2bbb/maxforge/blob/main/docs/object-catalog.md">catalog evidence and limits</a>
           before adding names or relying on dynamic port metadata.
+        </p>
+
+        <h3>Project externals and abstractions</h3>
+        <p>
+          Declare third-party externals and reusable <code>.maxpat</code>
+          abstractions in a strict <code>maxforge.config.json</code>. Inline DSL
+          subpatchers remain embedded and need no configuration.
+        </p>
+        <pre><code>{
+  "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
+  "schemaVersion": 1,
+  "objects": [{
+    "name": "vendor.filter~",
+    "kind": "external",
+    "ports": {
+      "mode": "fixed",
+      "inlets": 2,
+      "outlets": ["signal", ""]
+    }
+  }],
+  "abstractions": [{
+    "name": "studio.voice",
+    "path": "./patchers/studio.voice.maxpat",
+    "ports": "derive"
+  }]
+}</code></pre>
+        <ul>
+          <li><code>compile</code>, <code>validate</code>, and <code>plan</code> search upward from the input DSL; <code>--config</code> selects a file explicitly.</li>
+          <li><code>doctor</code> validates root/imported catalogs and reads referenced abstraction metadata before compilation.</li>
+          <li>Fixed ports are exact. Dynamic ports require a representative shape but do not impose a false upper connection bound.</li>
+          <li><code>ports: "derive"</code> counts root <code>inlet</code>/<code>outlet</code> boxes and infers signal outlets from incoming source metadata.</li>
+          <li>Imported catalogs cannot recursively import more catalogs. Accidental name collisions fail unless <code>override: true</code> is explicit.</li>
+        </ul>
+        <p>
+          Use the public <a href="../schema/config-v1.json">project config schema</a>
+          and <a href="../schema/objects-v1.json">shared catalog schema</a>.
+          A valid catalog is compiler metadata only: it does not install an
+          external, configure Max's search path, or prove runtime availability.
         </p>
       </section>
 
@@ -401,6 +440,12 @@ source[1] -&gt; destination[2]</code></pre>
           <code>0.0.0.0</code>, then use the same <code>@token</code> in Max.
           LAN transport is plaintext and is intended only for trusted networks.
         </p>
+        <p>
+          If desired DSL uses a project external or abstraction, add an absolute
+          <code>MAXFORGE_CONFIG</code> path to the server's <code>env</code> and
+          restart the MCP process after catalog edits. MCP intentionally does
+          not discover configuration from its working directory.
+        </p>
       </section>
 
       <section id="mcp-workflow" class="docs-section">
@@ -410,13 +455,14 @@ source[1] -&gt; destination[2]</code></pre>
         <ol class="docs-steps docs-steps-long">
           <li><span>01</span><div>Call <code>maxforge_help</code> with <code>{ "topic": "workflow" }</code>.</div></li>
           <li><span>02</span><div>Call <code>maxforge_status</code> when process or connection state is uncertain.</div></li>
-          <li><span>03</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
-          <li><span>04</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
-          <li><span>05</span><div>If managed edits exist, call <code>maxforge_reconcile_patch</code> with complete desired DSL and require <code>canApply: true</code>.</div></li>
-          <li><span>06</span><div>Otherwise call <code>maxforge_compile_plan</code>. Review warnings, deletes, and structural recreation.</div></li>
-          <li><span>07</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
-          <li><span>08</span><div>Verify the acknowledged revision, then inspect again.</div></li>
-          <li><span>09</span><div>After a merged apply, update the working complete DSL with preserved human edits or continue using reconciliation.</div></li>
+          <li><span>03</span><div>Before using a custom object, call <code>maxforge_catalog</code> and confirm the loaded definition.</div></li>
+          <li><span>04</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
+          <li><span>05</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
+          <li><span>06</span><div>If managed edits exist, call <code>maxforge_reconcile_patch</code> with complete desired DSL and require <code>canApply: true</code>.</div></li>
+          <li><span>07</span><div>Otherwise call <code>maxforge_compile_plan</code>. Review warnings, deletes, and structural recreation.</div></li>
+          <li><span>08</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
+          <li><span>09</span><div>Verify the acknowledged revision, then inspect again.</div></li>
+          <li><span>10</span><div>After a merged apply, update the working complete DSL with preserved human edits or continue using reconciliation.</div></li>
         </ol>
         <div class="docs-callout docs-callout-danger">
           <strong>Desired state, not commands</strong>
@@ -432,7 +478,8 @@ source[1] -&gt; destination[2]</code></pre>
             <thead><tr><th>Tool</th><th>Responsibility</th></tr></thead>
             <tbody>
               <tr><td><code>maxforge_help</code></td><td>Agent-facing workflow, setup, recovery, and safety instructions.</td></tr>
-              <tr><td><code>maxforge_status</code></td><td>Server state, raw clients, registered targets, and remembered revisions.</td></tr>
+              <tr><td><code>maxforge_status</code></td><td>Server, target, revision, baseline, and effective catalog state.</td></tr>
+              <tr><td><code>maxforge_catalog</code></td><td>Read loaded built-in/custom object metadata and its deterministic digest; not a Max runtime probe.</td></tr>
               <tr><td><code>maxforge_list_patches</code></td><td>List exact registered <code>patcherId</code>/<code>scope</code> targets.</td></tr>
               <tr><td><code>maxforge_create_patch</code></td><td>Create a new unsaved top-level patch through one controller-capable external.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
@@ -523,6 +570,7 @@ source[1] -&gt; destination[2]</code></pre>
         <h2>Current limits and security boundary</h2>
         <ul>
           <li>Live synchronization is experimental protocol version 1.</li>
+          <li>Project catalog entries describe compiler serialization and ports. They do not prove that the external binary, abstraction search path, architecture, or dependencies exist on the Max host.</li>
           <li>A plan is fully validated before mutation, but arbitrary Max SDK mutation has no implemented rollback after a runtime failure.</li>
           <li>Inspection is structural. It does not serialize arbitrary object attributes, DSP values, UI values, patchline colors, hidden state, or line midpoints.</li>
           <li>Reverse compilation preserves structure and explicit positions; it does not reproduce the exact original DSL source text.</li>
