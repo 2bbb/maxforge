@@ -78,13 +78,18 @@ export interface ExternalManagedConnection {
 }
 
 export function reconcilePatchGraphs(
-  base: PatchGraph,
+  // The graph whose revision Max currently acknowledges and whose concrete
+  // metadata is used to reconstruct the live snapshot.
+  acknowledged: PatchGraph,
+  // The agent's previous desired graph. It can differ from acknowledged after
+  // a human edit was preserved by an earlier reconciliation.
+  mergeBase: PatchGraph,
   desired: PatchGraph,
   currentSnapshot: MaxforgePatcherSnapshot,
   baselineSnapshot?: MaxforgePatcherSnapshot
 ): ReconciledPatchPlan {
   const reconstructed = reconstructManagedGraph(
-    base,
+    acknowledged,
     currentSnapshot,
     baselineSnapshot
   );
@@ -95,7 +100,7 @@ export function reconcilePatchGraphs(
     };
   }
 
-  const merge = mergePatchGraphs(base, reconstructed.graph, desired);
+  const merge = mergePatchGraphs(mergeBase, reconstructed.graph, desired);
   if (!merge.graph) {
     return {
       liveGraph: reconstructed.graph,
@@ -123,7 +128,7 @@ export function reconcilePatchGraphs(
       // Manual Max edits do not advance the native optimistic-concurrency
       // revision. Authenticate against the last acknowledged graph while the
       // operations themselves describe live -> merged.
-      baseRevision: base.revision,
+      baseRevision: acknowledged.revision,
     },
     conflicts: [],
   };

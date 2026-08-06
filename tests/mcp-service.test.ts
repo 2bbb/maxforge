@@ -240,6 +240,12 @@ describe("MaxforgePatchService", () => {
     expect(service.getManagedRevisions()["patch-a:voices"]).toBe(
       applied.plan.targetRevision
     );
+    expect(() => service.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl:
+        `${desiredDsl}\nmeter = meter~ at(50, 150)`,
+    })).toThrow("contains previously merged manual edits");
   });
 
   it("rejects merge when live and desired DSL change the same field", async () => {

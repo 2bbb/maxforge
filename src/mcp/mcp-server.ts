@@ -154,9 +154,11 @@ const HELP_CONTENT = {
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
+      "After a merged apply, update the working complete DSL to include preserved human edits or keep using reconciliation for later changes.",
     ],
     rules: [
       "DSL is complete desired state, not an imperative edit; omitted managed objects are removed.",
+      "Ordinary compile/apply is rejected while the acknowledged graph still differs from the agent's last desired DSL due to preserved human edits.",
       "Never mutate an unlisted patcherId or a scope different from the registration.",
       "Never retry a timeout or baseline warning blindly; inspect live state first.",
     ],

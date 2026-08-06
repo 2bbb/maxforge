@@ -52,6 +52,7 @@ export interface ReconcilePlanResult {
   readonly canApply: boolean;
   readonly plan?: PatchPlan;
   readonly mergedGraph?: PatchGraph;
+  readonly intentGraph: PatchGraph;
   readonly conflicts: readonly PatchReconciliationConflict[];
   readonly comparisonAvailable: boolean;
   readonly managedChangeCount: number;
@@ -104,6 +105,7 @@ export interface InspectPatchResult {
 
 export class MaxforgePatchService {
   private readonly managedGraphs = new Map<string, PatchGraph>();
+  private readonly intentGraphs = new Map<string, PatchGraph>();
   private readonly baselineSnapshots =
     new Map<string, MaxforgePatcherSnapshot>();
 
@@ -116,6 +118,7 @@ export class MaxforgePatchService {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
     this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+    this.assertNoPreservedManualEdits(request, current.graph);
     return {
       plan: diffPatchGraphs(current.graph, desired.graph),
       desiredGraph: desired.graph,
@@ -127,6 +130,7 @@ export class MaxforgePatchService {
     let plan: PatchPlan;
     let nextGraph: PatchGraph;
     let warnings: readonly CompileWarning[];
+    let intentGraph: PatchGraph;
     let manualChangesMerged = 0;
     if (request.manualChanges === "merge") {
       const reconciliation = await this.reconcilePlan(request);
@@ -139,15 +143,18 @@ export class MaxforgePatchService {
       }
       plan = reconciliation.plan;
       nextGraph = reconciliation.mergedGraph;
+      intentGraph = reconciliation.intentGraph;
       warnings = reconciliation.warnings;
       manualChangesMerged = reconciliation.managedChangeCount;
     } else {
       const desired = this.compileGraph(request.desiredDsl, request.scope);
       const current = this.resolveCurrentGraph(request);
       this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+      this.assertNoPreservedManualEdits(request, current.graph);
       await this.assertNoManagedDrift(request.patcherId, request.scope);
       plan = diffPatchGraphs(current.graph, desired.graph);
       nextGraph = desired.graph;
+      intentGraph = desired.graph;
       warnings = [...current.warnings, ...desired.warnings];
     }
 
@@ -158,6 +165,10 @@ export class MaxforgePatchService {
     this.managedGraphs.set(
       targetKey(request.patcherId, request.scope),
       nextGraph
+    );
+    this.intentGraphs.set(
+      targetKey(request.patcherId, request.scope),
+      intentGraph
     );
     const baseline = await this.captureBaseline(
       request.patcherId,
@@ -181,6 +192,10 @@ export class MaxforgePatchService {
     const desired = this.compileGraph(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
     this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+    const intent = request.currentDsl !== undefined
+      ? current.graph
+      : this.intentGraphs.get(targetKey(request.patcherId, request.scope)) ??
+        current.graph;
 
     const key = targetKey(request.patcherId, request.scope);
     const baseline = this.baselineSnapshots.get(key);
@@ -196,6 +211,7 @@ export class MaxforgePatchService {
     );
     const reconciliation = reconcilePatchGraphs(
       current.graph,
+      intent,
       desired.graph,
       snapshot.patcher,
       baseline
@@ -219,6 +235,7 @@ export class MaxforgePatchService {
         reconciliation.graph !== undefined,
       plan: reconciliation.plan,
       mergedGraph: reconciliation.graph,
+      intentGraph: desired.graph,
       conflicts: reconciliation.conflicts,
       comparisonAvailable: baseline !== undefined,
       managedChangeCount,
@@ -351,6 +368,23 @@ export class MaxforgePatchService {
         `${liveRevision ?? "uninitialized"}`
       );
     }
+  }
+
+  private assertNoPreservedManualEdits(
+    request: CompilePlanRequest,
+    current: PatchGraph
+  ): void {
+    if (request.currentDsl !== undefined) return;
+    const intent = this.intentGraphs.get(
+      targetKey(request.patcherId, request.scope)
+    );
+    if (!intent || intent.revision === current.revision) return;
+    throw new Error(
+      `Max patch "${request.patcherId}" scope "${request.scope}" contains ` +
+      "previously merged manual edits. Use maxforge_reconcile_patch and apply " +
+      "with manualChanges set to merge, or provide a complete currentDsl that " +
+      "includes the preserved edits."
+    );
   }
 
   private assertInspectionRevision(

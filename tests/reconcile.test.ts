@@ -20,7 +20,7 @@ describe("live patch reconciliation", () => {
       "obj-osc": { text: "cycle~ 880" },
     });
 
-    const result = reconcilePatchGraphs(base, desired, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
 
     expect(result.conflicts).toEqual([]);
     expect(result.plan).toMatchObject({
@@ -42,7 +42,7 @@ describe("live patch reconciliation", () => {
       "obj-osc": { patchingRect: [80, 90, 80, 22] },
     });
 
-    const result = reconcilePatchGraphs(base, desired, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
 
     expect(result.conflicts).toEqual([]);
     expect(result.plan?.operations.map((operation) => operation.op)).toEqual([
@@ -62,7 +62,7 @@ describe("live patch reconciliation", () => {
       "obj-osc": { text: "cycle~ 660" },
     });
 
-    const result = reconcilePatchGraphs(base, desired, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
 
     expect(result.plan).toBeUndefined();
     expect(result.conflicts).toEqual([
@@ -81,7 +81,7 @@ describe("live patch reconciliation", () => {
     );
     const current = { ...snapshot(base), boxes: [] };
 
-    const result = reconcilePatchGraphs(base, desired, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
 
     expect(result.conflicts).toEqual([]);
     expect(result.graph?.patcher.boxes.map((box) => box.id)).toEqual([
@@ -118,7 +118,7 @@ describe("live patch reconciliation", () => {
       },
     });
 
-    const result = reconcilePatchGraphs(base, desired, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
 
     expect(result.conflicts).toEqual([
       expect.objectContaining({
@@ -141,7 +141,7 @@ describe("live patch reconciliation", () => {
       text: "cycle~ 220",
     });
 
-    const result = reconcilePatchGraphs(base, base, current, snapshot(base));
+    const result = reconcilePatchGraphs(base, base, base, current, snapshot(base));
 
     expect(result.conflicts).toEqual([
       expect.objectContaining({
@@ -149,6 +149,38 @@ describe("live patch reconciliation", () => {
         id: "obj-extra",
       }),
     ]);
+  });
+
+  it("preserves an earlier merged human edit across later agent changes", () => {
+    const intent = graph(
+      "osc = cycle~ 440 at(10, 20)\ngain = *~ 0.25 at(10, 80)"
+    );
+    const acknowledged = graph(
+      "osc = cycle~ 880 at(10, 20)\ngain = *~ 0.25 at(10, 80)"
+    );
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\ngain = *~ 0.25 at(10, 80)\n" +
+      "meter = meter~ at(10, 140)"
+    );
+
+    const result = reconcilePatchGraphs(
+      acknowledged,
+      intent,
+      desired,
+      snapshot(acknowledged),
+      snapshot(acknowledged)
+    );
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.plan).toMatchObject({
+      baseRevision: acknowledged.revision,
+      operations: [{ op: "create", box: { id: "obj-meter" } }],
+    });
+    expect(result.graph?.patcher.boxes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "obj-osc", text: "cycle~ 880" }),
+      ])
+    );
   });
 });
 
