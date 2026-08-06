@@ -15,9 +15,16 @@ them from the HTML guide instead of duplicating every schema.
 Run the same structural check used by CI:
 
 ```bash
+mkdir -p site/schema
+cp schema/*.json site/schema/
 python3 scripts/verify-pages.py site
 node --check site/main.js
+rm -rf site/schema
 ```
+
+The schema copy is a staging step: Pages publishes those JSON files beside the
+static site, while the canonical sources remain under the repository's
+`schema/` directory.
 
 The verifier recursively checks every HTML page. It rejects missing titles,
 language metadata, primary headings, duplicate IDs, local files, cross-page
