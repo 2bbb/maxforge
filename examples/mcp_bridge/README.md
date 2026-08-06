@@ -142,13 +142,22 @@ MCP server configuration or native external installation above.
    equal `operationCount`, and `baselineCaptured` is true.
 9. Call `maxforge_inspect_patch` again and verify the expected boxes and cords.
 10. Move, edit, connect, create, or delete a box manually, then call
-   `maxforge_inspect_patch` again. The response reports the exact structural
-   change and whether it touches maxforge-managed state.
+    `maxforge_inspect_patch` again. The response reports the exact structural
+    change and whether it touches maxforge-managed state.
+11. Pass the next complete desired DSL to `maxforge_reconcile_patch`. Continue
+    only when `canApply` is true and every returned operation is intended.
+12. Call `maxforge_apply_dsl` with the same target and DSL plus
+    `manualChanges: "merge"`. Inspect again and verify that the human edit and
+    the agent's independent additions both remain.
 
-Inspection does not adopt a managed manual change. Restore a managed edit to
-the last post-apply structure before another apply. On timeout, transport error,
-or baseline warning, call `maxforge_help` with `topic: "recovery"`; do not
-blindly repeat the mutation.
+Inspection alone does not adopt a managed manual change. Reconciliation performs
+a three-way merge against the previous agent intent and reports same-field,
+change-vs-delete, ownership, and unmanaged-cord conflicts instead of silently
+choosing a winner. Apply repeats inspection and binds the resulting plan to its
+`baseStructureToken`; if the patch changes again before native mutation,
+`maxforge.sync` rejects the stale plan. On timeout, transport error, baseline
+warning, or token rejection, inspect again rather than blindly repeating the
+mutation.
 
 To work in a separate window instead, call `maxforge_create_patch`:
 
