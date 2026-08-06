@@ -179,7 +179,7 @@ npx maxforge@latest plan next.maxdsl \
 ```
 
 This repository also contains the native `maxforge.sync` Max external. It owns
-the loopback WebSocket connection to `maxforge-mcp`, validates complete plans,
+the WebSocket connection to `maxforge-mcp`, validates complete plans,
 and mutates the containing patcher directly through the Max SDK. It does not
 route through JavaScript, `thispatcher`, or a separate transport object. Its
 `inspect` request walks the live containing patcher and emits a
@@ -243,9 +243,15 @@ change-vs-delete conflicts are never resolved by silent overwrite.
 Apply-side inspection is bound to native mutation by a structure token, so a
 box or cord edit made in between causes rejection rather than stale overwrite.
 
-It listens for native `maxforge.sync` clients only on `127.0.0.1:8766`. Each
-live patch contains one `maxforge.sync`, registers a stable `patcherId`, and can
-therefore be created or operated as an independent Max window without
+By default it listens for native `maxforge.sync` clients on
+`127.0.0.1:8766`. Setting a human-chosen `MAXFORGE_WS_TOKEN` publishes the
+bridge on `0.0.0.0`; a Max instance on the LAN can connect using the MCP
+machine's address and the same `@token`. Non-loopback publication without a
+token is rejected. This is plaintext trusted-LAN authentication, not a public
+Internet service. See [`docs/mcp.md`](docs/mcp.md) for configuration.
+
+Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
+and can therefore be created or operated as an independent Max window without
 ambiguity. No JavaScript or helper patch wiring runs inside Max.
 
 The npm package supplies the `maxforge-mcp` Node.js server, but it does **not**

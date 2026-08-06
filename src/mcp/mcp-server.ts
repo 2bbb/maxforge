@@ -186,7 +186,7 @@ const HELP_CONTENT = {
       "Call maxforge_status, then maxforge_list_patches to verify registration before creating or changing patches.",
     ],
     rules: [
-      "The WebSocket bridge is loopback-only and defaults to 127.0.0.1:8766.",
+      "Without MAXFORGE_WS_TOKEN the WebSocket bridge stays on 127.0.0.1:8766. Setting a URL-safe token publishes it on 0.0.0.0 and requires the same maxforge.sync @token.",
       "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
       "New patch creation requires exactly one registered controller.",
     ],
@@ -226,7 +226,7 @@ const HELP_CONTENT = {
       "Titles and filenames are display metadata and are not stable identities.",
       "Unmanaged standalone edits do not block apply, but cords touching managed boxes do.",
       "Apply-side inspection is bound to native mutation by a structure token; a later human edit rejects the plan instead of being overwritten.",
-      "The loopback WebSocket transport is unauthenticated; do not expose it on a public interface.",
+      "LAN mode uses token authentication over plaintext WebSocket. Keep it on a trusted LAN; it is not an Internet-facing security boundary.",
     ],
     relatedTools: ["maxforge_list_patches", "maxforge_compile_plan", "maxforge_inspect_patch"],
   },

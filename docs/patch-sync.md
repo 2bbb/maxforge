@@ -119,7 +119,7 @@ cmake --build build
 
 `maxforge.sync` supports:
 
-- automatic loopback WebSocket connection and patch registration after the
+- automatic WebSocket connection and patch registration after the
   containing top-level patcher becomes visible;
 - `connect`, `disconnect`, and `restart` — control the native transport;
 - `status` — output the current transport state;
@@ -135,10 +135,17 @@ cmake --build build
 - `@patcher_id <name>` — select the stable MCP routing identity.
 - `@controller 0|1` — allow or deny native top-level patch creation requests.
 - `@revision_state <hash>` — persisted optimistic concurrency state.
-- `@host 127.0.0.1|::1` — select the loopback MCP host.
+- `@host <address>` — select the MCP host; defaults to `127.0.0.1`.
 - `@port <1..65535>` — select the MCP WebSocket port.
+- `@token <value>` — authenticate a LAN connection. Required when `@host` is
+  not the literal loopback address `127.0.0.1` or `::1`.
 - `@reconnect 0|1` — enable or disable automatic reconnect.
 - `@reconnect_interval <100..60000>` — set reconnect delay in milliseconds.
+
+Tokens contain 1–256 URL-safe characters: letters, digits, `.`, `_`, `~`, and
+`-`. Authentication is sent before registration and is not mirrored to the
+external's event outlet. The token is still stored as plain object text when
+the patch is saved.
 
 The external sends machine-readable events directly over its WebSocket
 connection and mirrors them on the outlet as `event <compact-json>`:
@@ -182,17 +189,14 @@ A controller can receive:
   "requestId": "correlation-id",
   "patcherId": "generated_patch",
   "scope": "generated",
-  "title": "Generated patch",
-  "host": "127.0.0.1",
-  "port": 8766
+  "title": "Generated patch"
 }
 ```
 
-The host must be loopback and the controller attribute must be enabled.
-`maxforge.sync` loads an unsaved top-level patch through the Max SDK, triggers
-its bootstrap loadbang, and acknowledges creation. The generated patch
-contains one configured `maxforge.sync` object, then registers through that
-object's independent native WebSocket connection.
+The controller attribute must be enabled. `maxforge.sync` loads an unsaved
+top-level patch through the Max SDK, triggers its bootstrap loadbang, and
+acknowledges creation. The generated patch inherits the controller's host,
+port, and token, then registers through its own native WebSocket connection.
 
 The snapshot response contains root patcher metadata plus flattened boxes and
 connections, and a top-level `structureToken` derived only from that sorted

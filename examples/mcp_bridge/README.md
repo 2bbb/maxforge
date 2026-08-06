@@ -5,9 +5,9 @@ This patch lets an MCP client replace a managed Max subgraph without
 
 The boundary is deliberately narrow:
 
-1. `maxforge-mcp` exposes tools over MCP stdio and listens only on
-   `127.0.0.1:8766`.
-2. The native `maxforge.sync` external owns the localhost WebSocket connection,
+1. `maxforge-mcp` exposes tools over MCP stdio and listens on
+   `127.0.0.1:8766` by default.
+2. The native `maxforge.sync` external owns the WebSocket connection,
    validates requests, and applies plans through the Max SDK.
 3. `maxforge.sync` sends revision acknowledgements and live structural patch
    snapshots back to the MCP process.
@@ -20,6 +20,11 @@ The boundary is deliberately narrow:
 Installing `maxforge` from npm provides the `maxforge-mcp` executable but does
 not install the native external into Max. The external remains a separate
 runtime prerequisite.
+
+For a Max machine elsewhere on the LAN, set `MAXFORGE_WS_TOKEN` in the MCP
+server environment. This changes the default bind host to `0.0.0.0`. Change
+the example object's `@host` to the MCP machine's LAN address and add the same
+`@token`. Do not use LAN mode on an untrusted network; transport is plaintext.
 
 The external compiles the reusable WebSocket client source pinned through the
 `bbb.agent` submodule. Neither the `bbb.agent.hub` external nor the

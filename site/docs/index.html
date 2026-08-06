@@ -396,9 +396,10 @@ source[1] -&gt; destination[2]</code></pre>
         </div>
         <p>
           The stdio server listens for native clients on
-          <code>ws://127.0.0.1:8766</code>. Only literal loopback hosts
-          <code>127.0.0.1</code> and <code>::1</code> are accepted. There is no
-          supported public-network mode.
+          <code>ws://127.0.0.1:8766</code> by default. Set
+          <code>MAXFORGE_WS_TOKEN</code> to publish an authenticated bridge on
+          <code>0.0.0.0</code>, then use the same <code>@token</code> in Max.
+          LAN transport is plaintext and is intended only for trusted networks.
         </p>
       </section>
 
@@ -447,7 +448,7 @@ source[1] -&gt; destination[2]</code></pre>
         <div class="docs-section-label">12 / NATIVE EXTERNAL</div>
         <h2><code>maxforge.sync</code></h2>
         <p>
-          The external owns loopback transport, stable patch registration,
+          The external owns WebSocket transport, stable patch registration,
           preflight validation, live structural inspection, and Max SDK mutation.
           It does not need <code>node.script</code>, <code>thispatcher</code>, a
           separate WebSocket object, routers, or bootstrap patch cords.
@@ -460,8 +461,9 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>@patcher_id</code></td><td>Stable MCP routing identity. Do not derive it from the window title.</td></tr>
               <tr><td><code>@scope</code></td><td>Exact managed ownership namespace.</td></tr>
               <tr><td><code>@controller 0|1</code></td><td>Whether this patch may create new top-level patches.</td></tr>
-              <tr><td><code>@host</code></td><td>Loopback MCP host; defaults to <code>127.0.0.1</code>.</td></tr>
-              <tr><td><code>@port</code></td><td>Loopback WebSocket port; defaults to <code>8766</code>.</td></tr>
+              <tr><td><code>@host</code></td><td>MCP host; defaults to <code>127.0.0.1</code>. A non-loopback host requires <code>@token</code>.</td></tr>
+              <tr><td><code>@port</code></td><td>WebSocket port; defaults to <code>8766</code>.</td></tr>
+              <tr><td><code>@token</code></td><td>Shared URL-safe LAN token matching <code>MAXFORGE_WS_TOKEN</code>.</td></tr>
               <tr><td><code>@reconnect</code></td><td>Enable or disable automatic reconnect.</td></tr>
               <tr><td><code>@revision_state</code></td><td>Persisted optimistic-concurrency revision.</td></tr>
             </tbody>
@@ -524,7 +526,7 @@ source[1] -&gt; destination[2]</code></pre>
           <li>A plan is fully validated before mutation, but arbitrary Max SDK mutation has no implemented rollback after a runtime failure.</li>
           <li>Inspection is structural. It does not serialize arbitrary object attributes, DSP values, UI values, patchline colors, hidden state, or line midpoints.</li>
           <li>Reverse compilation preserves structure and explicit positions; it does not reproduce the exact original DSL source text.</li>
-          <li>The MCP bridge binds only to literal loopback addresses. It has no remote-network mode.</li>
+          <li>The MCP bridge stays on loopback without a token. Setting <code>MAXFORGE_WS_TOKEN</code> enables authenticated trusted-LAN access; the WebSocket remains plaintext and must not be exposed directly to the Internet.</li>
           <li>The ownership marker is the reserved scripting-name namespace. The native consumer treats such boxes as owned, but MCP reconciliation rejects newly introduced reserved identities because inspection lacks enough metadata for safe adoption.</li>
           <li>Reconciliation preserves observed edits to existing managed identities. Arbitrary object attributes omitted from structural inspection cannot be merged.</li>
           <li>Moving a managed box to another patcher path is not merged as a move; express the intended delete/add in complete DSL and resolve the conflict explicitly.</li>

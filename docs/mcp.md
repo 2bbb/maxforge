@@ -9,7 +9,8 @@ from complete desired DSL. It does not run an agent or JavaScript inside Max.
 MCP client
   | stdio
 maxforge-mcp (Node.js 20+)
-  | ws://127.0.0.1:8766
+  | ws://127.0.0.1:8766 by default
+  | authenticated LAN WebSocket when explicitly enabled
 one maxforge.sync per registered patch (native Max external)
   | Max SDK
 containing patcher
@@ -18,7 +19,7 @@ containing patcher
 The boundary is intentional:
 
 - MCP, DSL compilation, diffing, and session state belong in Node.js.
-- Loopback transport, request routing, patcher ownership validation, and Max SDK
+- WebSocket transport, request routing, patcher ownership validation, and Max SDK
   mutation belong in `maxforge.sync`.
 - The WebSocket implementation is not duplicated. `maxforge.sync` compiles the
   reusable, Max-independent client source pinned by the `bbb.agent` submodule.
@@ -63,13 +64,38 @@ Environment variables:
 
 | Name | Default | Meaning |
 |---|---:|---|
-| `MAXFORGE_WS_HOST` | `127.0.0.1` | WebSocket bind host |
+| `MAXFORGE_WS_TOKEN` | unset | Shared LAN token; setting it enables authenticated LAN publication |
+| `MAXFORGE_WS_HOST` | conditional | `127.0.0.1` without a token, `0.0.0.0` with a token |
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
 
-The host is rejected unless it is exactly `127.0.0.1` or `::1`. Hostnames are
-not accepted because a hostname is not itself proof of a loopback bind. There
-is no supported public-network mode.
+With no token, non-loopback bind addresses are rejected and existing local
+setups remain unauthenticated on `127.0.0.1`. Set a human-chosen token to bind
+to all interfaces:
+
+```json
+{
+  "mcpServers": {
+    "maxforge": {
+      "command": "npx",
+      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"],
+      "env": { "MAXFORGE_WS_TOKEN": "studio-session_1" }
+    }
+  }
+}
+```
+
+On the Max machine, point `maxforge.sync` at the LAN address of the machine
+running the MCP process and use the same token:
+
+```text
+maxforge.sync @host 192.168.1.20 @port 8766 @token studio-session_1
+```
+
+Tokens contain 1–256 URL-safe characters: letters, digits, `.`, `_`, `~`, and
+`-`. `MAXFORGE_WS_HOST` may override the authenticated bind address when
+binding every interface is undesirable. The WebSocket remains plaintext: LAN
+mode is suitable for a trusted local network, not direct Internet exposure.
 
 ## AI agent guidance
 
@@ -417,7 +443,11 @@ empty. Those actions defeat optimistic concurrency.
 
 ## Failure contract
 
-- WebSocket transport is loopback-only but unauthenticated.
+- WebSocket transport is unauthenticated only in its default loopback mode.
+  Non-loopback binding requires `MAXFORGE_WS_TOKEN`, and Max must send the same
+  `@token` before registration.
+- LAN authentication uses plaintext WebSocket and is not intended for direct
+  Internet exposure.
 - A duplicate live `patcherId` is rejected rather than silently replacing the
   existing target.
 - WebSocket messages are bounded to 4 MiB; very large patch snapshots fail

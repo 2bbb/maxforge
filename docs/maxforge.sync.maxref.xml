@@ -90,13 +90,18 @@
 	<attributelist>
 
 		<attribute name='host' get='1' set='1' type='symbol' size='1' >
-			<digest>Loopback maxforge MCP WebSocket host </digest>
-			<description>Loopback maxforge MCP WebSocket host </description>
+			<digest>maxforge MCP WebSocket host </digest>
+			<description>maxforge MCP WebSocket host; non-loopback addresses require a token </description>
 		</attribute>
 
 		<attribute name='port' get='1' set='1' type='long' size='1' >
 			<digest>maxforge MCP WebSocket port </digest>
 			<description>maxforge MCP WebSocket port </description>
+		</attribute>
+
+		<attribute name='token' get='1' set='1' type='symbol' size='1' >
+			<digest>Shared token required for LAN connections </digest>
+			<description>Shared URL-safe token sent before registration; required for non-loopback hosts </description>
 		</attribute>
 
 		<attribute name='reconnect' get='1' set='1' type='long' size='1' >

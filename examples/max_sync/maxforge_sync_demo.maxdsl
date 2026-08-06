@@ -3,6 +3,7 @@ patch "maxforge.sync demo" | "Apply a managed PatchPlan without node.script or t
 title = comment "maxforge.sync: native external PatchPlan demo" at(40, 35)
 step1 = comment "The plan is imported and applied automatically. The buttons let you retry and inspect stale-revision rejection." at(40, 70)
 step2 = comment "The generated boxes use scope sync_demo; these controls and maxforge.sync itself remain unmanaged." at(40, 95)
+lan = comment "LAN: set MAXFORGE_WS_TOKEN on the MCP machine, then use @host <MCP-machine-IP> and the same @token on maxforge.sync. Trusted networks only; WebSocket is plaintext." at(40, 120)
 
 import = message "import managed_plan.json" at(40, 145)
 plan = dict maxforge_sync_demo_plan @embed 0 at(250, 145)

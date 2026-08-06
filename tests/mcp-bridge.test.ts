@@ -255,6 +255,16 @@ describe("MaxforgeWebSocketBridge", () => {
       token: "wrong-token",
     }));
     await expect(closed).resolves.toBe(1008);
+
+    const unauthenticated = await connect(status.port);
+    const unauthenticatedClosed = new Promise<number>((resolve) => {
+      unauthenticated.once("close", (code) => resolve(code));
+    });
+    unauthenticated.send(JSON.stringify(
+      registration("patch-b", "voices", false)
+    ));
+    await expect(unauthenticatedClosed).resolves.toBe(1008);
+    expect(bridge.listPatches()).toHaveLength(1);
   });
 
   it("rejects invalid token characters", () => {

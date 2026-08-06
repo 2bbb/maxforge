@@ -71,6 +71,21 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      const setupHelp = await client.request(33, "tools/call", {
+        name: "maxforge_help",
+        arguments: { topic: "setup" },
+      });
+      expect(setupHelp).toMatchObject({
+        result: {
+          structuredContent: {
+            topic: "setup",
+            rules: expect.arrayContaining([
+              expect.stringContaining("MAXFORGE_WS_TOKEN"),
+            ]),
+          },
+        },
+      });
+
       const initialStatus = await client.request(30, "tools/call", {
         name: "maxforge_status",
         arguments: {},

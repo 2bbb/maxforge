@@ -138,6 +138,8 @@ do not guess a target.
 - Reconcile managed human edits before preserving them; merge mode is opt-in.
 - Never remove or fabricate `baseStructureToken`; it prevents stale inspected
   state from being mutated after a concurrent human edit.
-- Never expose the unauthenticated WebSocket bridge outside loopback.
+- Keep the default unauthenticated WebSocket bridge on loopback. For trusted-LAN
+  use, require matching `MAXFORGE_WS_TOKEN` and `maxforge.sync @token`; never
+  treat the plaintext token mode as safe for direct Internet exposure.
 - Never treat a timeout, process exit, or missing acknowledgement as success.
 - Do not save, close, or discard a Max window unless the user asks.

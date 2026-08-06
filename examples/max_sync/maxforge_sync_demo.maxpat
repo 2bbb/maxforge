@@ -99,6 +99,21 @@
       },
       {
         "box": {
+          "id": "obj-lan",
+          "maxclass": "comment",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            40,
+            120,
+            200,
+            20
+          ],
+          "text": "LAN: set MAXFORGE_WS_TOKEN on the MCP machine, then use @host <MCP-machine-IP> and the same @token on maxforge.sync. Trusted networks only; WebSocket is plaintext."
+        }
+      },
+      {
+        "box": {
           "id": "obj-import",
           "maxclass": "message",
           "numinlets": 2,
