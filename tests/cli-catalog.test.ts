@@ -67,6 +67,7 @@ describe("maxforge catalog CLI", () => {
         kind: "external",
         argumentPorts: true,
         dynamicPorts: false,
+        paths: [],
       }),
     ]);
   });

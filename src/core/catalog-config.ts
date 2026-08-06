@@ -138,9 +138,7 @@ export interface CustomObjectInfo {
   readonly name: string;
   readonly kind: "external" | "abstraction";
   readonly source: string;
-  readonly path?: string;
-  /** All package artifacts for this object; older programmatic catalogs may provide only path. */
-  readonly paths?: readonly string[];
+  readonly paths: readonly string[];
   readonly ports: "fixed" | "dynamic" | "arguments";
   readonly definition: ObjectDef;
 }
@@ -170,8 +168,7 @@ export interface CatalogObjectRecord {
   readonly dynamicPorts: boolean;
   readonly argumentPorts: boolean;
   readonly source: string;
-  readonly path?: string;
-  readonly paths?: readonly string[];
+  readonly paths: readonly string[];
 }
 
 export function searchObjectCatalog(
@@ -204,10 +201,7 @@ export function searchObjectCatalog(
         dynamicPorts: definition.dynamicPorts === true,
         argumentPorts: definition.argumentPortRules !== undefined,
         source: custom?.source ?? "built-in",
-        ...(custom?.path ? { path: custom.path } : {}),
-        ...(custom?.paths && custom.paths.length > 1
-          ? { paths: [...custom.paths] }
-          : {}),
+        paths: custom ? [...custom.paths] : [],
       } satisfies CatalogObjectRecord];
     })
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -369,7 +363,6 @@ async function externalInfo(
     name: declaration.name,
     kind: "external",
     source,
-    path: externalPaths[0],
     paths: externalPaths,
     ports: portMode(declaration.ports),
     definition,
@@ -407,7 +400,6 @@ async function abstractionInfo(
     name: declaration.name,
     kind: "abstraction",
     source,
-    path: abstractionPath,
     paths: [abstractionPath],
     ports: portMode(ports),
     definition,

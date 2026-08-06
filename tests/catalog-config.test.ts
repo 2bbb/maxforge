@@ -304,7 +304,7 @@ describe("project object catalogs", () => {
     expect(catalog.customObjects[0]).toMatchObject({
       name: "my.voice",
       kind: "abstraction",
-      path: abstractionPath,
+      paths: [abstractionPath],
     });
   });
 

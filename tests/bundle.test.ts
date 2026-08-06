@@ -56,12 +56,12 @@ describe("portable catalog dependencies", () => {
       expect.objectContaining({
         name: "vendor.fx",
         destination: "externals",
-        path: externalPath,
+        paths: [externalPath],
       }),
       expect.objectContaining({
         name: "voice",
         destination: "patchers",
-        path: abstractionPath,
+        paths: [abstractionPath],
       }),
     ]);
   });
@@ -111,7 +111,7 @@ describe("portable catalog dependencies", () => {
     } as never;
 
     await expect(collectCatalogDependencies(patcher, catalog)).resolves.toEqual([
-      expect.objectContaining({ name: "vendor.ui", path: externalPath }),
+      expect.objectContaining({ name: "vendor.ui", paths: [externalPath] }),
     ]);
   });
 });

@@ -217,7 +217,8 @@ Arguments:
 
 Each result identifies the object as built-in, external, or abstraction and
 reports serialization class, port metadata, dynamic/argument-rule status,
-source file, and declared package artifact paths when present.
+source file, and `paths`. The `paths` array is empty for built-ins and custom
+externals without declared package artifacts.
 Use the catalog digest from this tool/status when diagnosing different agent
 results across process restarts. Do not treat a listed object as proof that Max
 can instantiate it; maxforge deliberately avoids side-effectful runtime probes.

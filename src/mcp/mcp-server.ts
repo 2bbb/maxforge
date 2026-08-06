@@ -138,8 +138,7 @@ const catalogObjectSchema = z.object({
   dynamicPorts: z.boolean(),
   argumentPorts: z.boolean(),
   source: z.string(),
-  path: z.string().optional(),
-  paths: z.array(z.string()).optional(),
+  paths: z.array(z.string()),
 });
 
 const catalogStatusSchema = z.object({

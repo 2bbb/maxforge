@@ -20,8 +20,7 @@ export async function collectCatalogDependencies(
     for (const name of names) {
       const dependency = customByName.get(name);
       if (!dependency || dependencies.has(name)) continue;
-      const paths = dependency.paths ?? (dependency.path ? [dependency.path] : []);
-      if (paths.length === 0) {
+      if (dependency.paths.length === 0) {
         throw new Error(
           `Portable bundle requires a path for ${dependency.kind} "${name}"`
         );
@@ -30,10 +29,9 @@ export async function collectCatalogDependencies(
         ...dependency,
         destination: dependency.kind === "external" ? "externals" : "patchers",
       });
-      const abstractionPath = dependency.path;
+      const abstractionPath = dependency.paths[0];
       if (
         dependency.kind !== "abstraction" ||
-        !abstractionPath ||
         visitedAbstractions.has(abstractionPath)
       ) {
         continue;
@@ -55,9 +53,7 @@ export async function collectCatalogDependencies(
   await visit(patcher);
   return [...dependencies.values()].sort((left, right) =>
     left.destination.localeCompare(right.destination) ||
-    basename(left.paths?.[0] ?? left.path!).localeCompare(
-      basename(right.paths?.[0] ?? right.path!)
-    )
+    basename(left.paths[0]).localeCompare(basename(right.paths[0]))
   );
 }
 

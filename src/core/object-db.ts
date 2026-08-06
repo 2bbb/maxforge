@@ -16,10 +16,6 @@ export async function loadDatabase(): Promise<ObjectDatabase> {
   return db!;
 }
 
-export function setDatabase(override: ObjectDatabase): void {
-  db = override;
-}
-
 export function lookupObject(
   objectText: string,
   database: ObjectDatabase,

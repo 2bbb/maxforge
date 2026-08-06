@@ -373,8 +373,7 @@ async function bundleCommand(cmdArgs: string[]) {
   const copies = new Map<string, string>();
   copies.set(mainRelative, inputPath);
   for (const dependency of dependencies) {
-    const sourcePaths = dependency.paths ?? (dependency.path ? [dependency.path] : []);
-    for (const sourcePath of sourcePaths) {
+    for (const sourcePath of dependency.paths) {
       const relative = `${dependency.destination}/${basename(sourcePath)}`;
       const previous = copies.get(relative);
       if (previous && previous !== sourcePath) {
