@@ -47,6 +47,9 @@ jobs:
       - name: Validate GitHub Pages site
         run: python3 scripts/verify-pages.py site
 
+      - name: Validate GitHub Pages JavaScript
+        run: node --check site/main.js
+
   build-macos:
     runs-on: macos-latest
     steps:

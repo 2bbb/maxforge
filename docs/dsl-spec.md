@@ -255,10 +255,17 @@ patch "Patch Name" | "Description text"
 patch "Patch Name" | "Description text" | 800x600
 ```
 
-- **Optional**. If omitted, defaults to `"Untitled" | "" | 640x480`.
+- **Optional**. If omitted, maxforge emits no explicit Max `title`, an empty
+  `description`, and a `640x480` patcher rectangle. Max may derive the visible
+  window title from the saved filename.
 - Recommended position is before any object definitions or connections.
 - Exactly zero or one declaration is allowed; duplicates are syntax errors.
-- Description must be quoted and size must be a valid `WIDTHxHEIGHT` token.
+- Title and description use JSON string escaping, so quoted `|`, `\"`, `\\`,
+  and escapes such as `\n` do not terminate the declaration. Size must contain
+  positive safe integers in a valid `WIDTHxHEIGHT` token.
+- The declaration maps to real root patcher JSON fields: `title`,
+  `description`, and `rect`. Decompilation preserves them when present; it does
+  not fabricate a filename-derived title when the JSON has none.
 - Parameters after `|`:
   1. Description (string)
   2. Window size (`WIDTHxHEIGHT`)

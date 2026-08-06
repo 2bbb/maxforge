@@ -45,6 +45,7 @@
     "enablehscroll": 1,
     "enablevscroll": 1,
     "devicewidth": 0,
+    "title": "maxforge.sync demo",
     "description": "Apply a managed PatchPlan without node.script or thispatcher",
     "digest": "",
     "tags": "",

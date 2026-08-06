@@ -45,6 +45,7 @@
     "enablehscroll": 1,
     "enablevscroll": 1,
     "devicewidth": 0,
+    "title": "Basic Synth",
     "description": "Simple oscillator -> gain -> DAC",
     "digest": "",
     "tags": "",

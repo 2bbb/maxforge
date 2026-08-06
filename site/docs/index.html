@@ -243,6 +243,8 @@ vol[1] -&gt; dac[1]</code></pre>
               <tr><td><code>from-clipboard -o patch.maxdsl</code></td><td>Read compressed patch text from stdin and emit DSL.</td></tr>
               <tr><td><code>plan desired.maxdsl --scope voices -o plan.json</code></td><td>Create an ordered managed PatchPlan.</td></tr>
               <tr><td><code>doctor --input input.maxdsl</code></td><td>Validate project catalogs and derive abstraction ports.</td></tr>
+              <tr><td><code>catalog cycle~ --json</code></td><td>Search effective project and built-in object metadata.</td></tr>
+              <tr><td><code>bundle input.maxdsl -o package</code></td><td>Build a Max package directory with declared custom dependencies.</td></tr>
             </tbody>
           </table>
         </div>
@@ -261,7 +263,14 @@ vol[1] -&gt; dac[1]</code></pre>
         <h3>Patch metadata</h3>
         <pre><code>patch "Title"
 patch "Title" | "Description" | 800x600</code></pre>
-        <p>Patch metadata is optional. The default canvas is <code>640x480</code>.</p>
+        <p>
+          Patch metadata is optional and maps to the real Max root patcher
+          <code>title</code>, <code>description</code>, and <code>rect</code>
+          fields. Without a declaration, maxforge stores no explicit title, an
+          empty description, and a <code>640x480</code> rectangle; Max may use
+          the saved filename as its visible window title. Quoted metadata uses
+          JSON escapes and may contain <code>|</code>.
+        </p>
 
         <h3>Objects</h3>
         <pre><code>name = type [arguments...] [@attribute value...] [at(x, y)]</code></pre>
@@ -327,9 +336,10 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
   }]
 }</code></pre>
         <ul>
-          <li><code>compile</code>, <code>validate</code>, and <code>plan</code> search upward from the input DSL; <code>--config</code> selects a file explicitly.</li>
+          <li><code>compile</code>, <code>validate</code>, <code>plan</code>, and <code>bundle</code> search upward from the input DSL; <code>--config</code> selects a file explicitly.</li>
           <li><code>doctor</code> validates root/imported catalogs and reads referenced abstraction metadata before compilation.</li>
-          <li>Fixed ports are exact. Dynamic ports require a representative shape but do not impose a false upper connection bound.</li>
+          <li><code>catalog [query] --json</code> lists project metadata or searches built-ins when a query is supplied.</li>
+          <li>Fixed ports are exact. Bounded argument mode derives counts from one integer argument or argument count. Dynamic ports require a representative shape but do not impose a false upper connection bound.</li>
           <li><code>ports: "derive"</code> counts root <code>inlet</code>/<code>outlet</code> boxes and infers signal outlets from incoming source metadata.</li>
           <li>An abstraction name must match its existing <code>.maxpat</code> filename. The file is validated but not embedded; Max still needs its directory on the search path.</li>
           <li>Imported catalogs cannot recursively import more catalogs. Accidental name collisions fail unless <code>override: true</code> is explicit.</li>
@@ -339,6 +349,15 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           and <a href="../schema/objects-v1.json">shared catalog schema</a>.
           A valid catalog is compiler metadata only: it does not install an
           external, configure Max's search path, or prove runtime availability.
+        </p>
+        <p>
+          <code>bundle</code> writes the main patch under <code>patchers/</code>,
+          follows declared abstraction dependencies, copies declared
+          <code>.mxo</code>/<code>.mxe64</code> artifacts under
+          <code>externals/</code>, and writes <code>package-info.json</code>.
+          Missing dependency paths and destination basename collisions are
+          errors. Object arguments that refer to arbitrary media or data files
+          are not inferred and must be packaged separately.
         </p>
       </section>
 

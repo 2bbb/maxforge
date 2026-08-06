@@ -45,6 +45,7 @@
     "enablehscroll": 1,
     "enablevscroll": 1,
     "devicewidth": 0,
+    "title": "Generated In Max",
     "description": "Patch generated inside Max by node.script + maxforge",
     "digest": "",
     "tags": "",

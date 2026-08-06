@@ -440,7 +440,9 @@ patch "Title" | "Description"
 patch "Title" | "Description" | 800x600
 ```
 
-Default: `"Untitled" | "" | 640x480`
+If omitted, no explicit Max `title` is stored, `description` is empty, and the
+patcher rectangle is `640x480`; Max may derive its visible title from the saved
+filename. Quoted title/description text uses JSON escapes and may contain `|`.
 
 ### Object Definition
 

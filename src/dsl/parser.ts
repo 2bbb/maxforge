@@ -131,28 +131,39 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
 }
 
 function parsePatchDecl(line: string): PatchDecl | null {
-  const pipeParts = line.split("|").map((s) => s.trim());
-  if (pipeParts.length > 3) return null;
+  const quotedString = '"(?:\\\\(?:["\\\\/bfnrt]|u[0-9a-fA-F]{4})|[^"\\\\])*"';
+  const match = line.match(new RegExp(
+    `^patch\\s+(${quotedString})` +
+    `(?:\\s*\\|\\s*(${quotedString})?)?` +
+    `(?:\\s*\\|\\s*(\\d+)x(\\d+))?$`
+  ));
+  if (!match) return null;
 
-  const firstPart = pipeParts[0];
-  const nameMatch = firstPart.match(/^patch\s+"(.+)"$/);
-  if (!nameMatch) return null;
-
-  const result: PatchDecl = { name: nameMatch[1] };
-
-  if (pipeParts.length > 1 && pipeParts[1]) {
-    const descMatch = pipeParts[1].match(/^"(.*)"$/);
-    if (!descMatch) return null;
-    result.description = descMatch[1];
+  let name: string;
+  let description: string | undefined;
+  try {
+    name = JSON.parse(match[1]) as string;
+    description = match[2] ? JSON.parse(match[2]) as string : undefined;
+  } catch {
+    return null;
   }
+  if (name.length === 0) return null;
 
-  if (pipeParts.length > 2 && pipeParts[2]) {
-    const sizeMatch = pipeParts[2].match(/^(\d+)x(\d+)$/);
-    if (sizeMatch) {
-      result.size = [parseInt(sizeMatch[1]), parseInt(sizeMatch[2])];
-    } else return null;
+  const result: PatchDecl = { name };
+  if (description !== undefined) result.description = description;
+  if (match[3] !== undefined && match[4] !== undefined) {
+    const width = Number(match[3]);
+    const height = Number(match[4]);
+    if (
+      !Number.isSafeInteger(width) ||
+      !Number.isSafeInteger(height) ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      return null;
+    }
+    result.size = [width, height];
   }
-
   return result;
 }
 

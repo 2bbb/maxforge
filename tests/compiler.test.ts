@@ -208,10 +208,26 @@ freq -> mt -> osc -> dac
     expect(ast.patchDecl?.size).toEqual([800, 600]);
   });
 
+  it("parses escaped patch metadata without splitting quoted pipes", () => {
+    const source = String.raw`patch "A | \"quoted\" title" | "Line\nA | B" | 801x601
+n = number`;
+    const { ast, errors } = parse(source);
+
+    expect(errors).toHaveLength(0);
+    expect(ast.patchDecl).toEqual({
+      name: 'A | "quoted" title',
+      description: "Line\nA | B",
+      size: [801, 601],
+    });
+  });
+
   it("rejects malformed and duplicate patch declarations", () => {
     for (const source of [
       'patch "Test" | description | 800x600',
       'patch "Test" | "Description" | wide',
+      'patch ""',
+      'patch "Test" | "Description" | 0x600',
+      'patch "Test\\q"',
       'patch "Test" | "Description" | 800x600 | extra',
       'patch "First"\npatch "Second"',
     ]) {
@@ -363,7 +379,11 @@ a[4] -> b[3]
     const result = compile(ast, db);
     expect(result.success).toBe(true);
     expect(result.output!.patcher.rect).toEqual([100, 100, 900, 700]);
+    expect(result.output!.patcher.title).toBe("Meta");
     expect(result.output!.patcher.description).toBe("Generated patch");
+    expect(decompile(result.output!)).toContain(
+      'patch "Meta" | "Generated patch" | 900x700'
+    );
   });
 
   it("warns and emits one line for duplicate connections", () => {

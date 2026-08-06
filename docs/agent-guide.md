@@ -45,7 +45,9 @@ patch "Title" | "Description"
 patch "Title" | "Description" | 800x600
 ```
 
-省略時: `"Untitled" | "" | 640x480`
+省略時はMax JSONへ明示的な`title`を保存せず、`description`は空、patcher
+rectangleは`640x480`。表示タイトルをファイル名から推測してDSLへ捏造しない。
+title/descriptionはJSON文字列escapeを使い、quote内の`|`は区切りではない。
 
 ### Object Definition
 

@@ -445,6 +445,41 @@ void test_plain_object_does_not_create_child_patcher() {
 	);
 }
 
+void test_reverse_plan_restores_topology() {
+	auto forward = base_plan();
+	sync_protocol::validation_operation remove_old;
+	remove_old.kind = sync_protocol::operation_kind::delete_box;
+	remove_old.variable_name = "maxforge_default_obj_old";
+	forward.operations.push_back(remove_old);
+	forward.operations.push_back(create_operation("maxforge_default_obj_new"));
+
+	const sync_protocol::virtual_patch initial_state{
+		{"", {"maxforge_default_obj_old"}}
+	};
+	const auto target_state = sync_protocol::validate_plan(
+		forward,
+		initial_state,
+		"default",
+		revision('a')
+	);
+
+	auto reverse = base_plan();
+	reverse.base_revision = revision('b');
+	sync_protocol::validation_operation remove_new;
+	remove_new.kind = sync_protocol::operation_kind::delete_box;
+	remove_new.variable_name = "maxforge_default_obj_new";
+	reverse.operations.push_back(remove_new);
+	reverse.operations.push_back(create_operation("maxforge_default_obj_old"));
+	const auto restored_state = sync_protocol::validate_plan(
+		reverse,
+		target_state,
+		"default",
+		revision('b')
+	);
+
+	require(restored_state == initial_state, "reverse plan did not restore topology");
+}
+
 }
 
 int main() {
@@ -461,7 +496,8 @@ int main() {
 		{"missing target and endpoint", test_missing_target_and_endpoint_guards},
 		{"duplicate create", test_duplicate_create_guard},
 		{"delete descendants", test_delete_removes_descendants},
-		{"plain object child patcher", test_plain_object_does_not_create_child_patcher}
+		{"plain object child patcher", test_plain_object_does_not_create_child_patcher},
+		{"reverse plan topology", test_reverse_plan_restores_topology}
 	};
 
 	std::size_t failure_count{};

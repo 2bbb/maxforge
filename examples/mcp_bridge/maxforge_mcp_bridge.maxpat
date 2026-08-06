@@ -45,6 +45,7 @@
     "enablehscroll": 1,
     "enablevscroll": 1,
     "devicewidth": 0,
+    "title": "maxforge MCP bridge",
     "description": "Single-object native MCP controller",
     "digest": "",
     "tags": "",

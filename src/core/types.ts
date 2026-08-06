@@ -28,6 +28,8 @@ export interface PatcherJSON {
     enablehscroll: number;
     enablevscroll: number;
     devicewidth: number;
+    /** Saved Max patcher window title; absent when no explicit title was authored. */
+    title?: string;
     description: string;
     digest: string;
     tags: string;

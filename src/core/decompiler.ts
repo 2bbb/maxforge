@@ -9,9 +9,12 @@ export function decompile(
   const p = patch.patcher;
   const signalPortIds = inferSignalPortIds(p, subpatcherOutletTypes);
 
-  if (p.description || p.rect[2] !== 640 || p.rect[3] !== 480) {
+  if (p.title || p.description || p.rect[2] !== 640 || p.rect[3] !== 480) {
     const sizeStr = `${Math.round(p.rect[2])}x${Math.round(p.rect[3])}`;
-    lines.push(`patch "Untitled" | "${p.description}" | ${sizeStr}`);
+    lines.push(
+      `patch ${JSON.stringify(p.title ?? "Untitled")} | ` +
+      `${JSON.stringify(p.description)} | ${sizeStr}`
+    );
     lines.push("");
   }
 

@@ -45,6 +45,7 @@
     "enablehscroll": 1,
     "enablevscroll": 1,
     "devicewidth": 0,
+    "title": "maxforge node.script demo",
     "description": "Use node.script to compile DSL and create objects through thispatcher",
     "digest": "",
     "tags": "",

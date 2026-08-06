@@ -89,6 +89,7 @@ export function buildPatcherJSON(
       enablehscroll: 1,
       enablevscroll: 1,
       devicewidth: 0.0,
+      ...(patchDecl ? { title: patchDecl.name } : {}),
       description: patchDecl?.description ?? "",
       digest: "",
       tags: "",
