@@ -5,7 +5,7 @@ import {
   compile,
   serialize,
   decompile,
-  loadDatabase,
+  loadObjectCatalog,
   compileDslToPatchGraph,
   createEmptyPatchGraph,
   diffPatchGraphs,
@@ -60,6 +60,7 @@ async function compileCommand(cmdArgs: string[]) {
   let outputFile = "";
   let allowUnknown = false;
   let clipboard = false;
+  let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
     if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
@@ -67,6 +68,9 @@ async function compileCommand(cmdArgs: string[]) {
       i++;
     } else if (cmdArgs[i] === "--allow-unknown") {
       allowUnknown = true;
+    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
+      configFile = cmdArgs[i + 1];
+      i++;
     } else if (cmdArgs[i] === "--clipboard") {
       clipboard = true;
     } else if (!inputFile) {
@@ -89,8 +93,11 @@ async function compileCommand(cmdArgs: string[]) {
     process.exit(1);
   }
 
-  const db = await loadDatabase();
-  const result = compile(ast, db, allowUnknown);
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath: inputFile,
+  });
+  const result = compile(ast, catalog.database, allowUnknown);
 
   for (const w of result.warnings) {
     console.warn(`Warning [${w.code}]: ${w.message}`);
@@ -120,10 +127,14 @@ async function compileCommand(cmdArgs: string[]) {
 async function validateCommand(cmdArgs: string[]) {
   let inputFile = "";
   let allowUnknown = false;
+  let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
     if (cmdArgs[i] === "--allow-unknown") {
       allowUnknown = true;
+    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
+      configFile = cmdArgs[i + 1];
+      i++;
     } else if (!inputFile) {
       inputFile = cmdArgs[i];
     }
@@ -144,8 +155,11 @@ async function validateCommand(cmdArgs: string[]) {
     process.exit(1);
   }
 
-  const db = await loadDatabase();
-  const result = compile(ast, db, allowUnknown);
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath: inputFile,
+  });
+  const result = compile(ast, catalog.database, allowUnknown);
 
   for (const w of result.warnings) {
     console.warn(`Warning [${w.code}]: ${w.message}`);
@@ -168,6 +182,7 @@ async function planCommand(cmdArgs: string[]) {
   let scope = "default";
   let allowUnknown = false;
   let compact = false;
+  let configFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
     if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
@@ -181,6 +196,9 @@ async function planCommand(cmdArgs: string[]) {
       i++;
     } else if (cmdArgs[i] === "--allow-unknown") {
       allowUnknown = true;
+    } else if (cmdArgs[i] === "--config" && cmdArgs[i + 1]) {
+      configFile = cmdArgs[i + 1];
+      i++;
     } else if (cmdArgs[i] === "--compact") {
       compact = true;
     } else if (!inputFile) {
@@ -193,7 +211,11 @@ async function planCommand(cmdArgs: string[]) {
     process.exit(1);
   }
 
-  const db = await loadDatabase();
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath: inputFile,
+  });
+  const db = catalog.database;
   const source = readFileSync(resolve(inputFile), "utf-8");
   const desiredResult = compileDslToPatchGraph(source, db, scope, allowUnknown);
   reportDiagnostics(desiredResult.errors, desiredResult.warnings);
@@ -312,11 +334,11 @@ function printHelp() {
   console.log(`maxforge - unofficial Max/MSP patch DSL compiler
 
 Usage:
-  maxforge compile <input.maxdsl> [-o output.maxpat] [--allow-unknown] [--clipboard]
+  maxforge compile <input.maxdsl> [-o output.maxpat] [--config path] [--allow-unknown] [--clipboard]
   maxforge decompile <input.maxpat> [-o output.maxdsl]
   maxforge from-clipboard [-o output.maxdsl]
-  maxforge validate <input.maxdsl> [--allow-unknown]
-  maxforge plan <desired.maxdsl> [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
+  maxforge validate <input.maxdsl> [--config path] [--allow-unknown]
+  maxforge plan <desired.maxdsl> [--config path] [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
@@ -328,6 +350,7 @@ Commands:
 Options:
   -o <file>          Output file path
   --allow-unknown    Allow objects not in the database
+  --config <file>    Project object catalog config (otherwise discovered upward from input)
   --clipboard        Output compressed text pasteable into Max
   --scope <name>     Managed scope for plan generation (default: default)
   --current <file>   Current managed .maxdsl or scoped .maxpat snapshot
