@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { loadDatabase } from "../core/object-db.js";
+import { loadObjectCatalog } from "../core/catalog-config.js";
 import { MaxforgeWebSocketBridge } from "./bridge.js";
 import { createMaxforgeMcpServer } from "./mcp-server.js";
 import { MaxforgePatchService } from "./service.js";
@@ -25,20 +25,29 @@ export function bridgeOptionsFromEnvironment(
   };
 }
 
+export function catalogOptionsFromEnvironment(
+  environment: NodeJS.ProcessEnv
+): Parameters<typeof loadObjectCatalog>[0] {
+  return {
+    configPath: optionalEnvironment(environment, "MAXFORGE_CONFIG"),
+    discover: false,
+  };
+}
+
 export async function main(): Promise<void> {
-  const [database, version] = await Promise.all([
-    loadDatabase(),
+  const [catalog, version] = await Promise.all([
+    loadObjectCatalog(catalogOptionsFromEnvironment(process.env)),
     packageVersion(),
   ]);
   const bridge = new MaxforgeWebSocketBridge(
     bridgeOptionsFromEnvironment(process.env)
   );
   const status = await bridge.start();
-  const service = new MaxforgePatchService(database, bridge);
+  const service = new MaxforgePatchService(catalog.database, bridge);
   let handle;
   try {
     handle = serveStdio(() =>
-      createMaxforgeMcpServer({ service, transport: bridge, version })
+      createMaxforgeMcpServer({ service, transport: bridge, version, catalog })
     );
   } catch (error) {
     await bridge.close();
@@ -48,6 +57,12 @@ export async function main(): Promise<void> {
   console.error(
     `maxforge MCP listening for Max on ws://${status.host}:${status.port}`
   );
+  if (catalog.configPath) {
+    console.error(
+      `maxforge loaded ${catalog.customObjects.length} custom objects from ` +
+      catalog.configPath
+    );
+  }
 
   let isShuttingDown = false;
   const shutdown = async () => {

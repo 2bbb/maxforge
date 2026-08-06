@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { bridgeOptionsFromEnvironment } from "../src/mcp/server.js";
+import {
+  bridgeOptionsFromEnvironment,
+  catalogOptionsFromEnvironment,
+} from "../src/mcp/server.js";
 
 describe("maxforge MCP environment", () => {
   it("keeps the unauthenticated default on loopback", () => {
@@ -29,6 +32,19 @@ describe("maxforge MCP environment", () => {
       host: "192.168.1.20",
       port: 9000,
       token: "studio-session_1",
+    });
+  });
+
+  it("loads MCP catalogs only from the explicit environment path", () => {
+    expect(catalogOptionsFromEnvironment({})).toEqual({
+      configPath: undefined,
+      discover: false,
+    });
+    expect(catalogOptionsFromEnvironment({
+      MAXFORGE_CONFIG: "/project/maxforge.config.json",
+    })).toEqual({
+      configPath: "/project/maxforge.config.json",
+      discover: false,
     });
   });
 });

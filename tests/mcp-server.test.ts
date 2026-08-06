@@ -5,6 +5,7 @@ import {
   McpServer,
 } from "@modelcontextprotocol/server";
 import dbData from "../data/objects.json" with { type: "json" };
+import { LoadedObjectCatalog } from "../src/core/catalog-config.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import {
   CreateMaxPatchRequest,
@@ -19,15 +20,40 @@ import { MaxforgePatchService } from "../src/mcp/service.js";
 import { PatchPlan } from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
+const configuredDatabase: ObjectDatabase = {
+  ...database,
+  "vendor.test~": {
+    maxclass: "newobj",
+    numinlets: 2,
+    numoutlets: 1,
+    outlettype: ["signal"],
+    defaultSize: [100, 22],
+    category: "external",
+  },
+};
+const catalog: LoadedObjectCatalog = {
+  database: configuredDatabase,
+  configPath: "/project/maxforge.config.json",
+  sources: ["/project/maxforge.config.json"],
+  digest: "c".repeat(64),
+  customObjects: [{
+    name: "vendor.test~",
+    kind: "external",
+    source: "/project/maxforge.config.json",
+    ports: "fixed",
+    definition: configuredDatabase["vendor.test~"],
+  }],
+};
 
 describe("maxforge MCP protocol surface", () => {
   it("lists tools and compiles a plan over an MCP transport", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = new MaxforgePatchService(configuredDatabase, transport);
     const server = createMaxforgeMcpServer({
       service,
       transport,
       version: "test",
+      catalog,
     });
     const client = new InMemoryMcpClient(server);
 
@@ -37,6 +63,7 @@ describe("maxforge MCP protocol surface", () => {
       expect(toolNames(tools)).toEqual([
         "maxforge_help",
         "maxforge_status",
+        "maxforge_catalog",
         "maxforge_list_patches",
         "maxforge_create_patch",
         "maxforge_inspect_patch",
@@ -45,7 +72,7 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(8);
+      expect(definitions).toHaveLength(9);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -100,6 +127,32 @@ describe("maxforge MCP protocol surface", () => {
             },
             managedRevisions: {},
             inspectionBaselineScopes: [],
+            catalog: {
+              digest: "c".repeat(64),
+              configPath: "/project/maxforge.config.json",
+              customObjectCount: 1,
+              abstractionCount: 0,
+            },
+          },
+        },
+      });
+
+      const catalogResult = await client.request(34, "tools/call", {
+        name: "maxforge_catalog",
+        arguments: {},
+      });
+      expect(catalogResult).toMatchObject({
+        result: {
+          structuredContent: {
+            totalMatches: 1,
+            truncated: false,
+            objects: [{
+              name: "vendor.test~",
+              kind: "external",
+              numinlets: 2,
+              numoutlets: 1,
+              outlettype: ["signal"],
+            }],
           },
         },
       });

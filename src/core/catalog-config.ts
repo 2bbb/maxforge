@@ -84,6 +84,7 @@ export interface LoadObjectCatalogOptions {
   readonly configPath?: string;
   readonly inputPath?: string;
   readonly cwd?: string;
+  readonly discover?: boolean;
 }
 
 interface CatalogEntry {
@@ -100,7 +101,9 @@ export async function loadObjectCatalog(
   const database = cloneDatabase(builtIn);
   const configPath = options.configPath
     ? resolve(options.cwd ?? process.cwd(), options.configPath)
-    : await findObjectCatalogConfig(options.inputPath, options.cwd);
+    : options.discover === false
+      ? undefined
+      : await findObjectCatalogConfig(options.inputPath, options.cwd);
 
   if (!configPath) {
     return {

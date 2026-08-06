@@ -1,5 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import {
+  CustomObjectInfo,
+  LoadedObjectCatalog,
+} from "../core/catalog-config.js";
 import { MaxforgePatchService } from "./service.js";
 import { PatchPlanTransport } from "./bridge.js";
 
@@ -105,6 +109,27 @@ const acknowledgementSchema = z.object({
   operations: z.number().int().nonnegative(),
 });
 
+const catalogObjectSchema = z.object({
+  name: z.string(),
+  kind: z.enum(["built-in", "external", "abstraction"]),
+  maxclass: z.string(),
+  numinlets: z.number().int().nonnegative(),
+  numoutlets: z.number().int().nonnegative(),
+  outlettype: z.array(z.string()),
+  dynamicPorts: z.boolean(),
+  source: z.string(),
+  path: z.string().optional(),
+});
+
+const catalogStatusSchema = z.object({
+  digest: z.string().regex(/^[a-f0-9]{64}$/),
+  configPath: z.string().nullable(),
+  sources: z.array(z.string()),
+  builtInObjectCount: z.number().int().nonnegative(),
+  customObjectCount: z.number().int().nonnegative(),
+  abstractionCount: z.number().int().nonnegative(),
+});
+
 const helpTopicSchema = z.enum(["workflow", "setup", "recovery", "safety"]);
 
 const helpResultSchema = z.object({
@@ -182,15 +207,21 @@ const HELP_CONTENT = {
     steps: [
       "Run maxforge-mcp as an MCP stdio server with Node.js 20 or newer.",
       "Install the native maxforge.sync external separately; the npm package does not install the Max external.",
+      "Set MAXFORGE_CONFIG before starting MCP when the project uses third-party externals or reusable abstractions.",
       "Open one controller patch containing maxforge.sync with controller enabled.",
-      "Call maxforge_status, then maxforge_list_patches to verify registration before creating or changing patches.",
+      "Call maxforge_status and maxforge_catalog, then maxforge_list_patches to verify catalog and patch registration before creating or changing patches.",
     ],
     rules: [
       "Without MAXFORGE_WS_TOKEN the WebSocket bridge stays on 127.0.0.1:8766. Setting a URL-safe token publishes it on 0.0.0.0 and requires the same maxforge.sync @token.",
       "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
       "New patch creation requires exactly one registered controller.",
     ],
-    relatedTools: ["maxforge_status", "maxforge_list_patches", "maxforge_create_patch"],
+    relatedTools: [
+      "maxforge_status",
+      "maxforge_catalog",
+      "maxforge_list_patches",
+      "maxforge_create_patch",
+    ],
   },
   recovery: {
     summary: "Recovery rules for stale process state, manual edits, timeouts, and partial failures.",
@@ -236,6 +267,7 @@ export interface CreateMcpServerOptions {
   readonly service: MaxforgePatchService;
   readonly transport: PatchPlanTransport;
   readonly version: string;
+  readonly catalog: LoadedObjectCatalog;
 }
 
 export function createMaxforgeMcpServer(
@@ -303,6 +335,7 @@ export function createMaxforgeMcpServer(
         }),
         managedRevisions: z.record(z.string(), revisionSchema),
         inspectionBaselineScopes: z.array(z.string()),
+        catalog: catalogStatusSchema,
       }),
       annotations: {
         readOnlyHint: true,
@@ -315,8 +348,54 @@ export function createMaxforgeMcpServer(
         bridge: options.transport.getStatus(),
         managedRevisions: options.service.getManagedRevisions(),
         inspectionBaselineScopes: options.service.getBaselineScopes(),
+        catalog: catalogStatus(options.catalog),
       };
       return toolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "maxforge_catalog",
+    {
+      title: "Search Maxforge object catalog",
+      description:
+        "List configured third-party externals and abstractions, or search the effective catalog including built-ins. Use this before authoring DSL with project-specific objects; catalog membership describes compile metadata, not installation on the Max machine.",
+      inputSchema: z.object({
+        query: z.string().optional().describe(
+          "Case-insensitive object-name or maxclass substring"
+        ),
+        includeBuiltins: z.boolean().optional().describe(
+          "Include built-in Max objects; defaults to false"
+        ),
+        limit: z.number().int().min(1).max(200).optional().describe(
+          "Maximum returned records; defaults to 50"
+        ),
+      }),
+      outputSchema: z.object({
+        catalog: catalogStatusSchema,
+        totalMatches: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+        objects: z.array(catalogObjectSchema),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ query, includeBuiltins, limit }) => {
+      const maximum = limit ?? 50;
+      const matches = catalogObjects(
+        options.catalog,
+        query,
+        includeBuiltins ?? false
+      );
+      return toolResult({
+        catalog: catalogStatus(options.catalog),
+        totalMatches: matches.length,
+        truncated: maximum < matches.length,
+        objects: matches.slice(0, maximum),
+      });
     }
   );
 
@@ -548,6 +627,59 @@ export function createMaxforgeMcpServer(
   );
 
   return server;
+}
+
+function catalogStatus(catalog: LoadedObjectCatalog) {
+  const customNames = new Set(catalog.customObjects.map(({ name }) => name));
+  return {
+    digest: catalog.digest,
+    configPath: catalog.configPath ?? null,
+    sources: [...catalog.sources],
+    builtInObjectCount: Object.keys(catalog.database).filter(
+      (name) => !customNames.has(name)
+    ).length,
+    customObjectCount: catalog.customObjects.length,
+    abstractionCount: catalog.customObjects.filter(
+      ({ kind }) => kind === "abstraction"
+    ).length,
+  };
+}
+
+function catalogObjects(
+  catalog: LoadedObjectCatalog,
+  query: string | undefined,
+  includeBuiltins: boolean
+) {
+  const customByName = new Map<string, CustomObjectInfo>(
+    catalog.customObjects.map((object) => [object.name, object])
+  );
+  const normalizedQuery = query?.trim().toLocaleLowerCase() ?? "";
+  return Object.entries(catalog.database)
+    .flatMap(([name, definition]) => {
+      const custom = customByName.get(name);
+      if (!custom && !includeBuiltins) return [];
+      const kind = custom?.kind ?? "built-in";
+      const record = {
+        name,
+        kind,
+        maxclass: definition.maxclass,
+        numinlets: definition.numinlets,
+        numoutlets: definition.numoutlets,
+        outlettype: [...definition.outlettype],
+        dynamicPorts: definition.dynamicPorts === true,
+        source: custom?.source ?? "built-in",
+        ...(custom?.path ? { path: custom.path } : {}),
+      };
+      if (
+        normalizedQuery &&
+        !name.toLocaleLowerCase().includes(normalizedQuery) &&
+        !definition.maxclass.toLocaleLowerCase().includes(normalizedQuery)
+      ) {
+        return [];
+      }
+      return [record];
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function toolResult(value: Record<string, unknown>) {
