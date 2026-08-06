@@ -17,6 +17,7 @@ Require these MCP tools:
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_inspect_patch`
+- `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
 
@@ -41,14 +42,25 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
 7. Call `maxforge_compile_plan` with the target and complete `desiredDsl`.
    Review warnings and every `delete`, `disconnect`, and replacement operation.
+   If inspection reports managed edits, call `maxforge_reconcile_patch`
+   instead and require `canApply: true`. Read every structured conflict when it
+   is false; never convert a conflict into an overwrite.
 8. State the target, operation count, destructive operations, and stop
    condition before mutation.
 9. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
+   Set `manualChanges: "merge"` only when reconciliation of that exact target
+   and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
+   Apply repeats inspection and binds its structure token; if the human edits
+   the patch before native mutation, treat the resulting rejection as fresh
+   drift and inspect again.
 10. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
 11. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
+12. After a merged apply, update the working complete DSL to include the
+    preserved human edits. Until it is aligned, continue through reconciliation;
+    ordinary compile/apply is intentionally rejected to prevent a silent revert.
 
 ## Desired DSL rule
 
@@ -81,11 +93,24 @@ empty. If the exact DSL is unavailable, stop and report the blocker.
 
 ### Managed manual edit detected
 
-Inspection does not accept or reset a baseline. There is no MCP operation that
-adopts a managed manual edit. Report the exact managed changes and require them
-to be manually restored to the last post-apply structure before another apply.
-Unmanaged standalone edits may remain, but a cord touching a managed box is a
-managed change.
+Inspection alone does not accept or reset a baseline. Call
+`maxforge_reconcile_patch` with the next complete desired DSL. It performs a
+three-way merge of the previous agent intent, current Max graph, and next
+desired graph while retaining the acknowledged graph for native revision safety.
+When `canApply` is true, apply the same DSL with `manualChanges: "merge"`.
+Resolve same-field, change-vs-delete, new-managed-identity, and unmanaged-cord
+conflicts explicitly. Do not force a winner or fall back to ordinary apply.
+
+After success, inspect and fold preserved text, position, deletion, and
+connection edits into the working complete DSL. This is required for clean
+restart recovery because the pre-merge agent DSL no longer hashes to Max's
+acknowledged merged revision.
+
+Unmanaged standalone edits remain outside the managed graph. A cord touching a
+managed box is preserved only while that box is not deleted or structurally
+recreated; reconciliation reports the destructive case as a conflict.
+Reparenting a managed box into another patcher path is a delete/add operation,
+not a mergeable move. Resolve it explicitly in the complete DSL.
 
 ### Timeout or transport error
 
@@ -110,6 +135,9 @@ do not guess a target.
 - Operate only on targets returned by `maxforge_list_patches`.
 - Manage only exact `maxforge_<scope>_obj_...` scripting names.
 - Preview nontrivial changes before apply.
+- Reconcile managed human edits before preserving them; merge mode is opt-in.
+- Never remove or fabricate `baseStructureToken`; it prevents stale inspected
+  state from being mutated after a concurrent human edit.
 - Never expose the unauthenticated WebSocket bridge outside loopback.
 - Never treat a timeout, process exit, or missing acknowledgement as success.
 - Do not save, close, or discard a Max window unless the user asks.

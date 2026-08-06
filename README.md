@@ -231,8 +231,17 @@ available for human-readable status and local diagnostics. See
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_inspect_patch`
+- `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
+
+`maxforge_reconcile_patch` performs a read-only three-way merge of the last
+agent intent, the current live Max graph, and the next complete DSL. Apply with
+`manualChanges: "merge"` only when it returns `canApply: true`. Non-conflicting
+human edits remain preserved across later reconciliations; same-field and
+change-vs-delete conflicts are never resolved by silent overwrite.
+Apply-side inspection is bound to native mutation by a structure token, so a
+box or cord edit made in between causes rejection rather than stale overwrite.
 
 It listens for native `maxforge.sync` clients only on `127.0.0.1:8766`. Each
 live patch contains one `maxforge.sync`, registers a stable `patcherId`, and can

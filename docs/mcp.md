@@ -110,10 +110,12 @@ The safe live sequence is fixed:
 2. `maxforge_status` when connection/process state is uncertain
 3. `maxforge_list_patches`
 4. `maxforge_inspect_patch`
-5. `maxforge_compile_plan` with complete desired DSL
-6. review warnings and destructive operations
-7. `maxforge_apply_dsl` with the same target and desired DSL
-8. verify acknowledgement revision and inspect again
+5. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
+6. require `canApply: true`, then review warnings and destructive operations
+7. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
+8. `maxforge_apply_dsl` with the same target and desired DSL; set
+   `manualChanges: "merge"` only after successful reconciliation
+9. verify acknowledgement revision and inspect again
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
 an imperative edit, and a timeout is not proof that Max remained unchanged.
@@ -192,6 +194,32 @@ baseline. Before the first apply, or after the MCP process restarts,
 `comparisonAvailable` is `false`: the full live snapshot remains available,
 but the server cannot honestly claim which prior action caused its state.
 
+### `maxforge_reconcile_patch`
+
+Performs a read-only three-way merge between:
+
+1. the agent's previous desired managed graph;
+2. the current live Max snapshot;
+3. the next complete `desiredDsl`.
+
+It preserves a live edit when desired DSL did not change the same field, and
+preserves a desired edit when Max did not change that field. For example, a
+human can move `osc` while the agent changes its arguments, or change `osc`
+while the agent adds an unrelated `gain` box. A different live and desired
+change to the same field is a conflict. Deleting a box on one side while the
+other side changes it is also a conflict.
+
+The result contains `canApply`, a structured `conflicts` array, and an ordered
+plan only when the merge is safe. This tool never mutates Max. Do not convert
+`canApply: false` into an overwrite: inspect the conflict and make the intended
+winner explicit in Max or in the next baseline/DSL.
+
+The acknowledged merged graph is tracked separately and supplies concrete live
+metadata plus the native `baseRevision`. Plan operations describe the actual
+live graph to merged graph transition. This split is required because manual
+Max edits do not advance `@revision_state`, while the agent's previous DSL may
+intentionally omit a human edit preserved by an earlier merge.
+
 ### `maxforge_compile_plan`
 
 Compiles complete `desiredDsl` into a read-only `PatchPlan`.
@@ -223,12 +251,28 @@ it as the next comparison baseline. If that second read fails, the apply still
 returns success with `baselineCaptured: false` and `baselineWarning`; reporting
 the already-applied mutation as a failure would invite an unsafe retry.
 
-When a baseline exists, apply first inspects Max. Any manual structural change
-that touches a managed box or one of its patch cords rejects mutation until the
-caller inspects and manually restores the post-apply managed structure.
-Inspection does not accept or reset the baseline, and there is currently no MCP
-operation that adopts managed manual edits. Standalone unmanaged edits are
-reported but do not block managed mutation.
+`manualChanges` defaults to `"reject"`, retaining the strict behavior: any
+manual structural change touching a managed box or one of its patch cords
+rejects mutation. After `maxforge_reconcile_patch` returns `canApply: true` for
+the exact same target and DSL, pass `manualChanges: "merge"` to preserve the
+non-conflicting live changes. The apply repeats inspection and reconciliation;
+it does not trust a stale preview. The resulting plan carries the inspected
+`baseStructureToken`; `maxforge.sync` recomputes it immediately before native
+validation and rejects the request if any box or cord changed in the interval.
+`manualChangesMerged` reports the managed change count used by that apply.
+
+The service tracks the acknowledged merged graph separately from the agent's
+last submitted desired graph. This prevents a later ordinary apply using stale
+DSL from silently reverting a previously preserved human edit. While those
+graphs differ, ordinary compile/apply is rejected; use reconciliation again, or
+provide a complete `currentDsl` that already includes every preserved edit.
+After a merged apply, inspect and update the working DSL if future sessions must
+be restart-safe.
+
+Standalone unmanaged edits remain outside the managed graph. A cord between an
+unmanaged box and a managed box is preserved while that managed box remains in
+place. Reconciliation rejects a desired deletion or structural recreation that
+would destroy such a cord.
 
 ## Tool call examples
 
@@ -254,6 +298,14 @@ Preview and then apply the same complete desired state:
 }
 ```
 
+If inspection reported managed edits, pass this same object to
+`maxforge_reconcile_patch`. Apply only when it returns `canApply: true`; then
+pass the same object to `maxforge_apply_dsl` with `manualChanges` added:
+
+```json
+{ "manualChanges": "merge" }
+```
+
 Review `plan.operations` and `warnings` from `maxforge_compile_plan`. A
 successful `maxforge_apply_dsl` result has this top-level shape:
 
@@ -270,6 +322,7 @@ successful `maxforge_apply_dsl` result has this top-level shape:
     "operations": 3
   },
   "baselineCaptured": true,
+  "manualChangesMerged": 0,
   "warnings": []
 }
 ```
@@ -325,6 +378,18 @@ complete DSL as `currentDsl`. The server verifies its revision against Max
 before sending a plan and then resumes remembered-state operation after
 acknowledgement.
 
+The seeded graph can also serve as the base for reconciliation. A post-restart
+live text, position, deletion, or connection edit can therefore be merged, but
+only when `currentDsl` is the exact previously acknowledged DSL. Without a
+baseline, ownership-name changes are less reliably distinguishable from a
+deletion plus an unmanaged box.
+
+If the previous session performed a merged apply, the old agent-intent DSL is
+not sufficient: it hashes to a different revision because it omits the
+preserved human edits. Before restart, update the complete DSL from the verified
+post-apply snapshot. Otherwise safe recovery may require reconstructing that
+exact merged DSL before mutation.
+
 The same limitation applies to inspection history. A restarted process can
 read the complete current patch, but it has no pre-restart snapshot, so it
 returns `comparisonAvailable: false` until an apply establishes a new baseline.
@@ -344,7 +409,8 @@ empty. Those actions defeat optimistic concurrency.
 | Duplicate `patcherId` | Two live patches advertise the same transport identity | Change one `@patcher_id`; titles are irrelevant |
 | Process has no graph state for an initialized revision | `maxforge-mcp` restarted while Max stayed open | Pass the exact previous complete DSL as `currentDsl` once |
 | Current DSL revision does not match Max | `currentDsl`, scope, or target is wrong | Stop; recover the exact prior DSL instead of forcing empty state |
-| Managed manual changes block apply | A managed box or a cord touching it changed after the baseline | Inspect the exact changes and manually restore the post-apply structure; there is no adopt operation |
+| Managed manual changes block ordinary apply | `manualChanges` defaults to `reject` | Call `maxforge_reconcile_patch`; apply the same DSL with `manualChanges: "merge"` only when `canApply` is true |
+| Reconciliation reports conflicts | Both sides changed the same field, one changed a box the other deleted, a new reserved identity appeared, or a desired replacement would destroy an unmanaged cord | Resolve the listed conflict explicitly; do not force or retry the apply |
 | Apply times out or transport disconnects | Acknowledgement is missing; Max may be unchanged, applied, or partially mutated | Do not retry; call status and inspect first |
 | `baselineCaptured: false` | Max acknowledged apply but the follow-up snapshot failed | Treat apply as successful, inspect explicitly, and do not repeat solely for baseline capture |
 | `comparisonAvailable: false` | No baseline exists in this MCP process | Use the full snapshot; do not invent historical changes |
@@ -366,5 +432,17 @@ empty. Those actions defeat optimistic concurrency.
   normal performance changes as patch edits.
 - A comparison baseline is process-local. Without one, Maxforge reports the
   current graph but does not fabricate change history.
+- Reconciliation preserves observed text, position, deletion, and patch-cord
+  edits on existing managed identities. It cannot reconstruct arbitrary object
+  attributes omitted from inspection.
+- Moving a managed box into a different patcher path is not treated as an
+  identity-preserving edit. Represent the intended reparenting in complete DSL
+  and resolve the resulting delete/add conflict explicitly.
+- A box manually given a new reserved `maxforge_<scope>_obj_...` identity is
+  reported as `managed_box_added`, not silently adopted. Define it in DSL or
+  remove the reserved scripting name first.
+- Inspection and apply are separate requests, but MCP apply plans bind them with
+  `baseStructureToken`. A human edit after apply-side inspection changes the
+  token, so the native external rejects the stale plan before mutation.
 
 See [`patch-sync.md`](patch-sync.md) for the plan and ownership protocol.

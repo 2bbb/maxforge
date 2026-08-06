@@ -223,19 +223,25 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 3. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
    scope、titleを指定し、登録完了まで待つ。
 4. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
-5. 同じ`patcherId`とscopeを指定して`maxforge_compile_plan`で完全なdesired
-   DSLから差分を確認する。
-6. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。
-7. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
+5. managed manual changeがあれば、完全なdesired DSLを
+   `maxforge_reconcile_patch`へ渡す。`canApply: true`でなければ適用しない。
+6. 通常経路では`maxforge_compile_plan`、手動変更の統合経路ではreconcileが
+   返したplanを確認する。
+7. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
+   場合だけ`manualChanges: "merge"`を指定する。
+8. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いする。
-8. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
+9. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
 
 MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
 
-managed manual changeをinspectしてもbaselineは更新されない。現行MCP APIには
-手動変更を新baselineとして採用するoperationが無いため、次のapply前にMax上で
-post-apply状態へ戻す。timeout、transport error、`baselineCaptured: false`を理由に
+managed manual changeをinspectしただけではbaselineは更新されない。
+`maxforge_reconcile_patch`は前回graph・live snapshot・次のdesired DSLを三者比較し、
+非競合変更だけを保持する。同一fieldの競合やchange-vs-deleteは明示的に解消する。
+apply側は再inspectした構造tokenをplanへ埋め込み、native externalが変更直前に
+再照合する。その間にboxまたはcordが変わった場合は上書きせず拒否される。
+timeout、transport error、`baselineCaptured: false`を理由に
 同じapplyを即時再送してはいけない。statusとlive inspectを先に行う。
 
 Max側は`examples/mcp_bridge/`の通り、接続設定を持つnative

@@ -411,10 +411,11 @@ source[1] -&gt; destination[2]</code></pre>
           <li><span>02</span><div>Call <code>maxforge_status</code> when process or connection state is uncertain.</div></li>
           <li><span>03</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
           <li><span>04</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
-          <li><span>05</span><div>Call <code>maxforge_compile_plan</code> with complete desired DSL.</div></li>
-          <li><span>06</span><div>Review warnings, deletes, and structural recreation before mutation.</div></li>
-          <li><span>07</span><div>Call <code>maxforge_apply_dsl</code> with the same target and complete DSL.</div></li>
+          <li><span>05</span><div>If managed edits exist, call <code>maxforge_reconcile_patch</code> with complete desired DSL and require <code>canApply: true</code>.</div></li>
+          <li><span>06</span><div>Otherwise call <code>maxforge_compile_plan</code>. Review warnings, deletes, and structural recreation.</div></li>
+          <li><span>07</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
           <li><span>08</span><div>Verify the acknowledged revision, then inspect again.</div></li>
+          <li><span>09</span><div>After a merged apply, update the working complete DSL with preserved human edits or continue using reconciliation.</div></li>
         </ol>
         <div class="docs-callout docs-callout-danger">
           <strong>Desired state, not commands</strong>
@@ -434,6 +435,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_list_patches</code></td><td>List exact registered <code>patcherId</code>/<code>scope</code> targets.</td></tr>
               <tr><td><code>maxforge_create_patch</code></td><td>Create a new unsaved top-level patch through one controller-capable external.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
+              <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>
               <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>
               <tr><td><code>maxforge_apply_dsl</code></td><td>Compile, send, acknowledge, and capture a new inspection baseline.</td></tr>
             </tbody>
@@ -488,7 +490,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td>Apply timed out</td><td>Do not retry. Call <code>maxforge_help</code> with <code>recovery</code>, inspect the live patch, and determine whether Max applied the revision.</td></tr>
               <tr><td>MCP process restarted</td><td>List targets and inspect. The process no longer has its previous desired graph or comparison baseline.</td></tr>
               <tr><td>Max or the patch restarted</td><td>Wait for registration, then status → list → inspect before compiling another plan.</td></tr>
-              <tr><td>Managed manual edit detected</td><td>Restore the last acknowledged managed structure manually. Inspection reports drift but does not adopt it.</td></tr>
+              <tr><td>Managed manual edit detected</td><td>Run <code>maxforge_reconcile_patch</code>. Apply with <code>manualChanges: "merge"</code> only when <code>canApply</code> is true; otherwise resolve each conflict explicitly.</td></tr>
               <tr><td>Unmanaged manual edit detected</td><td>Review it. Unmanaged-only edits are reported but do not block managed mutation.</td></tr>
             </tbody>
           </table>
@@ -523,7 +525,10 @@ source[1] -&gt; destination[2]</code></pre>
           <li>Inspection is structural. It does not serialize arbitrary object attributes, DSP values, UI values, patchline colors, hidden state, or line midpoints.</li>
           <li>Reverse compilation preserves structure and explicit positions; it does not reproduce the exact original DSL source text.</li>
           <li>The MCP bridge binds only to literal loopback addresses. It has no remote-network mode.</li>
-          <li>The ownership marker is the reserved scripting-name namespace. Manually renaming a box into it adopts that box into the managed scope.</li>
+          <li>The ownership marker is the reserved scripting-name namespace. The native consumer treats such boxes as owned, but MCP reconciliation rejects newly introduced reserved identities because inspection lacks enough metadata for safe adoption.</li>
+          <li>Reconciliation preserves observed edits to existing managed identities. Arbitrary object attributes omitted from structural inspection cannot be merged.</li>
+          <li>Moving a managed box to another patcher path is not merged as a move; express the intended delete/add in complete DSL and resolve the conflict explicitly.</li>
+          <li>MCP apply plans carry the inspected structure token. If a box or cord changes before native mutation, <code>maxforge.sync</code> rejects the stale plan.</li>
           <li>The macOS external is not notarized.</li>
         </ul>
       </section>

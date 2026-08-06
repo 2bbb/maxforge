@@ -77,7 +77,9 @@ for i in 0..7 {
 7. When MCP tools are available, call `maxforge_help` with `topic: "workflow"`
    first, then list patches, select the explicit `patcherId`, inspect it,
    preview with `maxforge_compile_plan`, and apply the complete desired state
-   with `maxforge_apply_dsl`. Use `maxforge_create_patch` when isolation in a
+   with `maxforge_apply_dsl`. If managed manual edits exist, use
+   `maxforge_reconcile_patch` and apply with `manualChanges: "merge"` only when
+   it reports `canApply: true`. Use `maxforge_create_patch` when isolation in a
    new Max window is required. Prefer the dedicated `maxforge-mcp` skill for
    sustained live control. Never treat a timeout as success.
 8. After an MCP process restart, provide the previous complete DSL as

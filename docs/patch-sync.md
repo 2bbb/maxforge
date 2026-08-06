@@ -34,8 +34,11 @@ graph. A shorter prefix scope does not own a longer scope (`foo` does not own
 `foo_bar`). A consumer must not modify other objects. Managed graph compilation
 rejects `@varname` because overriding it would destroy ownership tracking.
 
-The reserved varname is the ownership marker in protocol version 1. Manually
-renaming an object into this namespace explicitly adopts it into the scope.
+The reserved varname is the ownership marker in protocol version 1. The native
+consumer therefore treats a manually renamed object as scope-owned. The MCP
+reconciler does **not** silently adopt a newly introduced reserved identity,
+because inspection does not contain enough object metadata to reconstruct a
+safe `PatchGraph`; it reports `managed_box_added` instead.
 
 ## Stable identity
 
@@ -62,9 +65,14 @@ A plan contains:
 
 - `baseRevision` — revision the consumer must currently hold.
 - `targetRevision` — revision after successful application.
+- optional `baseStructureToken` — 16-character lowercase hexadecimal token for
+  the exact inspected live box/connection structure.
 
 The consumer must reject a plan when `baseRevision` does not match its current
-managed revision. A revision is optimistic concurrency control, not rollback.
+managed revision. When `baseStructureToken` is present, it must also snapshot
+the live patch immediately before validation and reject a token mismatch before
+any operation runs. MCP apply plans include this token; standalone CLI plans may
+omit it. A revision is optimistic concurrency control, not rollback.
 
 ## Operations
 
@@ -187,7 +195,10 @@ contains one configured `maxforge.sync` object, then registers through that
 object's independent native WebSocket connection.
 
 The snapshot response contains root patcher metadata plus flattened boxes and
-connections. `targetPath` identifies nested patchers. Box records include
+connections, and a top-level `structureToken` derived only from that sorted
+box/connection structure. Patcher title, file path, dirty state, lock state, and
+presentation mode do not affect the token. `targetPath` identifies nested
+patchers. Box records include
 `runtimeId`, `varName`, `maxclass`, `patchingRect`, `managed`, and `text` when
 the box exposes it. Connection records include both endpoint runtime IDs,
 varnames, and port indices.
@@ -203,7 +214,9 @@ operation fails.
 
 The consumer parses and validates all operations before mutation. Validation
 simulates create/delete ordering so a plan can create a parent subpatcher and
-then target its contents. Mutation occurs synchronously on Max's main thread.
+then target its contents. When a plan carries `baseStructureToken`, the consumer
+checks it before both `validate` and `apply`. Mutation occurs synchronously on
+Max's main thread.
 
 Generate plan JSON with the CLI:
 
