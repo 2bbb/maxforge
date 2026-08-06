@@ -63,8 +63,13 @@ interface ManagedSnapshotBox {
   readonly snapshot: MaxforgeSnapshotBox;
   readonly id: string;
   readonly targetPath: readonly string[];
-  readonly base: PatchBox;
+  readonly box: PatchBox;
 }
+
+export type LiveSnapshotBoxResolver = (
+  snapshot: MaxforgeSnapshotBox,
+  base: PatchBox
+) => PatchBox;
 
 interface ManagedSnapshotEndpoint {
   readonly id: string;
@@ -86,12 +91,14 @@ export function reconcilePatchGraphs(
   mergeBase: PatchGraph,
   desired: PatchGraph,
   currentSnapshot: MaxforgePatcherSnapshot,
-  baselineSnapshot?: MaxforgePatcherSnapshot
+  baselineSnapshot?: MaxforgePatcherSnapshot,
+  resolveBox?: LiveSnapshotBoxResolver
 ): ReconciledPatchPlan {
   const reconstructed = reconstructManagedGraph(
     acknowledged,
     currentSnapshot,
-    baselineSnapshot
+    baselineSnapshot,
+    resolveBox
   );
   if (reconstructed.conflicts.length > 0) {
     return {
@@ -137,13 +144,14 @@ export function reconcilePatchGraphs(
 export function reconstructManagedGraph(
   base: PatchGraph,
   current: MaxforgePatcherSnapshot,
-  baseline?: MaxforgePatcherSnapshot
+  baseline?: MaxforgePatcherSnapshot,
+  resolveBox: LiveSnapshotBoxResolver = defaultLiveBox
 ): ReconstructedManagedState {
   const baseBoxes = flattenBaseBoxes(base.patcher);
   const baselineByRuntime = new Map(
     (baseline?.boxes ?? [])
       .filter((box) => box.managed)
-      .map((box) => [box.runtimeId, box])
+      .map((box) => [runtimeKey(box.targetPath, box.runtimeId), box])
   );
   const consumed = new Set<string>();
   const conflicts: PatchReconciliationConflict[] = [];
@@ -151,7 +159,9 @@ export function reconstructManagedGraph(
   const runtimeEndpoints = new Map<string, ManagedSnapshotEndpoint>();
 
   for (const box of current.boxes) {
-    const baselineBox = baselineByRuntime.get(box.runtimeId);
+    const baselineBox = baselineByRuntime.get(
+      runtimeKey(box.targetPath, box.runtimeId)
+    );
     if (baselineBox && (!box.managed || box.varName !== baselineBox.varName)) {
       const id = managedIdFromVarName(base.scope, baselineBox.varName) ?? undefined;
       conflicts.push({
@@ -196,9 +206,9 @@ export function reconstructManagedGraph(
       snapshot: box,
       id,
       targetPath: box.targetPath,
-      base: baseBox,
+      box: resolveBox(box, baseBox),
     });
-    runtimeEndpoints.set(box.runtimeId, {
+    runtimeEndpoints.set(runtimeKey(box.targetPath, box.runtimeId), {
       id,
       varName: box.varName,
       targetPath: box.targetPath,
@@ -208,8 +218,12 @@ export function reconstructManagedGraph(
   const connectionsByPath = new Map<string, PatchConnection[]>();
   const externalConnections: ExternalManagedConnection[] = [];
   for (const connection of current.connections) {
-    const source = runtimeEndpoints.get(connection.source.runtimeId);
-    const destination = runtimeEndpoints.get(connection.destination.runtimeId);
+    const source = runtimeEndpoints.get(
+      runtimeKey(connection.targetPath, connection.source.runtimeId)
+    );
+    const destination = runtimeEndpoints.get(
+      runtimeKey(connection.targetPath, connection.destination.runtimeId)
+    );
     if (source && destination) {
       const key = pathKey(connection.targetPath);
       const connections = connectionsByPath.get(key) ?? [];
@@ -256,11 +270,7 @@ function rebuildNode(
     if (!live) continue;
     const nestedPath = [...targetPath, box.varName];
     boxes.push({
-      ...box,
-      varName: live.snapshot.varName,
-      maxclass: live.snapshot.maxclass,
-      patchingRect: live.snapshot.patchingRect,
-      text: live.snapshot.text,
+      ...live.box,
       patcher: box.patcher
         ? rebuildNode(box.patcher, nestedPath, liveBoxes, connectionsByPath)
         : undefined,
@@ -269,6 +279,19 @@ function rebuildNode(
   return {
     boxes,
     connections: connectionsByPath.get(pathKey(targetPath)) ?? [],
+  };
+}
+
+function defaultLiveBox(
+  snapshot: MaxforgeSnapshotBox,
+  base: PatchBox
+): PatchBox {
+  return {
+    ...base,
+    varName: snapshot.varName,
+    maxclass: snapshot.maxclass,
+    patchingRect: snapshot.patchingRect,
+    text: snapshot.text,
   };
 }
 
@@ -320,4 +343,8 @@ function boxKey(targetPath: readonly string[], id: string): string {
 
 function pathKey(path: readonly string[]): string {
   return path.join("/");
+}
+
+function runtimeKey(targetPath: readonly string[], runtimeId: string): string {
+  return `${pathKey(targetPath)}\u0000${runtimeId}`;
 }

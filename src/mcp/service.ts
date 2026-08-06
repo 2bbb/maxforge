@@ -2,16 +2,19 @@ import {
   CompileWarning,
   ObjectDatabase,
 } from "../core/types.js";
+import { lookupObject } from "../core/object-db.js";
 import {
   compileDslToPatchGraph,
   createEmptyPatchGraph,
   diffPatchGraphs,
   PatchGraph,
+  PatchBox,
   PatchPlan,
 } from "../max/patch-graph.js";
 import {
   PatchReconciliationConflict,
   reconcilePatchGraphs,
+  reconstructManagedGraph,
 } from "./reconcile.js";
 import {
   MaxforgeAppliedEvent,
@@ -173,7 +176,7 @@ export class MaxforgePatchService {
     const baseline = await this.captureBaseline(
       request.patcherId,
       request.scope,
-      acknowledgement.revision
+      nextGraph
     );
 
     return {
@@ -214,7 +217,8 @@ export class MaxforgePatchService {
       intent,
       desired.graph,
       snapshot.patcher,
-      baseline
+      baseline,
+      (box, baseBox) => this.resolveLiveBox(box, baseBox)
     );
     const changes = baseline
       ? diffPatcherSnapshots(baseline, snapshot.patcher)
@@ -292,7 +296,7 @@ export class MaxforgePatchService {
   private async captureBaseline(
     patcherId: string,
     scope: string,
-    expectedRevision: string
+    expectedGraph: PatchGraph
   ): Promise<{
     captured: boolean;
     warning?: string;
@@ -300,10 +304,24 @@ export class MaxforgePatchService {
     const key = targetKey(patcherId, scope);
     try {
       const snapshot = await this.transport.inspect(patcherId, scope);
-      if (snapshot.revision !== expectedRevision) {
+      if (snapshot.revision !== expectedGraph.revision) {
         throw new Error(
           `inspection revision ${snapshot.revision ?? "uninitialized"} does ` +
-          `not match acknowledged revision ${expectedRevision}`
+          `not match acknowledged revision ${expectedGraph.revision}`
+        );
+      }
+      const observed = reconstructManagedGraph(
+        expectedGraph,
+        snapshot.patcher,
+        undefined,
+        (box, baseBox) => this.resolveLiveBox(box, baseBox)
+      );
+      if (
+        observed.conflicts.length > 0 ||
+        observed.graph.revision !== expectedGraph.revision
+      ) {
+        throw new Error(
+          "post-apply snapshot does not match the acknowledged target graph"
         );
       }
       this.baselineSnapshots.set(key, snapshot.patcher);
@@ -418,6 +436,28 @@ export class MaxforgePatchService {
     return {
       graph: result.graph,
       warnings: result.warnings,
+    };
+  }
+
+  private resolveLiveBox(
+    snapshot: MaxforgeSnapshotBox,
+    base: PatchBox
+  ): PatchBox {
+    const objectText = base.maxclass === "newobj"
+      ? snapshot.text
+      : snapshot.maxclass;
+    const resolved = !base.patcher && objectText
+      ? lookupObject(objectText, this.database, true)
+      : null;
+    return {
+      ...base,
+      varName: snapshot.varName,
+      maxclass: resolved?.maxclass ?? base.maxclass,
+      numinlets: resolved?.def.numinlets ?? base.numinlets,
+      numoutlets: resolved?.def.numoutlets ?? base.numoutlets,
+      outlettype: resolved?.def.outlettype ?? base.outlettype,
+      patchingRect: snapshot.patchingRect,
+      text: snapshot.text,
     };
   }
 }

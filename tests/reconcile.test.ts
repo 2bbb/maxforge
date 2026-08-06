@@ -182,6 +182,69 @@ describe("live patch reconciliation", () => {
       ])
     );
   });
+
+  it("scopes repeated runtime IDs to their containing patcher", () => {
+    const base = graph(`
+fx = p pass at(10, 20) {
+  input = inlet signal at(10, 20)
+  output = outlet signal at(10, 80)
+  input -> output
+}
+`);
+    const desired = graph(`
+fx = p pass at(10, 20) {
+  input = inlet signal at(10, 20)
+  output = outlet signal at(10, 80)
+  input -> output
+}
+button_0 = button at(160, 20)
+`);
+    const fx = base.patcher.boxes[0];
+    const input = fx.patcher!.boxes[0];
+    const output = fx.patcher!.boxes[1];
+    const nestedPath = [fx.varName];
+    const current: MaxforgePatcherSnapshot = {
+      title: "Nested",
+      filename: "nested.maxpat",
+      filepath: "/tmp/nested.maxpat",
+      dirty: true,
+      locked: false,
+      presentation: false,
+      boxes: [
+        snapshotBox(fx, [], "obj-1"),
+        snapshotBox(input, nestedPath, "obj-1"),
+        snapshotBox(output, nestedPath, "obj-2"),
+      ],
+      connections: [{
+        targetPath: nestedPath,
+        source: {
+          runtimeId: "obj-1",
+          varName: input.varName,
+          port: 0,
+        },
+        destination: {
+          runtimeId: "obj-2",
+          varName: output.varName,
+          port: 0,
+        },
+      }],
+    };
+
+    const result = reconcilePatchGraphs(base, base, desired, current, current);
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.plan?.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        targetPath: [],
+        box: expect.objectContaining({ id: "obj-button_0" }),
+      }),
+    ]);
+    expect(
+      result.graph?.patcher.boxes.find((box) => box.id === "obj-fx")
+        ?.patcher?.connections
+    ).toHaveLength(1);
+  });
 });
 
 function graph(source: string): PatchGraph {
@@ -241,5 +304,21 @@ function snapshot(
     presentation: false,
     boxes,
     connections,
+  };
+}
+
+function snapshotBox(
+  box: PatchGraph["patcher"]["boxes"][number],
+  targetPath: readonly string[],
+  runtimeId: string
+): MaxforgePatcherSnapshot["boxes"][number] {
+  return {
+    targetPath,
+    runtimeId,
+    varName: box.varName,
+    maxclass: box.maxclass,
+    patchingRect: box.patchingRect,
+    managed: true,
+    ...(box.text === undefined ? {} : { text: box.text }),
   };
 }

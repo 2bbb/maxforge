@@ -283,6 +283,47 @@ describe("MaxforgePatchService", () => {
     expect(transport.plans).toHaveLength(1);
   });
 
+  it("recomputes port metadata when a live object text changes", async () => {
+    const transport = new FakeTransport();
+    const service = new MaxforgePatchService(database, transport);
+    const currentDsl = "osc = cycle~ 440 at(50, 50)";
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: currentDsl,
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "trigger b i f",
+      })),
+    };
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: `${currentDsl}\ngain = *~ 0.25 at(50, 100)`,
+    });
+
+    expect(preview).toMatchObject({
+      canApply: true,
+      mergedGraph: {
+        patcher: {
+          boxes: expect.arrayContaining([
+            expect.objectContaining({
+              id: "obj-osc",
+              text: "trigger b i f",
+              numinlets: 1,
+              numoutlets: 3,
+              outlettype: ["bang", "int", "float"],
+            }),
+          ]),
+        },
+      },
+    });
+  });
+
   it("can reconcile after restart when exact current DSL seeds the base graph", async () => {
     const transport = new FakeTransport();
     const currentDsl = "osc = cycle~ 440 at(50, 50)";
@@ -335,6 +376,30 @@ describe("MaxforgePatchService", () => {
       "patch-a:voices": result.plan.targetRevision,
     });
   });
+
+  it("does not capture a post-apply baseline that differs from the target graph", async () => {
+    const transport = new FakeTransport();
+    transport.snapshotAfterApply = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "cycle~ 880",
+      })),
+    };
+    const service = new MaxforgePatchService(database, transport);
+
+    const result = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+
+    expect(result.baselineCaptured).toBe(false);
+    expect(result.baselineWarning).toContain(
+      "post-apply snapshot does not match"
+    );
+    expect(service.getBaselineScopes()).toEqual([]);
+  });
 });
 
 class FakeTransport implements PatchPlanTransport {
@@ -342,6 +407,7 @@ class FakeTransport implements PatchPlanTransport {
   readonly liveRevisions = new Map<string, string | null>();
   failure: Error | undefined;
   inspectionFailure: Error | undefined;
+  snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
 
   async apply(
@@ -354,6 +420,7 @@ class FakeTransport implements PatchPlanTransport {
       `${patcherId}:${plan.scope}`,
       plan.targetRevision
     );
+    if (this.snapshotAfterApply) this.snapshot = this.snapshotAfterApply;
     return {
       type: "maxforge.applied",
       requestId: "fake-apply",
