@@ -373,10 +373,11 @@ abstractionを`--allow-unknown`で誤魔化さない。project rootの
 }
 ```
 
-CLIの`compile`、`validate`、`plan`は入力DSLから上方向へ設定を探索する。
+CLIの`compile`、`validate`、`plan`、`bundle`は入力DSLから上方向へ設定を探索する。
 明示指定は`--config`、事前検査は`maxforge doctor --input input.maxdsl`を使う。
 MCPはcwd探索を行わないため、server起動設定で`MAXFORGE_CONFIG`に絶対pathを
-渡し、変更後はserverを再起動する。
+渡す。catalog変更後は`maxforge_reload_catalog`を呼び、`maxforge_catalog`で
+新しいdigestを確認する。server再起動は不要で、reload失敗時は旧catalogが残る。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

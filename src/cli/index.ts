@@ -103,6 +103,10 @@ async function compileCommand(cmdArgs: string[]) {
     process.exit(1);
   }
 
+  if (clipboard && outputFile) {
+    throw new Error("compile accepts either -o or --clipboard, not both");
+  }
+
   const source = readFileSync(resolve(inputFile), "utf-8");
   const { ast, errors: parseErrors } = parse(source);
 
@@ -521,11 +525,14 @@ function decompileCommand(cmdArgs: string[]) {
   let outputFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
-      outputFile = cmdArgs[i + 1];
+    const argument = cmdArgs[i];
+    if (argument === "-o") {
+      outputFile = requiredOptionValue(cmdArgs, i);
       i++;
-    } else if (!inputFile) {
-      inputFile = cmdArgs[i];
+    } else if (!inputFile && !argument.startsWith("-")) {
+      inputFile = argument;
+    } else {
+      throw new Error(`Unknown decompile argument: ${argument}`);
     }
   }
 
@@ -552,31 +559,28 @@ function fromClipboardCommand(cmdArgs: string[]) {
   let outputFile = "";
 
   for (let i = 0; i < cmdArgs.length; i++) {
-    if (cmdArgs[i] === "-o" && cmdArgs[i + 1]) {
-      outputFile = cmdArgs[i + 1];
+    const argument = cmdArgs[i];
+    if (argument === "-o") {
+      outputFile = requiredOptionValue(cmdArgs, i);
       i++;
+    } else {
+      throw new Error(`Unknown from-clipboard argument: ${argument}`);
     }
   }
 
-  let input = "";
-  process.stdin.setEncoding("utf-8");
-  process.stdin.on("data", (chunk: string) => {
-    input += chunk;
-  });
-  process.stdin.on("end", () => {
-    const json = fromClipboardText(input);
-    const patch = JSON.parse(json);
-    const dsl = decompile(patch);
+  const input = readFileSync(0, "utf-8");
+  const json = fromClipboardText(input);
+  const patch = JSON.parse(json);
+  const dsl = decompile(patch);
 
-    if (outputFile) {
-      const outPath = resolve(outputFile);
-      mkdirSync(dirname(outPath), { recursive: true });
-      writeFileSync(outPath, dsl, "utf-8");
-      console.log(`Written: ${outPath}`);
-    } else {
-      console.log(dsl);
-    }
-  });
+  if (outputFile) {
+    const outPath = resolve(outputFile);
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, dsl, "utf-8");
+    console.log(`Written: ${outPath}`);
+  } else {
+    console.log(dsl);
+  }
 }
 
 function printHelp() {

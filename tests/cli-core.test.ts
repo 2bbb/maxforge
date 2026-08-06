@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe("maxforge core CLI commands", () => {
-  it("compiles, validates, decompiles, and plans through the published entrypoint", async () => {
+  it("compiles, validates, decompiles, plans, and diagnoses through the published entrypoint", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "source.maxdsl");
     const output = join(root, "compiled.maxpat");
@@ -70,6 +70,37 @@ describe("maxforge core CLI commands", () => {
         expect.objectContaining({ op: "connect" }),
       ]),
     });
+
+    const doctor = await execFileAsync(process.execPath, [
+      cliPath,
+      "doctor",
+      "--input",
+      input,
+    ]);
+    expect(doctor.stdout).toContain("Object catalog validation passed.");
+    expect(doctor.stdout).toContain("Config: built-in only");
+  });
+
+  it("round-trips compressed patch text from stdin", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "source.maxdsl");
+    const recovered = join(root, "recovered.maxdsl");
+    await writeFile(input, 'patch "Clipboard CLI"\nsource = button\nsink = print\nsource -> sink\n');
+
+    const compiled = await execFileAsync(process.execPath, [
+      cliPath,
+      "compile",
+      input,
+      "--clipboard",
+    ]);
+    const result = await spawnWithInput(
+      [cliPath, "from-clipboard", "-o", recovered],
+      compiled.stdout
+    );
+
+    expect(result.code).toBe(0);
+    expect(await readFile(recovered, "utf8")).toContain('patch "Clipboard CLI"');
+    expect(await readFile(recovered, "utf8")).toContain("button -> print");
   });
 
   it("returns a failing exit status for invalid DSL", async () => {
@@ -85,10 +116,64 @@ describe("maxforge core CLI commands", () => {
       stderr: expect.stringContaining("[E003]"),
     });
   });
+
+  it("rejects ambiguous output and unknown command options", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "source.maxdsl");
+    const output = join(root, "output.maxpat");
+    await writeFile(input, "source = button\n");
+
+    await expect(execFileAsync(process.execPath, [
+      cliPath,
+      "compile",
+      input,
+      "-o",
+      output,
+      "--clipboard",
+    ])).rejects.toMatchObject({
+      stderr: expect.stringContaining("either -o or --clipboard"),
+    });
+
+    await expect(execFileAsync(process.execPath, [
+      cliPath,
+      "decompile",
+      output,
+      "--bogus",
+    ])).rejects.toMatchObject({
+      stderr: expect.stringContaining("Unknown decompile argument"),
+    });
+
+    const clipboard = await spawnWithInput(
+      [cliPath, "from-clipboard", "--bogus"],
+      "ignored"
+    );
+    expect(clipboard.code).toBe(1);
+    expect(clipboard.stderr).toContain("Unknown from-clipboard argument");
+  });
 });
 
 async function temporaryDirectory(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), "maxforge-cli-core-"));
   temporaryDirectories.push(path);
   return path;
+}
+
+async function spawnWithInput(
+  args: string[],
+  input: string
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return await new Promise((resolveResult, reject) => {
+    const child = spawn(process.execPath, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => resolveResult({ code, stdout, stderr }));
+    child.stdin.end(input);
+  });
 }

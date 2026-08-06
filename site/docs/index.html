@@ -341,7 +341,7 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           <li><code>catalog [query] --json</code> lists project metadata or searches built-ins when a query is supplied.</li>
           <li>Fixed ports are exact. Bounded argument mode derives counts from one integer argument or argument count. Dynamic ports require a representative shape but do not impose a false upper connection bound.</li>
           <li><code>ports: "derive"</code> counts root <code>inlet</code>/<code>outlet</code> boxes and infers signal outlets from incoming source metadata.</li>
-          <li>An abstraction name must match its existing <code>.maxpat</code> filename. The file is validated but not embedded; Max still needs its directory on the search path.</li>
+          <li>An abstraction name must match its existing <code>.maxpat</code> filename. Normal compilation validates but does not embed it, so Max still needs its directory on the search path. <code>bundle</code> copies referenced declared dependencies instead.</li>
           <li>Imported catalogs cannot recursively import more catalogs. Accidental name collisions fail unless <code>override: true</code> is explicit.</li>
         </ul>
         <p>
@@ -464,9 +464,11 @@ source[1] -&gt; destination[2]</code></pre>
         </p>
         <p>
           If desired DSL uses a project external or abstraction, add an absolute
-          <code>MAXFORGE_CONFIG</code> path to the server's <code>env</code> and
-          restart the MCP process after catalog edits. MCP intentionally does
-          not discover configuration from its working directory.
+          <code>MAXFORGE_CONFIG</code> path to the server's <code>env</code>.
+          After catalog edits, call <code>maxforge_reload_catalog</code> and
+          verify the new digest with <code>maxforge_catalog</code>; restarting
+          MCP is unnecessary. MCP intentionally does not discover configuration
+          from its working directory.
         </p>
       </section>
 

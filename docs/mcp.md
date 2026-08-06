@@ -89,10 +89,12 @@ path because a client's launch directory is not a reliable project root:
 }
 ```
 
-The catalog is loaded once at server startup. Restart the MCP process after
-editing it. A valid declaration is not a runtime availability check: the Max
-machine still needs the corresponding external binary or abstraction search
-path. See [`object-catalog.md`](object-catalog.md#project-object-catalogs).
+The configured catalog is loaded at server startup. After editing its files,
+call `maxforge_reload_catalog` and verify the replacement digest with
+`maxforge_catalog`; a full MCP restart is unnecessary. A valid declaration is
+not a runtime availability check: the Max machine still needs the corresponding
+external binary or abstraction search path. See
+[`object-catalog.md`](object-catalog.md#project-object-catalogs).
 
 With no token, non-loopback bind addresses are rejected and existing local
 setups remain unauthenticated on `127.0.0.1`. Set a human-chosen token to bind

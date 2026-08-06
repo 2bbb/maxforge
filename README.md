@@ -407,7 +407,7 @@ reusable `.maxpat` abstraction that is not in the bundled catalog:
 }
 ```
 
-`compile`, `validate`, and `plan` search upward from the input DSL for that
+`compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for that
 filename. `--config path` selects it explicitly. `doctor` validates every
 source and reads abstractions before a build. Imported files use the
 [`objects-v1` schema](https://2bit.jp/maxforge/schema/objects-v1.json) and may
@@ -419,9 +419,10 @@ query it lists configured project objects; a query searches built-ins too, and
 `ports.mode: "arguments"` for bounded integer argument/index rules; see the
 object-catalog documentation for the schema and fallback behavior.
 
-An abstraction `name` must match its `.maxpat` filename. maxforge validates the
-file and its port metadata but does not embed it; its directory must still be
-available on Max's search path.
+An abstraction `name` must match its `.maxpat` filename. Normal compilation
+validates the file and its port metadata but does not embed it, so its directory
+must be available on Max's search path. `bundle` instead copies every referenced
+declared abstraction and external path into the generated package.
 
 The MCP server intentionally does not search its working directory. Set an
 absolute `MAXFORGE_CONFIG` path in the MCP client configuration, then call
