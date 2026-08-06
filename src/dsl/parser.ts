@@ -66,7 +66,8 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     if (subpatcherMatch) {
       const [, name, subpatcherName, attrText] = subpatcherMatch;
       const { text: cleanSubpatcherText, pos } = parsePositionSuffix(`p ${subpatcherName}${attrText}`);
-      const { attrs } = parseAttributes(cleanSubpatcherText);
+      const { attrs, errors: attributeErrors } = parseAttributes(cleanSubpatcherText);
+      appendSyntaxErrors(errors, attributeErrors, current.line);
       const { body, endLine } = parseSubpatcherBody(lines, i + 1, current.line, errors);
       statements.push({
         type: "subpatcher_def",
@@ -89,7 +90,16 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
       if (/^\w+$/.test(name)) {
         const positioned = parsePositionSuffix(objectText);
         objectText = positioned.text;
-        const { text: cleanText, attrs } = parseAttributes(objectText);
+        const {
+          text: cleanText,
+          attrs,
+          errors: attributeErrors,
+        } = parseAttributes(objectText);
+        appendSyntaxErrors(errors, attributeErrors, current.line);
+        const specialObjectError = validateSpecialObjectText(cleanText);
+        if (specialObjectError) {
+          appendSyntaxErrors(errors, [specialObjectError], current.line);
+        }
         statements.push({
           type: "object_def",
           name,
@@ -128,6 +138,23 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
   }
 
   return { ast: { type: "program", patchDecl, statements }, errors };
+}
+
+function appendSyntaxErrors(
+  errors: CompileError[],
+  messages: string[],
+  line: number
+): void {
+  for (const message of messages) {
+    errors.push({ code: ErrorCode.SYNTAX_ERROR, message, line });
+  }
+}
+
+function validateSpecialObjectText(text: string): string | null {
+  const type = text.match(/^(comment|message)(?:\s|$)/)?.[1];
+  if (!type) return null;
+  if (/^(?:comment|message)\s+"(?:\\.|[^"\\])*"$/.test(text)) return null;
+  return `${type} text must be one quoted string`;
 }
 
 function parsePatchDecl(line: string): PatchDecl | null {

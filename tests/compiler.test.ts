@@ -998,6 +998,50 @@ describe("attributes", () => {
     expect(stmt.attrs).toEqual({ fontname: ["Courier"] });
   });
 
+  it("round-trips escaped quotes and backslashes in attribute strings", () => {
+    const source = String.raw`n = number @fontname "A \"quoted\" \\ font"`;
+    const parsed = parse(source);
+    expect(parsed.errors).toHaveLength(0);
+    const stmt = parsed.ast.statements[0] as any;
+    expect(stmt.attrs).toEqual({ fontname: ['A "quoted" \\ font'] });
+
+    const compiled = compile(parsed.ast, db);
+    expect(compiled.success).toBe(true);
+    const decompiled = decompile(compiled.output!);
+    const reparsed = parse(decompiled);
+    expect(reparsed.errors).toHaveLength(0);
+    const recompiled = compile(reparsed.ast, db);
+    expect(recompiled.output!.patcher.boxes[0].box.fontname).toBe(
+      'A "quoted" \\ font'
+    );
+  });
+
+  it.each([
+    ["empty attribute name", "n = number @ 1", "Invalid attribute name"],
+    ["missing attribute value", "n = number @minimum", "requires at least one value"],
+    ["duplicate attribute", "n = number @minimum 0 @minimum 1", "Duplicate attribute"],
+    ["unterminated attribute string", 'n = number @fontname "broken', "Unterminated quoted string"],
+  ])("rejects %s", (_label, source, message) => {
+    const { errors } = parse(source);
+    expect(errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "E007", message: expect.stringContaining(message) }),
+    ]));
+  });
+
+  it.each([
+    ["comment", "c = comment unquoted"],
+    ["message", "m = message"],
+    ["message", 'm = message "valid" trailing'],
+  ])("requires one quoted string for %s text", (_type, source) => {
+    const { errors } = parse(source);
+    expect(errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "E007",
+        message: expect.stringContaining("must be one quoted string"),
+      }),
+    ]));
+  });
+
   it("does not treat @ inside quoted object text as an attribute", () => {
     const { ast, errors } = parse('msg = message "@target open" @presentation 1');
     expect(errors).toHaveLength(0);

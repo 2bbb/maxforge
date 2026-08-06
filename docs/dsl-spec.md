@@ -114,6 +114,8 @@ STRING ::= '"' ... '"'
 - `comment` and `message` text unescape `\"` and `\\`.
 - `\n` is not interpreted as a newline escape.
 - Used in: `patch` declaration, `comment` text, `message` text, and quoted attribute values.
+- `comment` and `message` require exactly one quoted text operand; unquoted or
+  trailing text is rejected instead of being guessed.
 
 ### 3.5 Arrow Operator
 
@@ -157,7 +159,11 @@ attr_value ::= NUMBER | STRING | unquoted_token
 - Each `@` token starts a new attribute; values are consumed until the next `@` or `at(` or end of line.
 - Single-value attributes emit a scalar in the box JSON; multi-value emit an array.
 - String values can be quoted (`"Courier"`) or unquoted (`Arial`).
+- Quoted attribute values unescape `\"` and `\\` so decompile/recompile preserves
+  literal quotes and backslashes; other backslash sequences remain literal.
 - Numeric values are parsed as numbers; everything else is a string.
+- Attribute names must be non-empty identifiers, every attribute requires at
+  least one value, and duplicate keys on one object are syntax errors.
 - Prefix an object argument with `\` when the literal token must begin with
   `@`. For example, `maxforge.sync \@host 127.0.0.1` emits the object text
   `maxforge.sync @host 127.0.0.1` instead of a `host` box JSON key.
