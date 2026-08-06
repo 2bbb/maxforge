@@ -5,4 +5,5 @@ export { decompile } from "./core/decompiler.js";
 export { loadDatabase, setDatabase } from "./core/object-db.js";
 export * from "./core/types.js";
 export * from "./max/patch-graph.js";
+export * from "./max/patch-merge.js";
 export * from "./max/thispatcher.js";
