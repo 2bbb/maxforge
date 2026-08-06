@@ -39,6 +39,9 @@ using virtual_patch = std::unordered_map<std::string, virtual_patcher>;
 auto is_valid_scope(const std::string &scope) -> bool;
 auto is_valid_patcher_id(const std::string &patcher_id) -> bool;
 auto is_valid_box_id(const std::string &id) -> bool;
+auto is_loopback_host(const std::string &host) -> bool;
+auto is_valid_network_host(const std::string &host) -> bool;
+auto is_valid_auth_token(const std::string &token) -> bool;
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

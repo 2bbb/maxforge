@@ -80,6 +80,43 @@ auto is_valid_box_id(const std::string &id) -> bool {
 	return true;
 }
 
+auto is_loopback_host(const std::string &host) -> bool {
+	return host == "127.0.0.1" || host == "::1";
+}
+
+auto is_valid_network_host(const std::string &host) -> bool {
+	if(host.empty() || 253 < host.size()) return false;
+	for(const auto character : host) {
+		const auto unsigned_character = static_cast<unsigned char>(character);
+		if(
+			std::isalnum(unsigned_character) == 0 &&
+			character != '.' &&
+			character != '-' &&
+			character != ':'
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+auto is_valid_auth_token(const std::string &token) -> bool {
+	if(token.empty() || 256 < token.size()) return false;
+	for(const auto character : token) {
+		const auto unsigned_character = static_cast<unsigned char>(character);
+		if(
+			std::isalnum(unsigned_character) == 0 &&
+			character != '.' &&
+			character != '_' &&
+			character != '~' &&
+			character != '-'
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

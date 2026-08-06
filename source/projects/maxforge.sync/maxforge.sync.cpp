@@ -193,17 +193,19 @@ auto bridge_patch_json(
 	const std::string &patcher_id,
 	const std::string &scope,
 	const std::string &host,
-	long port
+	long port,
+	const std::string &token
 ) -> std::string
 {
-	const auto object_text =
+	auto object_text =
 		"maxforge.sync @host " + host +
 		" @port " + std::to_string(port) +
 		" @scope " + scope +
 		" @patcher_id " + patcher_id +
 		" @controller 0";
+	if(!token.empty()) object_text += " @token " + token;
 	const std::vector<std::string> boxes{
-		patch_box_json("obj-sync", "newobj", object_text, 30, 30, 560, 22)
+		patch_box_json("obj-sync", "newobj", object_text, 30, 30, 680, 22)
 	};
 	return "{\"patcher\":" +
 		patcher_json(boxes, {}, 900, 560) +
@@ -222,14 +224,16 @@ auto create_bridge_patch(
 	const std::string &scope,
 	const std::string &title,
 	const std::string &host,
-	long port
+	long port,
+	const std::string &token
 ) -> c74::max::t_object *
 {
 	const auto json = bridge_patch_json(
 		patcher_id,
 		scope,
 		host,
-		port
+		port,
+		token
 	);
 	std::string buffer_name{patcher_id + ".maxpat"};
 	auto *patcher = reinterpret_cast<c74::max::t_object *>(
@@ -1196,7 +1200,7 @@ public:
 		this,
 		"host",
 		"127.0.0.1",
-		c74::min::description{"Loopback maxforge MCP WebSocket host"}
+		c74::min::description{"maxforge MCP WebSocket host"}
 	};
 
 	c74::min::attribute<long> port{
@@ -1205,6 +1209,13 @@ public:
 		8766,
 		c74::min::description{"maxforge MCP WebSocket port"},
 		c74::min::range{1, 65535}
+	};
+
+	c74::min::attribute<c74::min::symbol> token{
+		this,
+		"token",
+		"",
+		c74::min::description{"Shared token required for LAN connections"}
 	};
 
 	c74::min::attribute<long> reconnect{
@@ -1440,19 +1451,48 @@ private:
 	auto websocket_url() const -> std::string {
 		const c74::min::symbol host_symbol = host;
 		const std::string host_value{host_symbol.c_str()};
-		if(host_value != "127.0.0.1" && host_value != "::1") {
+		if(!sync_protocol::is_valid_network_host(host_value)) {
+			throw std::runtime_error("invalid @host");
+		}
+		const c74::min::symbol token_symbol = token;
+		const std::string token_value{token_symbol.c_str()};
+		if(!token_value.empty() && !sync_protocol::is_valid_auth_token(token_value)) {
 			throw std::runtime_error(
-				"@host must be the loopback address 127.0.0.1 or ::1"
+				"@token must contain 1 to 256 URL-safe characters"
 			);
+		}
+		if(!sync_protocol::is_loopback_host(host_value) && token_value.empty()) {
+			throw std::runtime_error("@token is required for a non-loopback @host");
 		}
 		const long port_value = port;
 		if(port_value < 1 || 65535 < port_value) {
 			throw std::runtime_error("invalid @port");
 		}
-		const auto authority = host_value == "::1"
+		const auto authority = host_value.find(':') != std::string::npos
 			? "[" + host_value + "]"
 			: host_value;
 		return "ws://" + authority + ":" + std::to_string(port_value);
+	}
+
+	auto send_authentication_event() -> bool {
+		const c74::min::symbol token_symbol = token;
+		const std::string token_value{token_symbol.c_str()};
+		if(token_value.empty()) return true;
+		if(!sync_protocol::is_valid_auth_token(token_value)) {
+			report_transport_error(
+				"@token must contain 1 to 256 URL-safe characters"
+			);
+			return false;
+		}
+		if(websocket_client_.send(
+			"{\"type\":\"maxforge.authenticate\",\"token\":" +
+			json_string(token_value) +
+			"}"
+		)) {
+			return true;
+		}
+		report_transport_error("could not authenticate with maxforge MCP bridge");
+		return false;
 	}
 
 	void connect_transport() {
@@ -1491,11 +1531,14 @@ private:
 					registration_sent_ = false;
 					last_transport_error_.clear();
 					status_output.send("status", "connected");
-					registration_timer_.delay(0);
+					if(send_authentication_event()) registration_timer_.delay(0);
 					break;
 				case bbb::agent::websocket_event_type::close:
 					transport_open_ = false;
 					registration_sent_ = false;
+					if(event.close_code == 1008 && !event.text.empty()) {
+						report_transport_error("WebSocket: " + event.text);
+					}
 					status_output.send("status", "disconnected");
 					break;
 				case bbb::agent::websocket_event_type::message:
@@ -1630,22 +1673,22 @@ private:
 							"patch title must contain between 1 and 256 characters"
 						);
 					}
-					const auto host = dictionary_string(dictionary, "host");
-					if(host != "127.0.0.1" && host != "::1") {
-						throw std::runtime_error(
-							"new patch WebSocket host must be loopback-only"
-						);
-					}
-					const auto port = dictionary_long(dictionary, "port");
-					if(port < 1 || 65535 < port) {
+					const c74::min::symbol host_symbol = host;
+					const std::string host_value{host_symbol.c_str()};
+					const c74::min::symbol token_symbol = token;
+					const std::string token_value{token_symbol.c_str()};
+					const long port_value = port;
+					if(port_value < 1 || 65535 < port_value) {
 						throw std::runtime_error("invalid new patch WebSocket port");
 					}
+					(void)websocket_url();
 					create_bridge_patch(
 						event_patcher_id,
 						event_scope,
 						title,
-						host,
-						port
+						host_value,
+						port_value,
+						token_value
 					);
 					send_patch_created_event(
 						request_id,

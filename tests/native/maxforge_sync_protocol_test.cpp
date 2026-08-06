@@ -81,6 +81,29 @@ void test_identifiers() {
 	require(!sync_protocol::is_valid_box_id("obj-osc-1"), "hyphenated suffix accepted");
 }
 
+void test_network_configuration() {
+	require(sync_protocol::is_loopback_host("127.0.0.1"), "IPv4 loopback rejected");
+	require(sync_protocol::is_loopback_host("::1"), "IPv6 loopback rejected");
+	require(!sync_protocol::is_loopback_host("localhost"), "hostname treated as loopback");
+	require(sync_protocol::is_valid_network_host("192.168.1.20"), "LAN IPv4 rejected");
+	require(sync_protocol::is_valid_network_host("agent.local"), "LAN hostname rejected");
+	require(sync_protocol::is_valid_network_host("fe80::1"), "LAN IPv6 rejected");
+	require(!sync_protocol::is_valid_network_host(""), "empty host accepted");
+	require(!sync_protocol::is_valid_network_host("host/path"), "host path accepted");
+
+	require(
+		sync_protocol::is_valid_auth_token("studio-session_1~dev"),
+		"URL-safe token rejected"
+	);
+	require(!sync_protocol::is_valid_auth_token(""), "empty token accepted");
+	require(!sync_protocol::is_valid_auth_token("contains spaces"), "spaced token accepted");
+	require(!sync_protocol::is_valid_auth_token("token/slash"), "slash token accepted");
+	require(
+		!sync_protocol::is_valid_auth_token(std::string(257, 'a')),
+		"oversized token accepted"
+	);
+}
+
 void test_managed_identity() {
 	const auto variable_name = sync_protocol::expected_variable_name(
 		"voice",
@@ -401,6 +424,7 @@ void test_plain_object_does_not_create_child_patcher() {
 int main() {
 	const std::vector<test_case> test_cases{
 		{"identifiers", test_identifiers},
+		{"network configuration", test_network_configuration},
 		{"managed identity", test_managed_identity},
 		{"revisions, paths, and subpatchers", test_revisions_paths_and_subpatchers},
 		{"valid state transition", test_valid_state_transition},
