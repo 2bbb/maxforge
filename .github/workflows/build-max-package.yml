@@ -30,11 +30,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Build TypeScript
         run: npm run build
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage gate
+        run: npm run test:coverage
 
       - name: Validate Max package sources
         run: python3 scripts/verify-max-package.py --source .

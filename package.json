@@ -13,9 +13,11 @@
     "build": "tsc",
     "prepack": "npm run build",
     "pretest": "npm run build",
+    "pretest:coverage": "npm run build",
     "dev": "tsc --watch",
     "mcp": "node dist/mcp/server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/vitest run --coverage",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
     "cli": "npm run build --silent && node dist/cli/index.js",
     "pack:dry-run": "npm pack --dry-run"
@@ -37,8 +39,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.10"
   },
   "files": [
     "dist/",

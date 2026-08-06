@@ -110,8 +110,9 @@ mismatch between the two package manifests.
 Run the complete checks from a clean `main` checkout:
 
 ```bash
-npm test
 npm run build
+npm run test:coverage
+npm audit --omit=dev --audit-level=high
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build --build-config Release --output-on-failure

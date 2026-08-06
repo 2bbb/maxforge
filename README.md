@@ -643,6 +643,7 @@ examples/
 ```bash
 npm run build          # compile TypeScript
 npm test               # run tests with vitest
+npm run test:coverage  # run the CI V8 coverage gate
 npm run dev            # watch mode
 npm run pack:dry-run   # inspect npm package contents
 
@@ -651,9 +652,15 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build --build-config Release --output-on-failure
 
-# Static website validation
-python3 scripts/verify-pages.py site
+# Static website validation (CI stages schema/*.json under site/schema first)
+mkdir -p site/schema && cp schema/*.json site/schema/
+python3 scripts/verify-pages.py site && node --check site/main.js
+rm -rf site/schema
 ```
+
+Coverage excludes the subprocess-only CLI entrypoint and gates instrumented
+`src/` code at 82% statements, 72% branches, 88% functions, and 84% lines.
+Dedicated CLI E2E tests still execute the built `dist/cli/index.js` binary.
 
 ## Error Codes
 
