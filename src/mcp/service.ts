@@ -10,6 +10,10 @@ import {
   PatchPlan,
 } from "../max/patch-graph.js";
 import {
+  PatchReconciliationConflict,
+  reconcilePatchGraphs,
+} from "./reconcile.js";
+import {
   MaxforgeAppliedEvent,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotBox,
@@ -25,6 +29,10 @@ export interface CompilePlanRequest {
   readonly currentDsl?: string;
 }
 
+export interface ApplyDslRequest extends CompilePlanRequest {
+  readonly manualChanges?: "reject" | "merge";
+}
+
 export interface CompilePlanResult {
   readonly plan: PatchPlan;
   readonly desiredGraph: PatchGraph;
@@ -37,6 +45,18 @@ export interface ApplyDslResult {
   readonly warnings: readonly CompileWarning[];
   readonly baselineCaptured: boolean;
   readonly baselineWarning?: string;
+  readonly manualChangesMerged: number;
+}
+
+export interface ReconcilePlanResult {
+  readonly canApply: boolean;
+  readonly plan?: PatchPlan;
+  readonly mergedGraph?: PatchGraph;
+  readonly conflicts: readonly PatchReconciliationConflict[];
+  readonly comparisonAvailable: boolean;
+  readonly managedChangeCount: number;
+  readonly unmanagedChangeCount: number;
+  readonly warnings: readonly CompileWarning[];
 }
 
 export type PatchSnapshotChange =
@@ -103,20 +123,41 @@ export class MaxforgePatchService {
     };
   }
 
-  async applyDsl(request: CompilePlanRequest): Promise<ApplyDslResult> {
-    const desired = this.compileGraph(request.desiredDsl, request.scope);
-    const current = this.resolveCurrentGraph(request);
-    this.assertLiveRevision(request.patcherId, request.scope, current.graph);
-    await this.assertNoManagedDrift(request.patcherId, request.scope);
+  async applyDsl(request: ApplyDslRequest): Promise<ApplyDslResult> {
+    let plan: PatchPlan;
+    let nextGraph: PatchGraph;
+    let warnings: readonly CompileWarning[];
+    let manualChangesMerged = 0;
+    if (request.manualChanges === "merge") {
+      const reconciliation = await this.reconcilePlan(request);
+      if (
+        !reconciliation.canApply ||
+        !reconciliation.plan ||
+        !reconciliation.mergedGraph
+      ) {
+        throw new PatchReconciliationError(reconciliation.conflicts);
+      }
+      plan = reconciliation.plan;
+      nextGraph = reconciliation.mergedGraph;
+      warnings = reconciliation.warnings;
+      manualChangesMerged = reconciliation.managedChangeCount;
+    } else {
+      const desired = this.compileGraph(request.desiredDsl, request.scope);
+      const current = this.resolveCurrentGraph(request);
+      this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+      await this.assertNoManagedDrift(request.patcherId, request.scope);
+      plan = diffPatchGraphs(current.graph, desired.graph);
+      nextGraph = desired.graph;
+      warnings = [...current.warnings, ...desired.warnings];
+    }
 
-    const plan = diffPatchGraphs(current.graph, desired.graph);
     const acknowledgement = await this.transport.apply(
       request.patcherId,
       plan
     );
     this.managedGraphs.set(
       targetKey(request.patcherId, request.scope),
-      desired.graph
+      nextGraph
     );
     const baseline = await this.captureBaseline(
       request.patcherId,
@@ -127,9 +168,62 @@ export class MaxforgePatchService {
     return {
       plan,
       acknowledgement,
-      warnings: [...current.warnings, ...desired.warnings],
+      warnings,
       baselineCaptured: baseline.captured,
+      manualChangesMerged,
       ...(baseline.warning ? { baselineWarning: baseline.warning } : {}),
+    };
+  }
+
+  async reconcilePlan(
+    request: CompilePlanRequest
+  ): Promise<ReconcilePlanResult> {
+    const desired = this.compileGraph(request.desiredDsl, request.scope);
+    const current = this.resolveCurrentGraph(request);
+    this.assertLiveRevision(request.patcherId, request.scope, current.graph);
+
+    const key = targetKey(request.patcherId, request.scope);
+    const baseline = this.baselineSnapshots.get(key);
+    const snapshot = await this.transport.inspect(
+      request.patcherId,
+      request.scope
+    );
+    this.assertInspectionRevision(
+      request.patcherId,
+      request.scope,
+      current.graph,
+      snapshot
+    );
+    const reconciliation = reconcilePatchGraphs(
+      current.graph,
+      desired.graph,
+      snapshot.patcher,
+      baseline
+    );
+    const changes = baseline
+      ? diffPatcherSnapshots(baseline, snapshot.patcher)
+      : [];
+    const managedChangeCount = baseline
+      ? changes.filter((change) => change.managed).length
+      : diffPatchGraphs(current.graph, reconciliation.liveGraph).operations.length +
+        reconciliation.conflicts.filter((conflict) =>
+          conflict.kind === "managed_box_added" ||
+          conflict.kind === "managed_identity_changed" ||
+          conflict.kind === "duplicate_managed_identity"
+        ).length;
+
+    return {
+      canApply:
+        reconciliation.conflicts.length === 0 &&
+        reconciliation.plan !== undefined &&
+        reconciliation.graph !== undefined,
+      plan: reconciliation.plan,
+      mergedGraph: reconciliation.graph,
+      conflicts: reconciliation.conflicts,
+      comparisonAvailable: baseline !== undefined,
+      managedChangeCount,
+      unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+      warnings: [...current.warnings, ...desired.warnings],
     };
   }
 
@@ -259,6 +353,22 @@ export class MaxforgePatchService {
     }
   }
 
+  private assertInspectionRevision(
+    patcherId: string,
+    scope: string,
+    current: PatchGraph,
+    snapshot: MaxforgeSnapshotEvent
+  ): void {
+    const expected = snapshot.revision ?? createEmptyPatchGraph(scope).revision;
+    if (current.revision !== expected) {
+      throw new Error(
+        `Inspection revision ${snapshot.revision ?? "uninitialized"} does not ` +
+        `match current graph revision ${current.revision} for Max patch ` +
+        `"${patcherId}" scope "${scope}"`
+      );
+    }
+  }
+
   private compileGraph(
     source: string,
     scope: string
@@ -275,6 +385,18 @@ export class MaxforgePatchService {
       graph: result.graph,
       warnings: result.warnings,
     };
+  }
+}
+
+export class PatchReconciliationError extends Error {
+  constructor(
+    readonly conflicts: readonly PatchReconciliationConflict[]
+  ) {
+    super(
+      "Cannot merge live Max edits with desired DSL:\n" +
+      conflicts.map((conflict) => `- ${conflict.message}`).join("\n")
+    );
+    this.name = "PatchReconciliationError";
   }
 }
 

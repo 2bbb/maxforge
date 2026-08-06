@@ -11,7 +11,10 @@ import {
   PatchPlanTransport,
 } from "../src/mcp/bridge.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
-import { PatchPlan } from "../src/max/patch-graph.js";
+import {
+  compileDslToPatchGraph,
+  PatchPlan,
+} from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
 
@@ -147,7 +150,7 @@ describe("MaxforgePatchService", () => {
         kind: "box_changed",
         managed: true,
         fields: ["patchingRect"],
-        before: { patchingRect: [10, 20, 66, 22] },
+        before: { patchingRect: [50, 50, 80, 22] },
         after: { patchingRect: [120, 80, 66, 22] },
       }],
     });
@@ -175,6 +178,136 @@ describe("MaxforgePatchService", () => {
       desiredDsl: "osc = cycle~ 660",
     })).rejects.toThrow("has 1 managed manual change");
     expect(transport.plans).toHaveLength(1);
+  });
+
+  it("reconciles a managed live edit with an independent desired addition", async () => {
+    const transport = new FakeTransport();
+    const service = new MaxforgePatchService(database, transport);
+    const baseDsl = "osc = cycle~ 440 at(50, 50)";
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "cycle~ 880",
+      })),
+    };
+    const desiredDsl =
+      `${baseDsl}\ngain = *~ 0.25 at(50, 100)`;
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+    });
+
+    expect(preview).toMatchObject({
+      canApply: true,
+      comparisonAvailable: true,
+      managedChangeCount: 1,
+      conflicts: [],
+      plan: {
+        baseRevision: transport.plans[0].targetRevision,
+        operations: [{ op: "create", box: { id: "obj-gain" } }],
+      },
+      mergedGraph: {
+        patcher: {
+          boxes: expect.arrayContaining([
+            expect.objectContaining({ id: "obj-osc", text: "cycle~ 880" }),
+          ]),
+        },
+      },
+    });
+
+    const applied = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+      manualChanges: "merge",
+    });
+
+    expect(applied.manualChangesMerged).toBe(1);
+    expect(applied.plan.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        box: expect.objectContaining({ id: "obj-gain" }),
+      }),
+    ]);
+    expect(service.getManagedRevisions()["patch-a:voices"]).toBe(
+      applied.plan.targetRevision
+    );
+  });
+
+  it("rejects merge when live and desired DSL change the same field", async () => {
+    const transport = new FakeTransport();
+    const service = new MaxforgePatchService(database, transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "cycle~ 660",
+      })),
+    };
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 880 at(50, 50)",
+    });
+    expect(preview).toMatchObject({
+      canApply: false,
+      conflicts: [{ kind: "box_field", id: "obj-osc", field: "text" }],
+    });
+
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 880 at(50, 50)",
+      manualChanges: "merge",
+    })).rejects.toThrow("changed differently");
+    expect(transport.plans).toHaveLength(1);
+  });
+
+  it("can reconcile after restart when exact current DSL seeds the base graph", async () => {
+    const transport = new FakeTransport();
+    const currentDsl = "osc = cycle~ 440 at(50, 50)";
+    const current = compileDslToPatchGraph(currentDsl, database, "voices").graph!;
+    transport.liveRevisions.set("patch-a:voices", current.revision);
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "cycle~ 880",
+      })),
+    };
+    const service = new MaxforgePatchService(database, transport);
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      currentDsl,
+      desiredDsl: `${currentDsl}\ngain = *~ 0.25 at(50, 100)`,
+    });
+
+    expect(preview).toMatchObject({
+      canApply: true,
+      comparisonAvailable: false,
+      managedChangeCount: 2,
+      conflicts: [],
+      plan: {
+        baseRevision: current.revision,
+        operations: [{ op: "create", box: { id: "obj-gain" } }],
+      },
+    });
   });
 
   it("does not misreport an acknowledged apply as failed when baseline capture fails", async () => {
@@ -287,7 +420,7 @@ function patcherSnapshot(): MaxforgePatcherSnapshot {
       runtimeId: "obj-1",
       varName: "maxforge_voices_obj_osc",
       maxclass: "cycle~",
-      patchingRect: [10, 20, 66, 22],
+      patchingRect: [50, 50, 80, 22],
       managed: true,
       text: "cycle~ 440",
     }],

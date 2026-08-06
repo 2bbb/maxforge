@@ -40,11 +40,12 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_list_patches",
         "maxforge_create_patch",
         "maxforge_inspect_patch",
+        "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(7);
+      expect(definitions).toHaveLength(8);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -64,7 +65,7 @@ describe("maxforge MCP protocol surface", () => {
               expect.stringContaining("currentDsl"),
             ]),
             rules: expect.arrayContaining([
-              expect.stringContaining("no MCP operation"),
+              expect.stringContaining("never silently chooses"),
             ]),
           },
         },
@@ -126,6 +127,27 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      const reconciliation = await client.request(32, "tools/call", {
+        name: "maxforge_reconcile_patch",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "voices",
+          desiredDsl: "osc = cycle~ 440",
+        },
+      });
+      expect(reconciliation).toMatchObject({
+        result: {
+          structuredContent: {
+            patcherId: "patch_a",
+            scope: "voices",
+            canApply: true,
+            conflicts: [],
+            operationCount: 1,
+            plan: { operations: [{ op: "create" }] },
+          },
+        },
+      });
+
       const applied = await client.request(31, "tools/call", {
         name: "maxforge_apply_dsl",
         arguments: {
@@ -148,6 +170,7 @@ describe("maxforge MCP protocol surface", () => {
             },
             baselineCaptured: false,
             baselineWarning: expect.stringContaining("Max applied the patch"),
+            manualChangesMerged: 0,
             warnings: [],
           },
         },

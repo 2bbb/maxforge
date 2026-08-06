@@ -127,14 +127,32 @@ const dslRequestSchema = z.object({
     ),
 });
 
+const applyDslRequestSchema = dslRequestSchema.extend({
+  manualChanges: z
+    .enum(["reject", "merge"])
+    .optional()
+    .describe(
+      "How to handle managed live edits. Defaults to reject. Use merge only after maxforge_reconcile_patch reports canApply=true for the same desired DSL."
+    ),
+});
+
+const reconciliationConflictSchema = z.object({
+  kind: z.string(),
+  targetPath: z.array(z.string()),
+  id: z.string().optional(),
+  field: z.string().optional(),
+  message: z.string(),
+}).passthrough();
+
 const HELP_CONTENT = {
   workflow: {
     summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
     steps: [
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
+      "If managed edits exist, call maxforge_reconcile_patch and require canApply=true before preserving them.",
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
-      "Send the same target and complete desired DSL to maxforge_apply_dsl.",
+      "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
     ],
     rules: [
@@ -145,6 +163,7 @@ const HELP_CONTENT = {
     relatedTools: [
       "maxforge_list_patches",
       "maxforge_inspect_patch",
+      "maxforge_reconcile_patch",
       "maxforge_compile_plan",
       "maxforge_apply_dsl",
     ],
@@ -169,16 +188,22 @@ const HELP_CONTENT = {
     steps: [
       "After an MCP process restart, call maxforge_list_patches and inspect the target.",
       "If Max reports an initialized revision but MCP has no graph, provide the exact previous complete DSL as currentDsl once.",
-      "If inspect reports managed manual changes, manually restore the post-apply managed structure before applying again.",
+      "If inspect reports managed manual changes, call maxforge_reconcile_patch with the next complete desired DSL.",
+      "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
       "If baselineCaptured is false, the apply still succeeded; do not repeat it solely to obtain a baseline.",
     ],
     rules: [
       "A revision hash proves identity but cannot reconstruct DSL or graph state.",
-      "There is no MCP operation that adopts managed manual edits as the new baseline.",
+      "Reconciliation preserves non-conflicting managed edits but never silently chooses between conflicting changes.",
       "Protocol v1 is not transactional; a runtime mutation failure can leave a partial patch while the revision remains unchanged.",
     ],
-    relatedTools: ["maxforge_status", "maxforge_inspect_patch", "maxforge_apply_dsl"],
+    relatedTools: [
+      "maxforge_status",
+      "maxforge_inspect_patch",
+      "maxforge_reconcile_patch",
+      "maxforge_apply_dsl",
+    ],
   },
   safety: {
     summary: "Ownership, identity, and mutation boundaries enforced by maxforge.",
@@ -221,7 +246,9 @@ export function createMaxforgeMcpServer(
         "targetRevision. Never retry a timeout or baseline warning blindly. After " +
         "an MCP restart, an initialized patch requires its exact previous complete " +
         "DSL as currentDsl once. Call maxforge_help with topic 'recovery' on errors " +
-        "or managed manual drift.",
+        "or managed manual drift. Preserve managed manual edits only after " +
+        "maxforge_reconcile_patch returns canApply=true, then apply with " +
+        "manualChanges set to merge.",
     }
   );
 
@@ -385,6 +412,52 @@ export function createMaxforgeMcpServer(
   );
 
   server.registerTool(
+    "maxforge_reconcile_patch",
+    {
+      title: "Reconcile live Max edits with desired DSL",
+      description:
+        "Preview a three-way merge of the last acknowledged graph, the current live patch, and complete desired DSL. Returns structured conflicts and never mutates Max.",
+      inputSchema: dslRequestSchema,
+      outputSchema: z.object({
+        patcherId: patcherIdSchema,
+        scope: scopeSchema,
+        canApply: z.boolean(),
+        comparisonAvailable: z.boolean(),
+        managedChangeCount: z.number().int().nonnegative(),
+        unmanagedChangeCount: z.number().int().nonnegative(),
+        conflicts: z.array(reconciliationConflictSchema),
+        plan: patchPlanSchema.optional(),
+        operationCount: z.number().int().nonnegative(),
+        warnings: z.array(warningSchema),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await options.service.reconcilePlan(request);
+        return toolResult({
+          patcherId: request.patcherId,
+          scope: request.scope,
+          canApply: result.canApply,
+          comparisonAvailable: result.comparisonAvailable,
+          managedChangeCount: result.managedChangeCount,
+          unmanagedChangeCount: result.unmanagedChangeCount,
+          conflicts: result.conflicts,
+          ...(result.plan ? { plan: result.plan } : {}),
+          operationCount: result.plan?.operations.length ?? 0,
+          warnings: result.warnings,
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
     "maxforge_compile_plan",
     {
       title: "Compile maxforge patch plan",
@@ -422,7 +495,7 @@ export function createMaxforgeMcpServer(
       title: "Apply desired maxforge DSL",
       description:
         "Apply complete desired DSL to one explicit patcherId and wait for exact revision acknowledgement. Do not retry timeouts or baselineCaptured=false blindly; inspect live state first.",
-      inputSchema: dslRequestSchema,
+      inputSchema: applyDslRequestSchema,
       outputSchema: z.object({
         patcherId: patcherIdSchema,
         scope: scopeSchema,
@@ -432,6 +505,7 @@ export function createMaxforgeMcpServer(
         acknowledgement: acknowledgementSchema,
         baselineCaptured: z.boolean(),
         baselineWarning: z.string().optional(),
+        manualChangesMerged: z.number().int().nonnegative(),
         warnings: z.array(warningSchema),
       }),
       annotations: {
@@ -451,6 +525,7 @@ export function createMaxforgeMcpServer(
           operationCount: result.plan.operations.length,
           acknowledgement: result.acknowledgement,
           baselineCaptured: result.baselineCaptured,
+          manualChangesMerged: result.manualChangesMerged,
           ...(result.baselineWarning
             ? { baselineWarning: result.baselineWarning }
             : {}),

@@ -589,7 +589,7 @@ function isManagedBox(box: PatchBox, scope: string): boolean {
   return managedIdFromVarName(scope, box.varName) === box.id;
 }
 
-function managedIdFromVarName(
+export function managedIdFromVarName(
   scope: string,
   varName: string | undefined
 ): string | null {
