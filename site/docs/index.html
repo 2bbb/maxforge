@@ -485,6 +485,9 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_catalog</code></td><td>Read loaded built-in/custom object metadata and its deterministic digest; not a Max runtime probe.</td></tr>
               <tr><td><code>maxforge_list_patches</code></td><td>List exact registered <code>patcherId</code>/<code>scope</code> targets.</td></tr>
               <tr><td><code>maxforge_create_patch</code></td><td>Create a new unsaved top-level patch through one controller-capable external.</td></tr>
+              <tr><td><code>maxforge_open_patch</code></td><td>Open an existing Max-host <code>.maxpat</code>, inject one bridge object, and wait for registration.</td></tr>
+              <tr><td><code>maxforge_save_patch</code></td><td>Save or save-as explicitly; apply never saves automatically and overwrite is opt-in.</td></tr>
+              <tr><td><code>maxforge_close_patch</code></td><td>Close a registered patch; dirty-state discard is explicit and opt-in.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>
               <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>

@@ -161,13 +161,16 @@ The safe live sequence is fixed:
 2. `maxforge_status` when connection/process state is uncertain
 3. `maxforge_catalog` before using a custom external or abstraction
 4. `maxforge_list_patches`
-5. `maxforge_inspect_patch`
-6. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
-7. require `canApply: true`, then review warnings and destructive operations
-8. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
-9. `maxforge_apply_dsl` with the same target and desired DSL; set
+5. create a blank target with `maxforge_create_patch`, or open an existing file
+   with `maxforge_open_patch`, only when a separate target is required
+6. `maxforge_inspect_patch`
+7. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
+8. require `canApply: true`, then review warnings and destructive operations
+9. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
+10. `maxforge_apply_dsl` with the same target and desired DSL; set
    `manualChanges: "merge"` only after successful reconciliation
-10. verify acknowledgement revision and inspect again
+11. verify acknowledgement revision, inspect again, and call
+    `maxforge_save_patch` only when persistence is intended
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
 an imperative edit, and a timeout is not proof that Max remained unchanged.
@@ -240,6 +243,30 @@ Creation is implemented by `maxforge.sync` with
 `jpatcher_load_frombuffer`. The generated patch contains one configured
 `maxforge.sync` object and no bootstrap patch cords. It does not use JavaScript
 or `node.script`.
+
+### `maxforge_open_patch`
+
+Opens an existing `.maxpat` using a controller on the Max host, injects one
+configured `maxforge.sync`, marks the patch dirty, and waits for the new client
+to register. `path` must be an absolute Max-host path; in LAN mode it is not an
+MCP-host path. A file that already contains `maxforge.sync` is rejected: open
+that file normally and use its configured `patcherId` instead.
+
+### `maxforge_save_patch`
+
+Saves a registered patch through Max's patcher `write` method. Omit `path` only
+when the patch already has a file path. Supplying an absolute `.maxpat` path is
+save-as; an existing destination is rejected unless `overwrite: true` is
+explicit. The tool succeeds only after Max reports a non-empty path and a clean
+dirty flag. Applying DSL does not save automatically.
+
+### `maxforge_close_patch`
+
+Closes a registered top-level patch through the documented patcher `dispose`
+method. A dirty patch is rejected unless `discard: true` is explicit. Save
+first when changes must survive. The acknowledgement is sent before deferred
+disposal so the MCP client does not mistake the expected disconnect for a
+transport failure.
 
 ### `maxforge_inspect_patch`
 
@@ -435,6 +462,10 @@ Transport lifecycle can also be controlled with `connect`, `disconnect`, and
 registered controller. The generated patch connects independently and
 registers its own `patcherId`; subsequent apply and inspection requests go
 directly to that patch rather than through the controller.
+
+The same controller handles `maxforge_open_patch`. Save and close requests are
+sent directly to the selected patch's own `maxforge.sync`, not proxied through
+the controller.
 
 `bbb.agent` is a recursive build-time submodule only. Max users do not install
 `bbb.agent.hub` or run the `bbb.agent` helper for this flow.

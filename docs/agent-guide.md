@@ -223,7 +223,8 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    MCP processが実際に読み込んだ定義を確認する。
 3. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
 4. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
-   scope、titleを指定し、登録完了まで待つ。
+   scope、titleを指定し、既存`.maxpat`を対象にするなら
+   `maxforge_open_patch`へMax host上の絶対pathを指定して登録完了まで待つ。
 5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
 6. managed manual changeがあれば、完全なdesired DSLを
    `maxforge_reconcile_patch`へ渡す。`canApply: true`でなければ適用しない。
@@ -234,6 +235,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 9. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いする。
 10. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
+11. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
+    dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
+    `discard: true`を渡すまで拒否される。
 
 MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。

@@ -232,6 +232,9 @@ available for human-readable status and local diagnostics. See
 - `maxforge_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
+- `maxforge_open_patch`
+- `maxforge_save_patch`
+- `maxforge_close_patch`
 - `maxforge_inspect_patch`
 - `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
@@ -260,6 +263,12 @@ an explicit path when needed; `off` deliberately disables recovery.
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without
 ambiguity. No JavaScript or helper patch wiring runs inside Max.
+
+`maxforge_open_patch` opens an existing `.maxpat` on the Max host and injects
+one `maxforge.sync`; it refuses a patch that already contains the external.
+Apply mutates only live state: use `maxforge_save_patch` explicitly to persist
+it. Save-as refuses an existing destination unless `overwrite` is true, and a
+dirty patch cannot be closed unless `discard` is explicitly true.
 
 The npm package supplies the `maxforge-mcp` Node.js server, but it does **not**
 install the native `maxforge.sync` external into Max. Build/install the external

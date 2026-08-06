@@ -17,6 +17,9 @@ Require these MCP tools:
 - `maxforge_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
+- `maxforge_open_patch`
+- `maxforge_save_patch`
+- `maxforge_close_patch`
 - `maxforge_inspect_patch`
 - `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
@@ -38,7 +41,10 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
    and filenames are display metadata, not target identities.
 5. If a separate window is required, call `maxforge_create_patch` with a unique
-   `patcherId`, scope, and title. Creation requires exactly one controller.
+   `patcherId`, scope, and title. To manage an existing `.maxpat`, use
+   `maxforge_open_patch` with an absolute path on the Max host. Opening injects
+   one bridge object and refuses files that already contain `maxforge.sync`.
+   Both operations require exactly one controller.
 6. Call `maxforge_inspect_patch` for the selected target. Read the snapshot;
    never infer patch state from the screen.
 7. Build the complete desired DSL. Omitted managed objects and cords are
@@ -66,6 +72,12 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 13. After a merged apply, update the working complete DSL to include the
     preserved human edits. Until it is aligned, continue through reconciliation;
     ordinary compile/apply is intentionally rejected to prevent a silent revert.
+14. Apply does not persist the Max document. Call `maxforge_save_patch` only
+    when persistence is intended. Omit `path` only for an already-saved patch;
+    save-as requires an absolute Max-host path and explicit `overwrite: true`
+    to replace a file.
+15. Use `maxforge_close_patch` only when closure is intended. Dirty state is
+    rejected unless `discard: true` is explicit; save first otherwise.
 
 ## Desired DSL rule
 
@@ -151,4 +163,5 @@ do not guess a target.
 - Never treat a timeout, process exit, or missing acknowledgement as success.
 - `maxforge_catalog` is compiler metadata, not a runtime probe. It does not
   prove the external binary or abstraction search path exists on the Max host.
-- Do not save, close, or discard a Max window unless the user asks.
+- Do not save, close, or discard a Max window unless the user asks. Never turn
+  a save/close rejection into `overwrite: true` or `discard: true` implicitly.

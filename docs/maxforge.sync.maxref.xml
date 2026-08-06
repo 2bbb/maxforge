@@ -130,8 +130,8 @@
 		</attribute>
 
 		<attribute name='controller' get='1' set='1' type='long' size='1' >
-			<digest>Allow this patcher to create top-level patches </digest>
-			<description>Allow this patcher to create top-level patches </description>
+			<digest>Allow this patcher to create or open top-level patches </digest>
+			<description>Allow correlated MCP requests to create an unsaved top-level patch or open a Max-host .maxpat and inject one maxforge.sync object </description>
 		</attribute>
 
 	</attributelist>

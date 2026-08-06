@@ -215,6 +215,7 @@ const HELP_CONTENT = {
       "maxforge_reconcile_patch",
       "maxforge_compile_plan",
       "maxforge_apply_dsl",
+      "maxforge_save_patch",
     ],
   },
   setup: {
@@ -238,6 +239,7 @@ const HELP_CONTENT = {
       "maxforge_catalog",
       "maxforge_list_patches",
       "maxforge_create_patch",
+      "maxforge_open_patch",
     ],
   },
   recovery: {
@@ -262,6 +264,8 @@ const HELP_CONTENT = {
       "maxforge_inspect_patch",
       "maxforge_reconcile_patch",
       "maxforge_apply_dsl",
+      "maxforge_save_patch",
+      "maxforge_close_patch",
     ],
   },
   safety: {
