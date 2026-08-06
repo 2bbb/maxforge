@@ -1,4 +1,9 @@
-import { ObjectDef, ObjectDatabase } from "./types.js";
+import {
+  ArgumentPortCountRule,
+  MAX_DECLARATIVE_PORT_COUNT,
+  ObjectDef,
+  ObjectDatabase,
+} from "./types.js";
 
 let db: ObjectDatabase | null = null;
 
@@ -54,7 +59,7 @@ export function lookupObject(
 
   const entry = database[firstToken];
   if (entry) {
-    if (entry.argDependent || entry.argRule) {
+    if (entry.argDependent || entry.argRule || entry.argumentPortRules) {
       const resolved = resolveArgDependent(objectText, entry);
       return { def: resolved, text: objectText, maxclass: entry.maxclass };
     }
@@ -110,6 +115,18 @@ function resolveArgDependent(
 ): ObjectDef {
   const args = extractArgs(objectText);
   const def = { ...base, outlettype: [...base.outlettype] };
+
+  if (base.argumentPortRules) {
+    const inletCount = resolvePortCount(args, base.argumentPortRules.inlets);
+    const outletCount = resolvePortCount(args, base.argumentPortRules.outlets);
+    if (inletCount !== undefined) def.numinlets = inletCount;
+    if (outletCount !== undefined) {
+      def.numoutlets = outletCount;
+      def.outlettype = Array(outletCount).fill(
+        base.argumentPortRules.outlets?.outlettype ?? ""
+      );
+    }
+  }
 
   if (base.argRule === "jit.movie output type from output_texture attribute") {
     def.outlettype = [
@@ -313,6 +330,25 @@ function resolveArgDependent(
   }
 
   return def;
+}
+
+function resolvePortCount(
+  args: readonly string[],
+  rule: ArgumentPortCountRule | undefined
+): number | undefined {
+  if (!rule) return undefined;
+  let value: number;
+  if (rule.source === "argument-count") {
+    value = args.length;
+  } else {
+    const token = rule.index === undefined ? undefined : args[rule.index];
+    if (token === undefined || !/^[+-]?\d+$/.test(token)) return undefined;
+    value = Number(token);
+  }
+  value += rule.offset ?? 0;
+  value = Math.max(rule.minimum ?? 0, value);
+  value = Math.min(rule.maximum ?? MAX_DECLARATIVE_PORT_COUNT, value);
+  return value;
 }
 
 function positiveInt(value: string | undefined): number | null {

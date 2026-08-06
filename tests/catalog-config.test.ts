@@ -94,6 +94,126 @@ describe("project object catalogs", () => {
     ]));
   });
 
+  it("derives project external ports from bounded argument rules", async () => {
+    const root = await temporaryDirectory();
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      objects: [{
+        name: "vendor.router~",
+        kind: "external",
+        ports: {
+          mode: "arguments",
+          representative: { inlets: 2, outlets: ["signal", "signal"] },
+          inlets: {
+            source: "argument",
+            index: 0,
+            offset: 1,
+            minimum: 1,
+            maximum: 8,
+          },
+          outlets: {
+            source: "argument-count",
+            offset: 1,
+            minimum: 1,
+            outlettype: "signal",
+          },
+        },
+      }],
+    });
+
+    const catalog = await loadObjectCatalog({ configPath });
+    expect(lookupObject("vendor.router~ 12 left right @mode 1", catalog.database)?.def)
+      .toMatchObject({
+        numinlets: 8,
+        numoutlets: 4,
+        outlettype: ["signal", "signal", "signal", "signal"],
+        dynamicPorts: undefined,
+      });
+    expect(lookupObject("vendor.router~ invalid", catalog.database)?.def)
+      .toMatchObject({
+        numinlets: 2,
+        numoutlets: 2,
+      });
+    expect(catalog.customObjects[0].ports).toBe("arguments");
+  });
+
+  it("rejects ambiguous or inconsistent argument port rules", async () => {
+    const root = await temporaryDirectory();
+    const configPath = join(root, "maxforge.config.json");
+    const base = {
+      schemaVersion: 1,
+      objects: [{
+        name: "vendor.invalid",
+        kind: "external",
+        ports: {
+          mode: "arguments",
+          representative: { inlets: 1, outlets: [] },
+          inlets: { source: "argument" },
+        },
+      }],
+    };
+    await writeJson(configPath, base);
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "index is required when source is argument"
+    );
+
+    await writeJson(configPath, {
+      ...base,
+      objects: [{
+        ...base.objects[0],
+        ports: {
+          ...base.objects[0].ports,
+          inlets: { source: "argument-count", index: 0 },
+        },
+      }],
+    });
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "index is not allowed when source is argument-count"
+    );
+
+    await writeJson(configPath, {
+      ...base,
+      objects: [{
+        ...base.objects[0],
+        ports: {
+          ...base.objects[0].ports,
+          inlets: { source: "argument-count", minimum: 4, maximum: 2 },
+        },
+      }],
+    });
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "maximum must be greater than or equal to minimum"
+    );
+  });
+
+  it("hard-clamps declarative port counts even without explicit bounds", () => {
+    const database = {
+      "vendor.counted": {
+        maxclass: "newobj",
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""],
+        defaultSize: [80, 22] as [number, number],
+        category: "external",
+        argumentPortRules: {
+          inlets: { source: "argument" as const, index: 0 },
+          outlets: { source: "argument" as const, index: 0 },
+        },
+      },
+    };
+
+    expect(lookupObject("vendor.counted -5", database)?.def).toMatchObject({
+      numinlets: 0,
+      numoutlets: 0,
+      outlettype: [],
+    });
+    expect(lookupObject("vendor.counted 999999", database)?.def).toMatchObject({
+      numinlets: 4096,
+      numoutlets: 4096,
+    });
+  });
+
   it("imports reusable catalogs before local definitions", async () => {
     const root = await temporaryDirectory();
     await mkdir(join(root, "catalogs"));

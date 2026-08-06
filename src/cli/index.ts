@@ -12,6 +12,7 @@ import {
   patcherToPatchGraph,
   PatchGraph,
   collectCatalogDependencies,
+  searchObjectCatalog,
 } from "../index.js";
 import { toClipboardText, fromClipboardText } from "../core/clipboard.js";
 import { cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
@@ -53,6 +54,11 @@ async function main() {
 
   if (command === "bundle") {
     await bundleCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "catalog") {
+    await catalogCommand(args.slice(1));
     return;
   }
 
@@ -417,6 +423,76 @@ async function bundleCommand(cmdArgs: string[]) {
   console.log(`Dependencies: ${dependencies.length}`);
 }
 
+async function catalogCommand(cmdArgs: string[]) {
+  let query = "";
+  let configFile = "";
+  let inputFile = "";
+  let includeAll = false;
+  let json = false;
+  let limit = 50;
+
+  for (let i = 0; i < cmdArgs.length; i++) {
+    const argument = cmdArgs[i];
+    if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
+      i++;
+    } else if (argument === "--input") {
+      inputFile = requiredOptionValue(cmdArgs, i);
+      i++;
+    } else if (argument === "--all") {
+      includeAll = true;
+    } else if (argument === "--json") {
+      json = true;
+    } else if (argument === "--limit") {
+      const rawLimit = requiredOptionValue(cmdArgs, i);
+      i++;
+      if (!/^\d+$/.test(rawLimit) || Number(rawLimit) < 1 || Number(rawLimit) > 1000) {
+        throw new Error("--limit must be an integer from 1 to 1000");
+      }
+      limit = Number(rawLimit);
+    } else if (!query && !argument.startsWith("-")) {
+      query = argument;
+    } else {
+      throw new Error(`Unknown catalog argument: ${argument}`);
+    }
+  }
+
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath: inputFile || undefined,
+  });
+  const includeBuiltins = includeAll || query.length > 0;
+  const matches = searchObjectCatalog(catalog, query, includeBuiltins);
+  const objects = matches.slice(0, limit);
+  if (json) {
+    console.log(JSON.stringify({
+      digest: catalog.digest,
+      configPath: catalog.configPath ?? null,
+      totalMatches: matches.length,
+      truncated: objects.length < matches.length,
+      objects,
+    }, null, 2));
+    return;
+  }
+
+  if (objects.length === 0) {
+    console.log("No matching objects.");
+    return;
+  }
+  for (const object of objects) {
+    const portMode = object.dynamicPorts
+      ? "dynamic"
+      : object.argumentPorts ? "arguments" : "fixed";
+    console.log(
+      `${object.name}\t${object.kind}\t${object.numinlets}->${object.numoutlets}` +
+      `\t${portMode}\t${object.maxclass}`
+    );
+  }
+  if (objects.length < matches.length) {
+    console.log(`... ${matches.length - objects.length} more; increase --limit`);
+  }
+}
+
 function requiredOptionValue(cmdArgs: string[], index: number): string {
   const option = cmdArgs[index];
   const value = cmdArgs[index + 1];
@@ -514,6 +590,7 @@ Usage:
   maxforge plan <desired.maxdsl> [--config path] [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
   maxforge doctor [--config path] [--input input.maxdsl]
   maxforge bundle <input.maxdsl> -o package-directory [--config path] [--name package-name]
+  maxforge catalog [query] [--config path] [--input input.maxdsl] [--all] [--limit n] [--json]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
@@ -523,6 +600,7 @@ Commands:
   plan            Build a managed PatchPlan for maxforge.sync
   doctor          Validate project catalog files and abstraction metadata
   bundle          Build a portable Max package directory with declared dependencies
+  catalog         List project objects or search the effective object catalog
 
 Options:
   -o <file>          Output file path
@@ -534,6 +612,9 @@ Options:
   --compact          Emit a single-line JSON plan
   --input <file>     Input path used for doctor config discovery
   --name <name>      Package title and generated main patch name for bundle
+  --all              Include all built-in objects in an unfiltered catalog listing
+  --limit <n>        Maximum catalog records (default: 50, maximum: 1000)
+  --json             Emit machine-readable catalog search results
 `);
 }
 

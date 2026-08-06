@@ -3,7 +3,13 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, parse, resolve } from "node:path";
 import * as z from "zod/v4";
 import { loadDatabase } from "./object-db.js";
-import { BoxJSON, ObjectDatabase, ObjectDef, PatcherJSON } from "./types.js";
+import {
+  BoxJSON,
+  MAX_DECLARATIVE_PORT_COUNT,
+  ObjectDatabase,
+  ObjectDef,
+  PatcherJSON,
+} from "./types.js";
 
 const CONFIG_FILENAME = "maxforge.config.json";
 
@@ -21,9 +27,70 @@ const dynamicPortsSchema = z.object({
   }).strict(),
 }).strict();
 
+const portCountRuleShape = {
+  source: z.enum(["argument", "argument-count"]),
+  index: z.number().int().nonnegative().optional(),
+  offset: z.number().int().optional(),
+  minimum: z.number().int().min(0).max(MAX_DECLARATIVE_PORT_COUNT).optional(),
+  maximum: z.number().int().min(0).max(MAX_DECLARATIVE_PORT_COUNT).optional(),
+};
+
+function validatePortCountRule(
+  rule: z.infer<z.ZodObject<typeof portCountRuleShape>>,
+  context: z.RefinementCtx
+): void {
+  if (rule.source === "argument" && rule.index === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["index"],
+      message: "index is required when source is argument",
+    });
+  }
+  if (rule.source === "argument-count" && rule.index !== undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["index"],
+      message: "index is not allowed when source is argument-count",
+    });
+  }
+  if (
+    rule.minimum !== undefined &&
+    rule.maximum !== undefined &&
+    rule.maximum < rule.minimum
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["maximum"],
+      message: "maximum must be greater than or equal to minimum",
+    });
+  }
+}
+
+const inletCountRuleSchema = z.object(portCountRuleShape)
+  .strict()
+  .superRefine(validatePortCountRule);
+
+const outletCountRuleSchema = z.object({
+  ...portCountRuleShape,
+  outlettype: z.string().optional(),
+}).strict().superRefine(validatePortCountRule);
+
+const argumentPortsSchema = z.object({
+  mode: z.literal("arguments"),
+  representative: z.object({
+    inlets: z.number().int().min(0).max(MAX_DECLARATIVE_PORT_COUNT),
+    outlets: z.array(z.string()).max(MAX_DECLARATIVE_PORT_COUNT),
+  }).strict(),
+  inlets: inletCountRuleSchema.optional(),
+  outlets: outletCountRuleSchema.optional(),
+}).strict().refine((ports) => ports.inlets !== undefined || ports.outlets !== undefined, {
+  message: "at least one of inlets or outlets is required",
+});
+
 const portsSchema = z.discriminatedUnion("mode", [
   fixedPortsSchema,
   dynamicPortsSchema,
+  argumentPortsSchema,
 ]);
 
 const defaultSizeSchema = z.tuple([
@@ -74,7 +141,7 @@ export interface CustomObjectInfo {
   readonly path?: string;
   /** All package artifacts for this object; older programmatic catalogs may provide only path. */
   readonly paths?: readonly string[];
-  readonly ports: "fixed" | "dynamic";
+  readonly ports: "fixed" | "dynamic" | "arguments";
   readonly definition: ObjectDef;
 }
 
@@ -91,6 +158,59 @@ export interface LoadObjectCatalogOptions {
   readonly inputPath?: string;
   readonly cwd?: string;
   readonly discover?: boolean;
+}
+
+export interface CatalogObjectRecord {
+  readonly name: string;
+  readonly kind: "built-in" | "external" | "abstraction";
+  readonly maxclass: string;
+  readonly numinlets: number;
+  readonly numoutlets: number;
+  readonly outlettype: readonly string[];
+  readonly dynamicPorts: boolean;
+  readonly argumentPorts: boolean;
+  readonly source: string;
+  readonly path?: string;
+  readonly paths?: readonly string[];
+}
+
+export function searchObjectCatalog(
+  catalog: LoadedObjectCatalog,
+  query = "",
+  includeBuiltins = false
+): readonly CatalogObjectRecord[] {
+  const customByName = new Map(
+    catalog.customObjects.map((object) => [object.name, object])
+  );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return Object.entries(catalog.database)
+    .flatMap(([name, definition]) => {
+      const custom = customByName.get(name);
+      if (!custom && !includeBuiltins) return [];
+      if (
+        normalizedQuery &&
+        !name.toLocaleLowerCase().includes(normalizedQuery) &&
+        !definition.maxclass.toLocaleLowerCase().includes(normalizedQuery)
+      ) {
+        return [];
+      }
+      return [{
+        name,
+        kind: custom?.kind ?? "built-in",
+        maxclass: definition.maxclass,
+        numinlets: definition.numinlets,
+        numoutlets: definition.numoutlets,
+        outlettype: [...definition.outlettype],
+        dynamicPorts: definition.dynamicPorts === true,
+        argumentPorts: definition.argumentPortRules !== undefined,
+        source: custom?.source ?? "built-in",
+        ...(custom?.path ? { path: custom.path } : {}),
+        ...(custom?.paths && custom.paths.length > 1
+          ? { paths: [...custom.paths] }
+          : {}),
+      } satisfies CatalogObjectRecord];
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 interface CatalogEntry {
@@ -251,7 +371,7 @@ async function externalInfo(
     source,
     path: externalPaths[0],
     paths: externalPaths,
-    ports: definition.dynamicPorts ? "dynamic" : "fixed",
+    ports: portMode(declaration.ports),
     definition,
   };
 }
@@ -289,7 +409,7 @@ async function abstractionInfo(
     source,
     path: abstractionPath,
     paths: [abstractionPath],
-    ports: definition.dynamicPorts ? "dynamic" : "fixed",
+    ports: portMode(ports),
     definition,
   };
 }
@@ -309,7 +429,15 @@ function definitionFromPorts(
     defaultSize,
     category,
     dynamicPorts: ports.mode === "dynamic" || undefined,
+    argumentPortRules: ports.mode === "arguments" ? {
+      ...(ports.inlets ? { inlets: { ...ports.inlets } } : {}),
+      ...(ports.outlets ? { outlets: { ...ports.outlets } } : {}),
+    } : undefined,
   };
+}
+
+function portMode(ports: PortDeclaration): CustomObjectInfo["ports"] {
+  return ports.mode;
 }
 
 async function deriveAbstractionPorts(path: string): Promise<PortDeclaration> {
@@ -380,6 +508,14 @@ function cloneDatabase(database: ObjectDatabase): ObjectDatabase {
       ...definition,
       outlettype: [...definition.outlettype],
       defaultSize: [...definition.defaultSize] as [number, number],
+      argumentPortRules: definition.argumentPortRules ? {
+        ...(definition.argumentPortRules.inlets
+          ? { inlets: { ...definition.argumentPortRules.inlets } }
+          : {}),
+        ...(definition.argumentPortRules.outlets
+          ? { outlets: { ...definition.argumentPortRules.outlets } }
+          : {}),
+      } : undefined,
     },
   ]));
 }

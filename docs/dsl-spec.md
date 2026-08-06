@@ -417,7 +417,7 @@ and known identity-only alias warnings are documented in
 Before lookup, CLI commands may merge a project object catalog over the bundled
 database. `compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for
 `maxforge.config.json`; `--config` selects a file explicitly. Declarations can
-add fixed/dynamic third-party external metadata and map reusable abstraction
+add fixed, bounded argument-dependent, or dynamic third-party external metadata and map reusable abstraction
 names to `.maxpat` files. A collision is fatal unless the later declaration
 sets `override: true`.
 
@@ -449,7 +449,11 @@ Some objects have inlet/outlet counts that depend on arguments:
 | `tapout~` | one inlet/outlet signal pair per delay argument |
 | `adc~` / `dac~` | signal outlets/inlets = channel argument count |
 
-These are handled by named rules in `src/core/object-db.ts`. Quoted arguments
+Built-ins are handled by named rules in `src/core/object-db.ts`. Project
+catalogs can declare the safe numeric subset with `ports.mode: "arguments"`:
+port counts may come from one integer argument or the argument count, followed
+by an integer offset and min/max clamps. They cannot execute expressions or
+inspect runtime state. Quoted arguments
 count as one argument. Every catalog entry carrying `argRule` has a unit-test
 case; the table above is only representative.
 

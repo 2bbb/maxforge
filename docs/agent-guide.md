@@ -423,6 +423,9 @@ node dist/cli/index.js validate input.maxdsl
 # project catalogとabstraction metadataの事前検査
 node dist/cli/index.js doctor --input input.maxdsl
 
+# effective object catalogの検索（query指定時はbuilt-inも対象）
+node dist/cli/index.js catalog cycle~ --json
+
 # 標準出力へ（ファイル書き出しなし）
 node dist/cli/index.js compile input.maxdsl
 node dist/cli/index.js decompile input.maxpat

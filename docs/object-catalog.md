@@ -60,11 +60,13 @@ contain a `catalogs` property, and are loaded before declarations in the root
 configuration. The format is strict: unknown keys fail validation instead of
 being silently ignored.
 
-`compile`, `validate`, and `plan` search upward from the input DSL for the exact
+`compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for the exact
 filename `maxforge.config.json`. `--config path` bypasses discovery. Use
 `maxforge doctor --input path/to/input.maxdsl` or `maxforge doctor --config
 path/to/config.json` to validate all declarations and referenced abstractions
-before compilation.
+before compilation. Use `maxforge catalog [query] --json` to search the
+effective catalog; an unfiltered call lists project declarations, while a query
+also searches built-ins. `--all` requests a complete built-in listing.
 
 The MCP process deliberately has no working-directory discovery because an MCP
 client's process directory is often unrelated to the patch project. Set
@@ -79,8 +81,9 @@ For a fixed-shape external, `inlets` is the exact inlet count and the length of
 `outlettype`; use `"signal"` for an MSP signal outlet and `""` when no more
 specific type is known.
 
-Use dynamic mode only when arguments, attributes, embedded code, or runtime
-state can alter the shape:
+Use dynamic mode only when attributes, embedded code, runtime state, or an
+argument convention that the bounded rules below cannot represent can alter
+the shape:
 
 ```json
 {
@@ -94,9 +97,46 @@ state can alter the shape:
 ```
 
 The representative shape is serialized into generated JSON, but maxforge does
-not use it as an upper connection-index bound. Project catalogs do not expose
-the built-in `argRule` mechanism; encoding arbitrary executable or named rules
-in configuration would be an unsafe and unstable API.
+not use it as an upper connection-index bound.
+
+When the shape is a deterministic function of initialization arguments, use
+bounded argument mode instead of weakening validation with dynamic mode:
+
+```json
+{
+  "name": "vendor.router~",
+  "kind": "external",
+  "ports": {
+    "mode": "arguments",
+    "representative": { "inlets": 2, "outlets": ["signal"] },
+    "inlets": {
+      "source": "argument",
+      "index": 0,
+      "offset": 1,
+      "minimum": 1,
+      "maximum": 64
+    },
+    "outlets": {
+      "source": "argument-count",
+      "minimum": 1,
+      "outlettype": "signal"
+    }
+  }
+}
+```
+
+`source: "argument"` reads a zero-based integer argument and requires `index`.
+`source: "argument-count"` counts tokens before the first `@attribute` and
+forbids `index`. The optional integer `offset` is applied before `minimum` and
+`maximum` clamps. An absent or non-integer indexed argument keeps the
+representative count. Outlet rules generate one uniform `outlettype` per
+resolved outlet. Counts are always clamped to the hard safety range 0–4096,
+even when explicit bounds are omitted. At least one of `inlets` or `outlets` is
+required.
+
+This is deliberately not an expression language and cannot execute code or
+refer to environment/runtime state. Shapes that need those capabilities remain
+`dynamic`.
 
 External boxes default to `maxclass: "newobj"` and size `[80, 22]`. Set
 `serialization.maxclass` or `defaultSize` only when saved-patcher evidence for
@@ -128,8 +168,9 @@ omitted) reads only the abstraction's root patcher:
   metadata; all other outlet types are `""`.
 
 This is static metadata extraction, not recursive compilation. If the patcher
-uses a dynamic convention that cannot be derived honestly, specify fixed or
-dynamic `ports` explicitly. Inline DSL subpatchers (`name = p child { ... }`)
+uses an argument-dependent or dynamic convention that cannot be derived
+honestly, specify `arguments` or `dynamic` ports explicitly. Inline DSL
+subpatchers (`name = p child { ... }`)
 remain embedded in the generated patch and require no configuration file.
 
 ### Portable package bundles

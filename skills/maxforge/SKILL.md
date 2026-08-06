@@ -117,9 +117,11 @@ for i in 0..7 {
   Cycling '74 facts.
 - For project externals or reusable `.maxpat` abstractions, create a strict
   `maxforge.config.json` using `schema/config-v1.json`. CLI compile, validate,
-  and plan discover it upward from the input; `--config` selects one explicitly.
+  plan, and bundle discover it upward from the input; `--config` selects one explicitly.
 - Prefer fixed port metadata backed by the external's reference/help patch.
-  Use dynamic mode only when the shape actually varies. Use `ports: "derive"`
+  Use bounded `ports.mode: "arguments"` when integer initialization arguments
+  deterministically control counts; it is not an arbitrary expression hook.
+  Use dynamic mode only when the shape cannot be resolved statically. Use `ports: "derive"`
   for an abstraction whose root `inlet`/`outlet` boxes are authoritative. Its
   catalog name must match the existing `.maxpat` filename; the file is not
   embedded and Max still needs its directory on the search path.
@@ -128,6 +130,10 @@ for i in 0..7 {
 - When changing the catalog locally, run
   `python3 scripts/audit-object-catalog.py` against Max 9 and add a unit case for
   every `argRule` entry.
+- Search metadata with `npx maxforge@latest catalog <query> --json`; an
+  unfiltered call lists project declarations and `--all` includes all built-ins.
+- Use `npx maxforge@latest bundle input.maxdsl -o package-directory` only when
+  every referenced custom dependency has a declared package path.
 
 ## References in this repo
 

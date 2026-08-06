@@ -92,6 +92,8 @@ export interface LineJSON {
 }
 
 // Object database entry
+export const MAX_DECLARATIVE_PORT_COUNT = 4096;
+
 export interface ObjectDef {
   maxclass: string;
   numinlets: number;
@@ -101,8 +103,26 @@ export interface ObjectDef {
   category: string;
   argDependent?: boolean;
   argRule?: string;
+  /** Safe project-catalog rules for deriving port counts from object arguments. */
+  argumentPortRules?: ArgumentPortRules;
   /** Port shape depends on attributes, an embedded patcher, or runtime state. */
   dynamicPorts?: boolean;
+}
+
+export interface ArgumentPortCountRule {
+  source: "argument" | "argument-count";
+  /** Zero-based argument index; required when source is argument. */
+  index?: number;
+  offset?: number;
+  minimum?: number;
+  maximum?: number;
+  /** Uniform Max outlettype used only for an outlet rule. */
+  outlettype?: string;
+}
+
+export interface ArgumentPortRules {
+  inlets?: ArgumentPortCountRule;
+  outlets?: ArgumentPortCountRule;
 }
 
 export type ObjectDatabase = Record<string, ObjectDef>;

@@ -71,10 +71,83 @@
         }
       }
     },
+    "inletCountRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": { "enum": ["argument", "argument-count"] },
+        "index": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer" },
+        "minimum": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "maximum": { "type": "integer", "minimum": 0, "maximum": 4096 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "argument" } } },
+          "then": { "required": ["index"] }
+        },
+        {
+          "if": { "properties": { "source": { "const": "argument-count" } } },
+          "then": { "not": { "required": ["index"] } }
+        }
+      ]
+    },
+    "outletCountRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": { "enum": ["argument", "argument-count"] },
+        "index": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer" },
+        "minimum": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "maximum": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "outlettype": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "argument" } } },
+          "then": { "required": ["index"] }
+        },
+        {
+          "if": { "properties": { "source": { "const": "argument-count" } } },
+          "then": { "not": { "required": ["index"] } }
+        }
+      ]
+    },
+    "argumentPorts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "representative"],
+      "properties": {
+        "mode": { "const": "arguments" },
+        "representative": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inlets", "outlets"],
+          "properties": {
+            "inlets": { "type": "integer", "minimum": 0, "maximum": 4096 },
+            "outlets": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "inlets": { "$ref": "#/$defs/inletCountRule" },
+        "outlets": { "$ref": "#/$defs/outletCountRule" }
+      },
+      "anyOf": [
+        { "required": ["inlets"] },
+        { "required": ["outlets"] }
+      ]
+    },
     "ports": {
       "oneOf": [
         { "$ref": "#/$defs/fixedPorts" },
-        { "$ref": "#/$defs/dynamicPorts" }
+        { "$ref": "#/$defs/dynamicPorts" },
+        { "$ref": "#/$defs/argumentPorts" }
       ]
     },
     "external": {

@@ -37,6 +37,7 @@ Run without installing globally:
 ```bash
 npx maxforge@latest compile input.maxdsl -o output.maxpat
 npx maxforge@latest validate input.maxdsl
+npx maxforge@latest catalog cycle~ --json
 ```
 
 Try the generative example after cloning this repository:
@@ -411,6 +412,12 @@ filename. `--config path` selects it explicitly. `doctor` validates every
 source and reads abstractions before a build. Imported files use the
 [`objects-v1` schema](https://2bit.jp/maxforge/schema/objects-v1.json) and may
 not recursively import more catalogs.
+
+`maxforge catalog [query] --json` searches the effective metadata. With no
+query it lists configured project objects; a query searches built-ins too, and
+`--all` produces an unfiltered built-in listing. Project catalogs can use
+`ports.mode: "arguments"` for bounded integer argument/index rules; see the
+object-catalog documentation for the schema and fallback behavior.
 
 An abstraction `name` must match its `.maxpat` filename. maxforge validates the
 file and its port metadata but does not embed it; its directory must still be

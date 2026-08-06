@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import {
-  CustomObjectInfo,
   LoadedObjectCatalog,
+  searchObjectCatalog,
 } from "../core/catalog-config.js";
 import { MaxforgePatchService } from "./service.js";
 import { PatchPlanTransport } from "./bridge.js";
@@ -136,8 +136,10 @@ const catalogObjectSchema = z.object({
   numoutlets: z.number().int().nonnegative(),
   outlettype: z.array(z.string()),
   dynamicPorts: z.boolean(),
+  argumentPorts: z.boolean(),
   source: z.string(),
   path: z.string().optional(),
+  paths: z.array(z.string()).optional(),
 });
 
 const catalogStatusSchema = z.object({
@@ -446,7 +448,7 @@ export function createMaxforgeMcpServer(
     },
     async ({ query, includeBuiltins, limit }) => {
       const maximum = limit ?? 50;
-      const matches = catalogObjects(
+      const matches = searchObjectCatalog(
         currentCatalog,
         query,
         includeBuiltins ?? false
@@ -857,46 +859,6 @@ function catalogStatus(catalog: LoadedObjectCatalog) {
       ({ kind }) => kind === "abstraction"
     ).length,
   };
-}
-
-function catalogObjects(
-  catalog: LoadedObjectCatalog,
-  query: string | undefined,
-  includeBuiltins: boolean
-) {
-  const customByName = new Map<string, CustomObjectInfo>(
-    catalog.customObjects.map((object) => [object.name, object])
-  );
-  const normalizedQuery = query?.trim().toLocaleLowerCase() ?? "";
-  return Object.entries(catalog.database)
-    .flatMap(([name, definition]) => {
-      const custom = customByName.get(name);
-      if (!custom && !includeBuiltins) return [];
-      const kind = custom?.kind ?? "built-in";
-      const record = {
-        name,
-        kind,
-        maxclass: definition.maxclass,
-        numinlets: definition.numinlets,
-        numoutlets: definition.numoutlets,
-        outlettype: [...definition.outlettype],
-        dynamicPorts: definition.dynamicPorts === true,
-        source: custom?.source ?? "built-in",
-        ...(custom?.path ? { path: custom.path } : {}),
-        ...(custom?.paths && custom.paths.length > 1
-          ? { paths: [...custom.paths] }
-          : {}),
-      };
-      if (
-        normalizedQuery &&
-        !name.toLocaleLowerCase().includes(normalizedQuery) &&
-        !definition.maxclass.toLocaleLowerCase().includes(normalizedQuery)
-      ) {
-        return [];
-      }
-      return [record];
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function toolResult(value: Record<string, unknown>) {
