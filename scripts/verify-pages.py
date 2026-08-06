@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -225,6 +226,23 @@ def verify_site(site_directory: Path) -> list[str]:
         required_path = site_directory / required_name
         if not required_path.is_file():
             errors.append(f"missing required site file: {required_name}")
+
+    for schema_name in ["config-v1.json", "objects-v1.json"]:
+        schema_path = site_directory / "schema" / schema_name
+        if not schema_path.is_file():
+            errors.append(f"missing public schema: schema/{schema_name}")
+            continue
+        try:
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exception:
+            errors.append(f"invalid public schema schema/{schema_name}: {exception}")
+            continue
+        expected_id = f"https://2bit.jp/maxforge/schema/{schema_name}"
+        if schema.get("$id") != expected_id:
+            errors.append(
+                f"schema/{schema_name}: expected $id {expected_id}, "
+                f"found {schema.get('$id')!r}"
+            )
 
     return errors
 

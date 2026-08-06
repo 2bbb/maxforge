@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "schema/**"
       - "scripts/verify-pages.py"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
@@ -24,6 +25,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Stage public schemas
+        run: |
+          mkdir -p site/schema
+          cp schema/*.json site/schema/
 
       - name: Validate static site
         run: python3 scripts/verify-pages.py site

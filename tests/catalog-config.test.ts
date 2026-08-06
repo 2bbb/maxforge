@@ -107,6 +107,23 @@ describe("project object catalogs", () => {
     expect(catalog.database).toHaveProperty("local.object");
   });
 
+  it("rejects nested catalog declarations even when the list is empty", async () => {
+    const root = await temporaryDirectory();
+    await writeJson(join(root, "shared.json"), {
+      schemaVersion: 1,
+      catalogs: [],
+    });
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      catalogs: ["./shared.json"],
+    });
+
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "Imported catalog cannot import other catalogs"
+    );
+  });
+
   it("requires explicit override for collisions", async () => {
     const root = await temporaryDirectory();
     const configPath = join(root, "maxforge.config.json");

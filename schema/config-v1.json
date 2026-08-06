@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://2bit.jp/maxforge/schema/config-v1.json",
+  "title": "maxforge project configuration v1",
+  "description": "Project-local object metadata used by the maxforge CLI and MCP server.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "catalogs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "objects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/external" }
+    },
+    "abstractions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/abstraction" }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$"
+    },
+    "defaultSize": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "number", "exclusiveMinimum": 0 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "fixedPorts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "inlets", "outlets"],
+      "properties": {
+        "mode": { "const": "fixed" },
+        "inlets": { "type": "integer", "minimum": 0 },
+        "outlets": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "dynamicPorts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "representative"],
+      "properties": {
+        "mode": { "const": "dynamic" },
+        "representative": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inlets", "outlets"],
+          "properties": {
+            "inlets": { "type": "integer", "minimum": 0 },
+            "outlets": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "ports": {
+      "oneOf": [
+        { "$ref": "#/$defs/fixedPorts" },
+        { "$ref": "#/$defs/dynamicPorts" }
+      ]
+    },
+    "external": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "ports"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "kind": { "const": "external" },
+        "serialization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxclass"],
+          "properties": {
+            "maxclass": { "type": "string", "minLength": 1 }
+          }
+        },
+        "ports": { "$ref": "#/$defs/ports" },
+        "defaultSize": { "$ref": "#/$defs/defaultSize" },
+        "override": { "type": "boolean" }
+      }
+    },
+    "abstraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "path": { "type": "string", "minLength": 1 },
+        "ports": {
+          "oneOf": [
+            { "const": "derive" },
+            { "$ref": "#/$defs/ports" }
+          ]
+        },
+        "defaultSize": { "$ref": "#/$defs/defaultSize" },
+        "override": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -122,7 +122,7 @@ export async function loadObjectCatalog(
   for (const relativeCatalog of config.catalogs ?? []) {
     const catalogPath = resolve(configDirectory, relativeCatalog);
     const catalog = await readCatalogDocument(catalogPath);
-    if ((catalog.catalogs?.length ?? 0) > 0) {
+    if (catalog.catalogs !== undefined) {
       throw new Error(
         `Imported catalog cannot import other catalogs: ${catalogPath}`
       );

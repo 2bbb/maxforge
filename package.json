@@ -42,6 +42,7 @@
   "files": [
     "dist/",
     "data/objects.json",
+    "schema/",
     "README.md",
     "skills/",
     "docs/dsl-spec.md",
