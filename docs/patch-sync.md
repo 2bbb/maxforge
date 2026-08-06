@@ -67,6 +67,8 @@ A plan contains:
 - `targetRevision` — revision after successful application.
 - optional `baseStructureToken` — 16-character lowercase hexadecimal token for
   the exact inspected live box/connection structure.
+- optional `rollbackOperations` — reverse ordered operations generated from
+  target state back to base state.
 
 The consumer must reject a plan when `baseRevision` does not match its current
 managed revision. When `baseStructureToken` is present, it must also snapshot
@@ -103,11 +105,15 @@ A correct consumer must:
 - Apply operations on Max's main thread.
 - Reject references outside the active managed scope.
 - Update its current revision only after every operation succeeds.
-- Keep a pre-apply snapshot if rollback is required.
+- Validate supplied reverse operations against the simulated target state
+  before mutation.
 
 The Max SDK does not make arbitrary external-driven patcher mutations undoable.
-Do not claim transaction safety until snapshot restoration has been implemented
-and tested in Max.
+Current maxforge plans therefore carry reverse operations and the native
+consumer attempts them after a forward operation fails. This is best-effort
+managed-graph recovery, not transaction safety: recreated boxes receive new
+runtime IDs, opaque object state is not restored, and patch cords to unmanaged
+objects may already have been removed. Always inspect after an apply error.
 
 ## maxforge.sync
 

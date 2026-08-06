@@ -58,6 +58,8 @@ struct patch_plan {
 	bool has_base_structure_token{};
 	std::string base_structure_token;
 	std::vector<patch_operation> operations;
+	bool has_rollback_operations{};
+	std::vector<patch_operation> rollback_operations;
 };
 
 struct snapshot_box {
@@ -696,6 +698,27 @@ auto parse_plan(c74::max::t_dictionary *dictionary) -> patch_plan {
 			result.scope
 		));
 	}
+	result.has_rollback_operations = c74::max::dictionary_hasentry(
+		dictionary,
+		c74::max::gensym("rollbackOperations")
+	) != 0;
+	if(result.has_rollback_operations) {
+		long rollback_count{};
+		const auto *rollback_atoms = dictionary_array(
+			dictionary,
+			"rollbackOperations",
+			rollback_count
+		);
+		result.rollback_operations.reserve(
+			static_cast<std::size_t>(rollback_count)
+		);
+		for(long index{}; index < rollback_count; index++) {
+			result.rollback_operations.push_back(parse_operation(
+				atom_dictionary(rollback_atoms[index]),
+				result.scope
+			));
+		}
+	}
 	return result;
 }
 
@@ -1193,15 +1216,19 @@ void seed_virtual_patch(
 	}
 }
 
-auto validation_plan_from_patch_plan(const patch_plan &plan)
+auto validation_plan_from_operations(
+	const patch_plan &plan,
+	const std::vector<patch_operation> &operations,
+	const std::string &base_revision
+)
 	-> sync_protocol::validation_plan
 {
 	sync_protocol::validation_plan result;
 	result.scope = plan.scope;
-	result.base_revision = plan.base_revision;
-	result.operations.reserve(plan.operations.size());
+	result.base_revision = base_revision;
+	result.operations.reserve(operations.size());
 
-	for(const auto &operation : plan.operations) {
+	for(const auto &operation : operations) {
 		sync_protocol::validation_operation validation_operation;
 		validation_operation.kind = operation.kind;
 		validation_operation.target_path = operation.target_path;
@@ -1226,12 +1253,33 @@ void validate_plan_against_patch(
 ) {
 	sync_protocol::virtual_patch state;
 	seed_virtual_patch(root_patcher, plan.scope, {}, state);
-	sync_protocol::validate_plan(
-		validation_plan_from_patch_plan(plan),
+	const auto target_state = sync_protocol::validate_plan(
+		validation_plan_from_operations(
+			plan,
+			plan.operations,
+			plan.base_revision
+		),
 		state,
 		configured_scope,
 		current_revision
 	);
+	if(plan.has_rollback_operations) {
+		const auto restored_state = sync_protocol::validate_plan(
+			validation_plan_from_operations(
+				plan,
+				plan.rollback_operations,
+				plan.target_revision
+			),
+			target_state,
+			configured_scope,
+			plan.target_revision
+		);
+		if(restored_state != state) {
+			throw std::runtime_error(
+				"rollback operations do not restore managed box topology"
+			);
+		}
+	}
 }
 
 auto resolve_target_patcher(
@@ -1467,6 +1515,43 @@ auto apply_operation(
 			return apply_connection(target_patcher, operation, "connect");
 	}
 	return false;
+}
+
+auto apply_rollback_operation(
+	c74::max::t_object *root_patcher,
+	const patch_operation &operation
+) -> bool
+{
+	auto *target_patcher = resolve_target_patcher(
+		root_patcher,
+		operation.target_path
+	);
+	if(!target_patcher) {
+		return operation.kind == operation_kind::disconnect ||
+			operation.kind == operation_kind::delete_box;
+	}
+
+	if(operation.kind == operation_kind::disconnect) {
+		// The forward prefix may never have created this cord. Absence already
+		// satisfies the reverse operation.
+		(void)apply_connection(target_patcher, operation, "disconnect");
+		return true;
+	}
+	if(operation.kind == operation_kind::delete_box) {
+		auto *box = find_named_box(target_patcher, operation.variable_name);
+		if(box) c74::max::object_free(box);
+		return true;
+	}
+	if(operation.kind == operation_kind::create) {
+		if(auto *box = find_named_box(
+			target_patcher,
+			operation.box.variable_name
+		)) {
+			c74::max::object_free(box);
+		}
+		return apply_create(target_patcher, operation.box);
+	}
+	return apply_operation(root_patcher, operation);
 }
 
 auto dictionary_from_json(const std::string &json) -> c74::max::t_dictionary * {
@@ -2265,9 +2350,38 @@ private:
 					root_patcher,
 					plan.operations[index]
 				)) {
+					if(!plan.has_rollback_operations) {
+						throw std::runtime_error(
+							"operation " + std::to_string(index) +
+							" failed; no rollback operations were supplied and the "
+							"patch may be partially modified"
+						);
+					}
+					std::vector<std::size_t> rollback_failures;
+					for(
+						std::size_t rollback_index{};
+						rollback_index < plan.rollback_operations.size();
+						rollback_index++
+					) {
+						if(!apply_rollback_operation(
+							root_patcher,
+							plan.rollback_operations[rollback_index]
+						)) {
+							rollback_failures.push_back(rollback_index);
+						}
+					}
+					if(rollback_failures.empty()) {
+						throw std::runtime_error(
+							"operation " + std::to_string(index) +
+							" failed; reverse operations completed and the managed "
+							"revision was not advanced"
+						);
+					}
 					throw std::runtime_error(
 						"operation " + std::to_string(index) +
-						" failed; the patch may be partially modified"
+						" failed and rollback operation " +
+						std::to_string(rollback_failures.front()) +
+						" also failed; inspect the patch before retrying"
 					);
 				}
 			}

@@ -537,8 +537,10 @@ optimistic concurrency.
   rather than consuming unbounded memory.
 - Only exact `maxforge_<scope>_obj_...` scripting names are managed.
 - The complete plan is validated before mutation.
-- Protocol v1 is not transactional. A runtime failure may leave partial patch
-  mutation; the revision is not advanced.
+- Protocol v1 is not transactional. Generated plans include reverse operations
+  and the native external attempts them after a runtime failure, but recreated
+  runtime IDs, opaque object state, and cords to unmanaged boxes are not
+  guaranteed to survive. The revision is not advanced; inspect before retrying.
 - Structural inspection covers box identity, varname, class, text/comment,
   patching rectangle, nesting, patch cords, and dirty user-readable/writable
   attributes whose values are serializable Max atoms. It excludes volatile

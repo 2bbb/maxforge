@@ -57,6 +57,14 @@ const patchPlanSchema = z.object({
       targetPath: z.array(z.string()),
     }).passthrough()
   ).describe("Ordered native Max mutations; review these before apply"),
+  rollbackOperations: z.array(
+    z.object({
+      op: z.enum(["disconnect", "delete", "create", "set", "connect"]),
+      targetPath: z.array(z.string()),
+    }).passthrough()
+  ).optional().describe(
+    "Reverse ordered mutations used by maxforge.sync after a partial apply failure"
+  ),
 });
 
 const snapshotEndpointSchema = z.object({
@@ -270,7 +278,7 @@ const HELP_CONTENT = {
     rules: [
       "Persistent state stores graphs and inspection baselines; a revision hash alone still cannot reconstruct either.",
       "Reconciliation preserves non-conflicting managed edits but never silently chooses between conflicting changes.",
-      "Protocol v1 is not transactional; a runtime mutation failure can leave a partial patch while the revision remains unchanged.",
+      "Protocol v1 attempts generated reverse operations after a runtime mutation failure, but is not transactional; inspect before retrying while the revision remains unchanged.",
     ],
     relatedTools: [
       "maxforge_status",

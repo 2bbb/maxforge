@@ -171,6 +171,16 @@ osc -> gain
       op: "create",
       box: { id: "obj-osc", text: "cycle~ 880" },
     });
+    expect(plan.rollbackOperations?.map((operation) => operation.op)).toEqual([
+      "disconnect",
+      "delete",
+      "create",
+      "connect",
+    ]);
+    expect(plan.rollbackOperations?.[2]).toMatchObject({
+      op: "create",
+      box: { id: "obj-osc", text: "cycle~ 440" },
+    });
   });
 
   it("uses an attribute update for position-only changes", () => {
@@ -186,6 +196,16 @@ osc -> gain
         varName: "maxforge_voices_obj_osc",
         attribute: "patching_rect",
         value: [30, 40, 80, 22],
+      },
+    ]);
+    expect(plan.rollbackOperations).toEqual([
+      {
+        op: "set",
+        targetPath: [],
+        id: "obj-osc",
+        varName: "maxforge_voices_obj_osc",
+        attribute: "patching_rect",
+        value: [10, 20, 80, 22],
       },
     ]);
   });

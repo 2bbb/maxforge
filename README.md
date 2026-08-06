@@ -189,6 +189,11 @@ attributes exposed by boxes and patch cords. Volatile object values and
 opaque/structured attributes are excluded, so an agent can read patch edits
 without using the screen or a saved `.maxpat`.
 
+Plans also include reverse operations. `maxforge.sync` validates them and tries
+to restore the managed graph after a partial apply failure. This is not Max undo
+or a transaction: runtime identity, opaque state, and unmanaged boundary cords
+are not guaranteed, so every apply error still requires inspection.
+
 Build and install it for local development:
 
 ```bash
@@ -221,8 +226,9 @@ example, including managed objects inside a generated subpatcher.
 `maxforge.sync` auto-connects and registers after its containing top-level
 patcher has a visible view. It verifies `baseRevision` and never touches objects
 outside the exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does
-**not** provide rollback after a runtime mutation failure. Its outlet remains
-available for human-readable status and local diagnostics. See
+attempt generated reverse operations after a runtime mutation failure, but does
+**not** guarantee transactional rollback. Its outlet remains available for
+human-readable status and local diagnostics. See
 [`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
 
 ### MCP live control

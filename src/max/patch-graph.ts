@@ -108,6 +108,7 @@ export interface PatchPlan {
   readonly targetRevision: string;
   readonly baseStructureToken?: string;
   readonly operations: readonly PatchOperation[];
+  readonly rollbackOperations?: readonly PatchOperation[];
 }
 
 const BOX_KEYS = new Set([
@@ -213,6 +214,14 @@ export function createPatchGraph(
 }
 
 export function diffPatchGraphs(current: PatchGraph, desired: PatchGraph): PatchPlan {
+  return diffPatchGraphsInternal(current, desired, true);
+}
+
+function diffPatchGraphsInternal(
+  current: PatchGraph,
+  desired: PatchGraph,
+  includeRollback: boolean
+): PatchPlan {
   assertProtocolVersion(current);
   assertProtocolVersion(desired);
   if (current.scope !== desired.scope) {
@@ -368,12 +377,22 @@ export function diffPatchGraphs(current: PatchGraph, desired: PatchGraph): Patch
     }
   }
 
+  const operations = [...disconnects, ...deletes, ...creates, ...sets, ...connects];
   return {
     protocolVersion: 1,
     scope,
     baseRevision: current.revision,
     targetRevision: desired.revision,
-    operations: [...disconnects, ...deletes, ...creates, ...sets, ...connects],
+    operations,
+    ...(includeRollback
+      ? {
+          rollbackOperations: diffPatchGraphsInternal(
+            desired,
+            current,
+            false
+          ).operations,
+        }
+      : {}),
   };
 }
 

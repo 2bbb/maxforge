@@ -210,7 +210,7 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 - Max内では`maxforge.sync @scope voices`へ`apply <compact-json>`を送るか、
   named `dict`を`applydict <name>`で適用する。
 - `maxforge.sync`はJavaScriptや`thispatcher`を経由せずMax SDKでpatcherを変更する。
-- protocol v1はruntime failure時のrollbackを保証しない。
+- protocol v1はruntime failure時にreverse operationsを試行するが、transactionalなrollbackは保証しない。
 - 詳細は`docs/patch-sync.md`を参照。
 
 ### MCP経由のlive managed patch

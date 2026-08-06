@@ -192,7 +192,7 @@
 
       <div class="warning">
         <strong>Experimental means experimental.</strong>
-        <p>Protocol v1 validates complete plans before mutation but does not roll back a partial runtime failure. Inspect first, preview destructive operations, then apply complete desired state.</p>
+        <p>Protocol v1 validates complete plans and reverse operations before mutation, then attempts managed-graph recovery after a failure. It is not transactional: inspect after every error before retrying.</p>
       </div>
     </section>
 
