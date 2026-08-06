@@ -219,19 +219,21 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 
 1. 初回操作では`maxforge_help`へ`topic: "workflow"`を渡し、serverが返す
    最新の操作規約を読む。失敗後は`topic: "recovery"`を読む。
-2. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
-3. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
+2. custom externalまたはabstractionを使う場合は`maxforge_catalog`で、
+   MCP processが実際に読み込んだ定義を確認する。
+3. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
+4. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
    scope、titleを指定し、登録完了まで待つ。
-4. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
-5. managed manual changeがあれば、完全なdesired DSLを
+5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
+6. managed manual changeがあれば、完全なdesired DSLを
    `maxforge_reconcile_patch`へ渡す。`canApply: true`でなければ適用しない。
-6. 通常経路では`maxforge_compile_plan`、手動変更の統合経路ではreconcileが
+7. 通常経路では`maxforge_compile_plan`、手動変更の統合経路ではreconcileが
    返したplanを確認する。
-7. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
+8. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
    場合だけ`manualChanges: "merge"`を指定する。
-8. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
+9. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いする。
-9. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
+10. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
 
 MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
@@ -332,6 +334,47 @@ Max Object Referenceで確認する。名前に`~`を足し引きして未確認
 作らない。特に信号subpatch portは`inlet signal` / `outlet signal`であり、
 `inlet~` / `outlet~`ではない。
 
+### Project external / abstraction catalog
+
+builtin databaseにないthird-party externalや、別ファイルの`.maxpat`
+abstractionを`--allow-unknown`で誤魔化さない。project rootの
+`maxforge.config.json`にport metadataを宣言する。
+
+```json
+{
+  "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
+  "schemaVersion": 1,
+  "objects": [
+    {
+      "name": "vendor.filter~",
+      "kind": "external",
+      "ports": {
+        "mode": "fixed",
+        "inlets": 2,
+        "outlets": ["signal", ""]
+      }
+    }
+  ],
+  "abstractions": [
+    {
+      "name": "studio.voice",
+      "path": "./patchers/studio.voice.maxpat",
+      "ports": "derive"
+    }
+  ]
+}
+```
+
+CLIの`compile`、`validate`、`plan`は入力DSLから上方向へ設定を探索する。
+明示指定は`--config`、事前検査は`maxforge doctor --input input.maxdsl`を使う。
+MCPはcwd探索を行わないため、server起動設定で`MAXFORGE_CONFIG`に絶対pathを
+渡し、変更後はserverを再起動する。
+
+agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
+ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal
+install、abstraction search path、binary architecture、内部dependencyの存在を
+証明しない。画面や名前からavailabilityを推測してはいけない。
+
 ## Error Messages
 
 ### Fatal Errors (コンパイル停止)
@@ -370,6 +413,9 @@ node dist/cli/index.js decompile input.maxpat -o output.maxdsl
 
 # バリデーションのみ
 node dist/cli/index.js validate input.maxdsl
+
+# project catalogとabstraction metadataの事前検査
+node dist/cli/index.js doctor --input input.maxdsl
 
 # 標準出力へ（ファイル書き出しなし）
 node dist/cli/index.js compile input.maxdsl
@@ -427,3 +473,5 @@ node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 - [ ] ポート番号がオブジェクトのinlet/outlet数の範囲内
 - [ ] サブパッチャーに inlet/outlet が存在
 - [ ] 重複する名前がない
+- [ ] custom object使用時は`doctor`が成功し、MCPなら`maxforge_catalog`と一致
+- [ ] catalog entryをMax runtime availabilityの証明として扱っていない

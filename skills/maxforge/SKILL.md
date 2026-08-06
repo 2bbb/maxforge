@@ -68,6 +68,8 @@ for i in 0..7 {
 
 1. Write or edit a `.maxdsl` file.
 2. Run `maxforge validate` before compiling.
+   If the DSL uses project externals or abstractions, run
+   `maxforge doctor --input input.maxdsl` first.
 3. Run `maxforge compile input.maxdsl -o output.maxpat`.
 4. If targeting Max clipboard paste, use `--clipboard` and pipe/copy the output.
 5. For reverse engineering, use `maxforge decompile input.maxpat -o output.maxdsl`; positions round-trip via `at(x, y)`.
@@ -107,6 +109,14 @@ for i in 0..7 {
   higher indices but does not prove that those ports exist.
 - `defaultSize` and `category` are maxforge layout/grouping data, not official
   Cycling '74 facts.
+- For project externals or reusable `.maxpat` abstractions, create a strict
+  `maxforge.config.json` using `schema/config-v1.json`. CLI compile, validate,
+  and plan discover it upward from the input; `--config` selects one explicitly.
+- Prefer fixed port metadata backed by the external's reference/help patch.
+  Use dynamic mode only when the shape actually varies. Use `ports: "derive"`
+  for an abstraction whose root `inlet`/`outlet` boxes are authoritative.
+- Catalog metadata does not install or probe an external, put an abstraction on
+  Max's search path, or prove availability on another machine.
 - When changing the catalog locally, run
   `python3 scripts/audit-object-catalog.py` against Max 9 and add a unit case for
   every `argRule` entry.
@@ -121,3 +131,4 @@ for i in 0..7 {
 - MCP control and restart contract: `docs/mcp.md`
 - Object database used by the compiler: `data/objects.json`
 - Object evidence and limits: `docs/object-catalog.md`
+- Project catalog schemas: `schema/config-v1.json`, `schema/objects-v1.json`

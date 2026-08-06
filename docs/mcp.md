@@ -68,6 +68,30 @@ Environment variables:
 | `MAXFORGE_WS_HOST` | conditional | `127.0.0.1` without a token, `0.0.0.0` with a token |
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
+| `MAXFORGE_CONFIG` | unset | Explicit project object catalog; no MCP working-directory discovery |
+
+When custom externals or reusable abstractions appear in desired DSL, set
+`MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
+path because a client's launch directory is not a reliable project root:
+
+```json
+{
+  "mcpServers": {
+    "maxforge": {
+      "command": "npx",
+      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"],
+      "env": {
+        "MAXFORGE_CONFIG": "/projects/show/maxforge.config.json"
+      }
+    }
+  }
+}
+```
+
+The catalog is loaded once at server startup. Restart the MCP process after
+editing it. A valid declaration is not a runtime availability check: the Max
+machine still needs the corresponding external binary or abstraction search
+path. See [`object-catalog.md`](object-catalog.md#project-object-catalogs).
 
 With no token, non-loopback bind addresses are rejected and existing local
 setups remain unauthenticated on `127.0.0.1`. Set a human-chosen token to bind
@@ -134,14 +158,15 @@ The safe live sequence is fixed:
 
 1. `maxforge_help` (`workflow`)
 2. `maxforge_status` when connection/process state is uncertain
-3. `maxforge_list_patches`
-4. `maxforge_inspect_patch`
-5. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
-6. require `canApply: true`, then review warnings and destructive operations
-7. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
-8. `maxforge_apply_dsl` with the same target and desired DSL; set
+3. `maxforge_catalog` before using a custom external or abstraction
+4. `maxforge_list_patches`
+5. `maxforge_inspect_patch`
+6. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
+7. require `canApply: true`, then review warnings and destructive operations
+8. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
+9. `maxforge_apply_dsl` with the same target and desired DSL; set
    `manualChanges: "merge"` only after successful reconciliation
-9. verify acknowledgement revision and inspect again
+10. verify acknowledgement revision and inspect again
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
 an imperative edit, and a timeout is not proof that Max remained unchanged.
@@ -163,12 +188,32 @@ Reports:
   and revision;
 - the last revision received for each `patcherId:scope` target;
 - graph revisions remembered by the current MCP process;
-- targets with a post-apply structural inspection baseline.
+- targets with a post-apply structural inspection baseline;
+- effective object-catalog digest, configured source files, and built-in,
+  custom, and abstraction counts.
 
 Raw WebSocket connections are not operation targets. A client becomes
 addressable only after `maxforge.sync` sends `maxforge.registered`. Apply and
 inspection route to the explicit `patcherId`; multiple registered patches are
 therefore not ambiguous.
+
+### `maxforge_catalog`
+
+Reads the compiler catalog loaded by this MCP process. It does not require Max
+to be running and never mutates a patch.
+
+Arguments:
+
+- `query` — optional case-insensitive substring filter;
+- `includeBuiltins` — include the bundled database; defaults to `false`, so an
+  unfiltered call reports project declarations only;
+- `limit` — result limit from 1 to 200, default 50.
+
+Each result identifies the object as built-in, external, or abstraction and
+reports serialization class, port metadata, dynamic status, and source file.
+Use the catalog digest from this tool/status when diagnosing different agent
+results across process restarts. Do not treat a listed object as proof that Max
+can instantiate it; maxforge deliberately avoids side-effectful runtime probes.
 
 ### `maxforge_list_patches`
 

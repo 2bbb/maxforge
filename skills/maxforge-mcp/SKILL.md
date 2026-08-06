@@ -14,6 +14,7 @@ Require these MCP tools:
 
 - `maxforge_help`
 - `maxforge_status`
+- `maxforge_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_inspect_patch`
@@ -30,35 +31,39 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 
 1. Call `maxforge_help` with `topic: "workflow"` before the first mutation.
 2. Call `maxforge_status` when registration or process state is uncertain.
-3. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
+3. Before using a custom external or abstraction, call `maxforge_catalog` and
+   require its configured definition. If it is absent, stop and tell the user
+   to set `MAXFORGE_CONFIG` and restart the MCP process. Do not substitute
+   `--allow-unknown` in a live mutation.
+4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
    and filenames are display metadata, not target identities.
-4. If a separate window is required, call `maxforge_create_patch` with a unique
+5. If a separate window is required, call `maxforge_create_patch` with a unique
    `patcherId`, scope, and title. Creation requires exactly one controller.
-5. Call `maxforge_inspect_patch` for the selected target. Read the snapshot;
+6. Call `maxforge_inspect_patch` for the selected target. Read the snapshot;
    never infer patch state from the screen.
-6. Build the complete desired DSL. Omitted managed objects and cords are
+7. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
-7. Call `maxforge_compile_plan` with the target and complete `desiredDsl`.
+8. Call `maxforge_compile_plan` with the target and complete `desiredDsl`.
    Review warnings and every `delete`, `disconnect`, and replacement operation.
    If inspection reports managed edits, call `maxforge_reconcile_patch`
    instead and require `canApply: true`. Read every structured conflict when it
    is false; never convert a conflict into an overwrite.
-8. State the target, operation count, destructive operations, and stop
+9. State the target, operation count, destructive operations, and stop
    condition before mutation.
-9. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
+10. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
    Set `manualChanges: "merge"` only when reconciliation of that exact target
    and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
    Apply repeats inspection and binds its structure token; if the human edits
    the patch before native mutation, treat the resulting rejection as fresh
    drift and inspect again.
-10. Count success only when `acknowledgement.revision` equals `targetRevision`.
+11. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
-11. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
+12. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
-12. After a merged apply, update the working complete DSL to include the
+13. After a merged apply, update the working complete DSL to include the
     preserved human edits. Until it is aligned, continue through reconciliation;
     ordinary compile/apply is intentionally rejected to prevent a silent revert.
 
@@ -142,4 +147,6 @@ do not guess a target.
   use, require matching `MAXFORGE_WS_TOKEN` and `maxforge.sync @token`; never
   treat the plaintext token mode as safe for direct Internet exposure.
 - Never treat a timeout, process exit, or missing acknowledgement as success.
+- `maxforge_catalog` is compiler metadata, not a runtime probe. It does not
+  prove the external binary or abstraction search path exists on the Max host.
 - Do not save, close, or discard a Max window unless the user asks.

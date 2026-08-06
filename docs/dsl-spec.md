@@ -397,7 +397,25 @@ The exact evidence hierarchy, generated-metadata limits, dynamic-port behavior,
 and known identity-only alias warnings are documented in
 [`object-catalog.md`](object-catalog.md).
 
-### 5.2 Argument-dependent inlets/outlets
+### 5.2 Project catalog resolution
+
+Before lookup, CLI commands may merge a project object catalog over the bundled
+database. `compile`, `validate`, and `plan` search upward from the input DSL for
+`maxforge.config.json`; `--config` selects a file explicitly. Declarations can
+add fixed/dynamic third-party external metadata and map reusable abstraction
+names to `.maxpat` files. A collision is fatal unless the later declaration
+sets `override: true`.
+
+Inline DSL subpatchers are part of the grammar and do not require a catalog.
+External and abstraction declarations are compiler metadata only. They do not
+install a binary, add a directory to Max's search path, or prove runtime
+availability. See [`object-catalog.md`](object-catalog.md#project-object-catalogs)
+and the published `config-v1.json` schema.
+
+The MCP server never performs input-path discovery. Its database is fixed when
+the process starts and is extended only when `MAXFORGE_CONFIG` is set.
+
+### 5.3 Argument-dependent inlets/outlets
 
 Some objects have inlet/outlet counts that depend on arguments:
 
@@ -419,7 +437,7 @@ These are handled by named rules in `src/core/object-db.ts`. Quoted arguments
 count as one argument. Every catalog entry carrying `argRule` has a unit-test
 case; the table above is only representative.
 
-### 5.3 Dynamic ports
+### 5.4 Dynamic ports
 
 Some objects derive their shape from attributes, embedded code, channel
 settings, a referenced patcher, or runtime configuration. Their catalog record
@@ -427,7 +445,7 @@ uses `dynamicPorts: true` and stores only a representative base shape. The
 compiler does not reject an explicit index above that representative bound.
 Examples include `poly~`, `bpatcher`, `gen~`, and `jit.gl.slab`.
 
-### 5.4 Unknown objects
+### 5.5 Unknown objects
 
 If an object type is NOT found in the database:
 - **Error by default** — compilation fails.

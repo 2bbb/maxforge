@@ -24,6 +24,7 @@ It supports:
 - **Clipboard output** — compressed text pasteable directly into Max
 - **Clipboard input** — decompress pasted patches back to DSL
 - **320 Max 9 object names/aliases with local identity evidence**, plus the project-owned `maxforge.sync` external; port metadata has explicit fixed, argument-dependent, and dynamic categories
+- **Project object catalogs** for third-party externals and reusable `.maxpat` abstractions
 - **Subpatcher support** with nested recursion
 - **Auto-layout** via topological sort, with optional `at(x, y)` override
 - **Macro expansion** — `for`, `if`, and `${expr}` for generating large repeated patches
@@ -228,6 +229,7 @@ available for human-readable status and local diagnostics. See
 
 - `maxforge_help`
 - `maxforge_status`
+- `maxforge_catalog`
 - `maxforge_list_patches`
 - `maxforge_create_patch`
 - `maxforge_inspect_patch`
@@ -269,6 +271,9 @@ target.
   }
 }
 ```
+
+Add `MAXFORGE_CONFIG` to that server's `env` only when desired DSL uses a
+project catalog; use an absolute path.
 
 Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing the
 native external. The patch contains exactly one configured object and no patch
@@ -332,6 +337,9 @@ maxforge plan desired.maxdsl --scope voices --compact -o plan.json
 # Diff from a prior desired DSL or a scoped maxpat snapshot
 maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 
+# Validate project object catalogs and derived abstraction ports
+maxforge doctor --input input.maxdsl
+
 # Allow objects not in the database
 maxforge compile input.maxdsl --allow-unknown -o output.maxpat
 ```
@@ -340,6 +348,50 @@ maxforge compile input.maxdsl --allow-unknown -o output.maxpat
 metadata and skips upper-bound port rejection. It does not verify the external's
 real shape. Use it only when Max or the external's own documentation is the
 source of truth.
+
+### Project externals and abstractions
+
+Put `maxforge.config.json` at the project root when DSL uses an external or a
+reusable `.maxpat` abstraction that is not in the bundled catalog:
+
+```json
+{
+  "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
+  "schemaVersion": 1,
+  "catalogs": ["./catalogs/studio.json"],
+  "objects": [
+    {
+      "name": "vendor.filter~",
+      "kind": "external",
+      "ports": {
+        "mode": "fixed",
+        "inlets": 2,
+        "outlets": ["signal", ""]
+      }
+    }
+  ],
+  "abstractions": [
+    {
+      "name": "studio.voice",
+      "path": "./patchers/studio.voice.maxpat",
+      "ports": "derive"
+    }
+  ]
+}
+```
+
+`compile`, `validate`, and `plan` search upward from the input DSL for that
+filename. `--config path` selects it explicitly. `doctor` validates every
+source and reads abstractions before a build. Imported files use the
+[`objects-v1` schema](https://2bit.jp/maxforge/schema/objects-v1.json) and may
+not recursively import more catalogs.
+
+The MCP server intentionally does not search its working directory. Set an
+absolute `MAXFORGE_CONFIG` path in the MCP client configuration, then call
+`maxforge_catalog` to inspect the catalog actually loaded by that server.
+Catalog metadata tells maxforge how to serialize and validate a box; it neither
+installs an external/abstraction nor proves that the Max machine can load it.
+See [Project object catalogs](docs/object-catalog.md#project-object-catalogs).
 
 ## DSL Syntax
 
@@ -484,6 +536,7 @@ src/
     decompiler.ts      maxpat JSON → DSL text
     attributes.ts      Shared box attribute helpers
     object-db.ts       Object lookup + argDependent resolution
+    catalog-config.ts  Project external/abstraction catalog loading
     layout.ts          Auto-layout via topological sort
     clipboard.ts       Compress/decompress for Max clipboard
     serializer.ts      JSON serialization
@@ -502,6 +555,9 @@ deps/
   bbb.agent/           Pinned reusable WebSocket transport source
 data/
   objects.json         321-entry audited compiler metadata catalog
+schema/
+  config-v1.json       maxforge.config.json JSON Schema
+  objects-v1.json      Reusable catalog JSON Schema
 docs/
   dsl-spec.md          Formal DSL specification (EBNF)
   agent-guide.md       AI agent documentation
