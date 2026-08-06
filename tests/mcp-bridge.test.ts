@@ -456,6 +456,50 @@ describe("parseBridgeEvent", () => {
     }))).toBeUndefined();
     const { structureToken: _structureToken, ...withoutToken } = malformed;
     expect(parseBridgeEvent(JSON.stringify(withoutToken))).toBeUndefined();
+    expect(parseBridgeEvent(JSON.stringify({
+      ...malformed,
+      patcher: {
+        ...malformed.patcher,
+        boxes: [{
+          ...malformed.patcher.boxes[0],
+          attributes: { color: { red: 1 } },
+        }],
+      },
+    }))).toBeUndefined();
+  });
+
+  it("parses serializable box attributes and upgrades older snapshots", () => {
+    const current = snapshotEvent("request-1");
+    const parsedCurrent = parseBridgeEvent(JSON.stringify({
+      ...current,
+      patcher: {
+        ...current.patcher,
+        boxes: [{
+          ...current.patcher.boxes[0],
+          comment: "human label",
+          attributes: {
+            presentation: 1,
+            textcolor: [1, 0.5, 0, 1],
+          },
+        }],
+      },
+    }));
+    expect(parsedCurrent).toMatchObject({
+      patcher: {
+        boxes: [{
+          comment: "human label",
+          attributes: {
+            presentation: 1,
+            textcolor: [1, 0.5, 0, 1],
+          },
+        }],
+      },
+    });
+
+    const parsedLegacy = parseBridgeEvent(JSON.stringify(current));
+    expect(parsedLegacy).toMatchObject({
+      patcher: { boxes: [{ attributes: {} }] },
+    });
   });
 });
 

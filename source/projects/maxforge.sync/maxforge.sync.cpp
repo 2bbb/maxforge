@@ -69,6 +69,9 @@ struct snapshot_box {
 	bool managed{};
 	bool has_text{};
 	std::string text;
+	bool has_comment{};
+	std::string comment;
+	std::vector<std::pair<std::string, std::string>> attributes;
 };
 
 struct snapshot_endpoint {
@@ -81,6 +84,7 @@ struct snapshot_connection {
 	std::vector<std::string> target_path;
 	snapshot_endpoint source;
 	snapshot_endpoint destination;
+	std::vector<std::pair<std::string, std::string>> attributes;
 };
 
 struct patch_snapshot {
@@ -797,6 +801,117 @@ auto box_text(c74::max::t_object *box, bool &has_text) -> std::string {
 	return text;
 }
 
+auto atoms_json(long count, const c74::max::t_atom *values) -> std::string {
+	if(count <= 0 || 256 < count || !values) return {};
+	std::vector<std::string> encoded;
+	encoded.reserve(static_cast<std::size_t>(count));
+	for(long index{}; index < count; index++) {
+		const auto type = c74::max::atom_gettype(values + index);
+		if(type == c74::max::A_LONG) {
+			encoded.push_back(std::to_string(c74::max::atom_getlong(values + index)));
+		} else if(type == c74::max::A_FLOAT) {
+			const auto value = c74::max::atom_getfloat(values + index);
+			if(!std::isfinite(value)) return {};
+			encoded.push_back(json_number(value));
+		} else if(type == c74::max::A_SYM || c74::max::atomisstring(values + index)) {
+			encoded.push_back(json_string(atom_string(values[index])));
+		} else {
+			return {};
+		}
+	}
+	if(encoded.size() == 1) return encoded.front();
+	std::string result{"["};
+	for(std::size_t index{}; index < encoded.size(); index++) {
+		if(0 < index) result += ",";
+		result += encoded[index];
+	}
+	return result + "]";
+}
+
+auto is_snapshot_attribute(const std::string &name) -> bool {
+	static const std::unordered_set<std::string> separately_serialized{
+		"patching_rect",
+		"text",
+		"comment",
+		"value"
+	};
+	return sync_protocol::is_safe_set_attribute(name) &&
+		separately_serialized.count(name) == 0;
+}
+
+void collect_snapshot_attributes(
+	c74::max::t_object *object,
+	std::vector<std::pair<std::string, std::string>> &attributes
+) {
+	if(!object) return;
+	long count{};
+	c74::max::t_symbol **names{};
+	if(
+		c74::max::object_attr_getnames(object, &count, &names) !=
+			c74::max::MAX_ERR_NONE ||
+		count <= 0 ||
+		!names
+	) {
+		if(names) c74::max::sysmem_freeptr(names);
+		return;
+	}
+
+	for(long index{}; index < count; index++) {
+		auto *name = names[index];
+		const auto attribute_name = symbol_string(name);
+		if(
+			!name ||
+			!is_snapshot_attribute(attribute_name) ||
+			c74::max::object_attr_usercanget(object, name) == 0 ||
+			c74::max::object_attr_usercanset(object, name) == 0 ||
+			c74::max::object_attr_getdirty(object, name) == 0
+		) {
+			continue;
+		}
+
+		long value_count{};
+		c74::max::t_atom *values{};
+		if(
+			c74::max::object_attr_getvalueof(
+				object,
+				name,
+				&value_count,
+				&values
+			) != c74::max::MAX_ERR_NONE
+		) {
+			if(values) c74::max::sysmem_freeptr(values);
+			continue;
+		}
+		const auto encoded = atoms_json(value_count, values);
+		if(values) c74::max::sysmem_freeptr(values);
+		if(encoded.empty()) continue;
+
+		auto existing = std::find_if(
+			attributes.begin(),
+			attributes.end(),
+			[&attribute_name](const auto &attribute) {
+				return attribute.first == attribute_name;
+			}
+		);
+		if(existing == attributes.end()) {
+			attributes.emplace_back(attribute_name, encoded);
+		}
+	}
+	c74::max::sysmem_freeptr(names);
+}
+
+auto attributes_json(
+	const std::vector<std::pair<std::string, std::string>> &attributes
+) -> std::string
+{
+	std::string result{"{"};
+	for(std::size_t index{}; index < attributes.size(); index++) {
+		if(0 < index) result += ",";
+		result += json_string(attributes[index].first) + ":" + attributes[index].second;
+	}
+	return result + "}";
+}
+
 auto snapshot_path_component(const snapshot_box &box) -> std::string {
 	return box.variable_name.empty() ? box.runtime_id : box.variable_name;
 }
@@ -830,6 +945,17 @@ auto snapshot_box_from_object(
 		};
 	}
 	result.text = box_text(box, result.has_text);
+	result.comment = attribute_text(box, "comment", result.has_comment);
+	if(!result.has_comment) {
+		result.comment = attribute_text(
+			c74::max::jbox_get_object(box),
+			"comment",
+			result.has_comment
+		);
+	}
+	collect_snapshot_attributes(box, result.attributes);
+	collect_snapshot_attributes(c74::max::jbox_get_object(box), result.attributes);
+	std::sort(result.attributes.begin(), result.attributes.end());
 	return result;
 }
 
@@ -878,17 +1004,20 @@ void collect_patch_snapshot(
 		line;
 		line = c74::max::jpatchline_get_nextline(line)
 	) {
-		snapshot.connections.push_back({
+		snapshot_connection connection{
 			target_path,
 			snapshot_endpoint_from_box(
 				c74::max::jpatchline_get_box1(line),
 				c74::max::jpatchline_get_outletnum(line)
 			),
-			snapshot_endpoint_from_box(
+				snapshot_endpoint_from_box(
 				c74::max::jpatchline_get_box2(line),
 				c74::max::jpatchline_get_inletnum(line)
 			)
-		});
+		};
+		collect_snapshot_attributes(line, connection.attributes);
+		std::sort(connection.attributes.begin(), connection.attributes.end());
+		snapshot.connections.push_back(std::move(connection));
 	}
 
 	for(const auto &[box, box_snapshot] : boxes) {
@@ -984,6 +1113,8 @@ auto patch_structure_json(const patch_snapshot &snapshot) -> std::string {
 			json_number(box.patching_rectangle[3]) + "]" +
 			",\"managed\":" + (box.managed ? "true" : "false");
 		if(box.has_text) result += ",\"text\":" + json_string(box.text);
+		if(box.has_comment) result += ",\"comment\":" + json_string(box.comment);
+		result += ",\"attributes\":" + attributes_json(box.attributes);
 		result += "}";
 	}
 	result += "],\"connections\":[";
@@ -997,6 +1128,7 @@ auto patch_structure_json(const patch_snapshot &snapshot) -> std::string {
 			snapshot_endpoint_json(connection.source) +
 			",\"destination\":" +
 			snapshot_endpoint_json(connection.destination) +
+			",\"attributes\":" + attributes_json(connection.attributes) +
 			"}";
 	}
 	result += "]}";

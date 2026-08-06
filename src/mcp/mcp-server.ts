@@ -73,12 +73,23 @@ const snapshotBoxSchema = z.object({
   patchingRect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   managed: z.boolean(),
   text: z.string().optional(),
+  comment: z.string().optional(),
+  attributes: z.record(z.string(), z.union([
+    z.string(),
+    z.number(),
+    z.array(z.union([z.string(), z.number()])),
+  ])),
 });
 
 const snapshotConnectionSchema = z.object({
   targetPath: z.array(z.string()),
   source: snapshotEndpointSchema,
   destination: snapshotEndpointSchema,
+  attributes: z.record(z.string(), z.union([
+    z.string(),
+    z.number(),
+    z.array(z.union([z.string(), z.number()])),
+  ])),
 });
 
 const snapshotEventSchema = z.object({

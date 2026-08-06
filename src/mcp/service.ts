@@ -15,6 +15,7 @@ import {
   PatchReconciliationConflict,
   reconcilePatchGraphs,
   reconstructManagedGraph,
+  resolveSnapshotAttributes,
 } from "./reconcile.js";
 import {
   MaxforgeAppliedEvent,
@@ -88,10 +89,19 @@ export type PatchSnapshotChange =
         | "maxclass"
         | "patchingRect"
         | "text"
+        | "comment"
+        | "attributes"
         | "managed"
       )[];
       readonly before: MaxforgeSnapshotBox;
       readonly after: MaxforgeSnapshotBox;
+    }
+  | {
+      readonly kind: "connection_changed";
+      readonly managed: boolean;
+      readonly fields: readonly "attributes"[];
+      readonly before: MaxforgeSnapshotConnection;
+      readonly after: MaxforgeSnapshotConnection;
     }
   | {
       readonly kind: "connection_added";
@@ -575,7 +585,8 @@ export class MaxforgePatchService {
 
   private resolveLiveBox(
     snapshot: MaxforgeSnapshotBox,
-    base: PatchBox
+    base: PatchBox,
+    baseline?: MaxforgeSnapshotBox
   ): PatchBox {
     const objectText = base.maxclass === "newobj"
       ? snapshot.text
@@ -592,6 +603,8 @@ export class MaxforgePatchService {
       outlettype: resolved?.def.outlettype ?? base.outlettype,
       patchingRect: snapshot.patchingRect,
       text: snapshot.text,
+      comment: snapshot.comment,
+      attributes: resolveSnapshotAttributes(snapshot, base, baseline),
     };
   }
 }
@@ -663,7 +676,8 @@ export function diffPatcherSnapshots(
   const currentManagedBoxes = managedBoxKeys(current);
 
   for (const [key, connection] of baselineConnections) {
-    if (!currentConnections.has(key)) {
+    const currentConnection = currentConnections.get(key);
+    if (!currentConnection) {
       changes.push({
         kind: "connection_removed",
         managed: connectionTouchesManagedBox(
@@ -671,6 +685,23 @@ export function diffPatcherSnapshots(
           baselineManagedBoxes
         ),
         connection,
+      });
+    } else if (!sameSnapshotAttributes(
+      connection.attributes,
+      currentConnection.attributes
+    )) {
+      changes.push({
+        kind: "connection_changed",
+        managed: connectionTouchesManagedBox(
+          connection,
+          baselineManagedBoxes
+        ) || connectionTouchesManagedBox(
+          currentConnection,
+          currentManagedBoxes
+        ),
+        fields: ["attributes"],
+        before: connection,
+        after: currentConnection,
       });
     }
   }
@@ -700,10 +731,22 @@ function changedBoxFields(
   baseline: MaxforgeSnapshotBox,
   current: MaxforgeSnapshotBox
 ): Array<
-  "varName" | "maxclass" | "patchingRect" | "text" | "managed"
+  | "varName"
+  | "maxclass"
+  | "patchingRect"
+  | "text"
+  | "comment"
+  | "attributes"
+  | "managed"
 > {
   const fields: Array<
-    "varName" | "maxclass" | "patchingRect" | "text" | "managed"
+    | "varName"
+    | "maxclass"
+    | "patchingRect"
+    | "text"
+    | "comment"
+    | "attributes"
+    | "managed"
   > = [];
   if (baseline.varName !== current.varName) fields.push("varName");
   if (baseline.maxclass !== current.maxclass) fields.push("maxclass");
@@ -715,6 +758,10 @@ function changedBoxFields(
     fields.push("patchingRect");
   }
   if (baseline.text !== current.text) fields.push("text");
+  if (baseline.comment !== current.comment) fields.push("comment");
+  if (!sameSnapshotAttributes(baseline.attributes, current.attributes)) {
+    fields.push("attributes");
+  }
   if (baseline.managed !== current.managed) fields.push("managed");
   return fields;
 }
@@ -755,7 +802,26 @@ function snapshotChangeKey(change: PatchSnapshotChange): string {
   if (change.kind === "box_changed") {
     return `${change.kind}\u0000${snapshotBoxKey(change.after)}`;
   }
+  if (change.kind === "connection_changed") {
+    return `${change.kind}\u0000${snapshotConnectionKey(change.after)}`;
+  }
   return `${change.kind}\u0000${snapshotConnectionKey(change.connection)}`;
+}
+
+function sameSnapshotAttributes(
+  left: Readonly<Record<string, unknown>>,
+  right: Readonly<Record<string, unknown>>
+): boolean {
+  return JSON.stringify(sortSnapshotAttributes(left)) ===
+    JSON.stringify(sortSnapshotAttributes(right));
+}
+
+function sortSnapshotAttributes(
+  attributes: Readonly<Record<string, unknown>>
+): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(attributes).sort(([left], [right]) => left.localeCompare(right))
+  );
 }
 
 function pathKey(path: readonly string[]): string {

@@ -183,9 +183,11 @@ This repository also contains the native `maxforge.sync` Max external. It owns
 the WebSocket connection to `maxforge-mcp`, validates complete plans,
 and mutates the containing patcher directly through the Max SDK. It does not
 route through JavaScript, `thispatcher`, or a separate transport object. Its
-`inspect` request walks the live containing patcher and emits a
-machine-readable structural snapshot, so an agent does not need the screen or
-a saved `.maxpat` to read patch state.
+`inspect` request walks the live containing patcher and emits a machine-readable
+structural snapshot, including text/comments and bounded serializable changed
+attributes exposed by boxes and patch cords. Volatile object values and
+opaque/structured attributes are excluded, so an agent can read patch edits
+without using the screen or a saved `.maxpat`.
 
 Build and install it for local development:
 

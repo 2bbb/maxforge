@@ -1,6 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
-import { PatchPlan } from "../max/patch-graph.js";
+import { PatchPlan, PatchSetValue } from "../max/patch-graph.js";
 
 export interface MaxforgePatchInfo {
   readonly patcherId: string;
@@ -80,6 +80,8 @@ export interface MaxforgeSnapshotBox {
   readonly patchingRect: readonly [number, number, number, number];
   readonly managed: boolean;
   readonly text?: string;
+  readonly comment?: string;
+  readonly attributes: Readonly<Record<string, PatchSetValue>>;
 }
 
 export interface MaxforgeSnapshotEndpoint {
@@ -92,6 +94,7 @@ export interface MaxforgeSnapshotConnection {
   readonly targetPath: readonly string[];
   readonly source: MaxforgeSnapshotEndpoint;
   readonly destination: MaxforgeSnapshotEndpoint;
+  readonly attributes: Readonly<Record<string, PatchSetValue>>;
 }
 
 export interface MaxforgePatcherSnapshot {
@@ -1474,10 +1477,13 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     typeof value.maxclass !== "string" ||
     !isRectangle(value.patchingRect) ||
     typeof value.managed !== "boolean" ||
-    (value.text !== undefined && typeof value.text !== "string")
+    (value.text !== undefined && typeof value.text !== "string") ||
+    (value.comment !== undefined && typeof value.comment !== "string")
   ) {
     return undefined;
   }
+  const attributes = parseSnapshotAttributes(value.attributes);
+  if (!attributes) return undefined;
   return {
     targetPath: value.targetPath,
     runtimeId: value.runtimeId,
@@ -1486,6 +1492,8 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     patchingRect: value.patchingRect,
     managed: value.managed,
     ...(value.text === undefined ? {} : { text: value.text }),
+    ...(value.comment === undefined ? {} : { comment: value.comment }),
+    attributes,
   };
 }
 
@@ -1495,12 +1503,44 @@ function parseSnapshotConnection(
   if (!isRecord(value) || !isStringArray(value.targetPath)) return undefined;
   const source = parseSnapshotEndpoint(value.source);
   const destination = parseSnapshotEndpoint(value.destination);
-  if (!source || !destination) return undefined;
+  const attributes = parseSnapshotAttributes(value.attributes);
+  if (!source || !destination || !attributes) return undefined;
   return {
     targetPath: value.targetPath,
     source,
     destination,
+    attributes,
   };
+}
+
+function parseSnapshotAttributes(
+  value: unknown
+): Readonly<Record<string, PatchSetValue>> | undefined {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return undefined;
+  const attributes: Record<string, PatchSetValue> = {};
+  for (const [name, attribute] of Object.entries(value)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return undefined;
+    if (typeof attribute === "string" || (
+      typeof attribute === "number" && Number.isFinite(attribute)
+    )) {
+      attributes[name] = attribute;
+      continue;
+    }
+    if (
+      !Array.isArray(attribute) ||
+      attribute.length === 0 ||
+      attribute.length > 256 ||
+      !attribute.every((entry) =>
+        typeof entry === "string" ||
+        (typeof entry === "number" && Number.isFinite(entry))
+      )
+    ) {
+      return undefined;
+    }
+    attributes[name] = attribute;
+  }
+  return attributes;
 }
 
 function parseSnapshotEndpoint(

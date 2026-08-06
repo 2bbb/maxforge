@@ -67,6 +67,41 @@ describe("JsonFilePatchStateStore", () => {
     );
   });
 
+  it("upgrades persisted v1 snapshots that predate attribute inspection", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
+    const path = join(directory, "state.json");
+    writeFileSync(path, JSON.stringify({
+      schemaVersion: 1,
+      managedGraphs: [],
+      intentGraphs: [],
+      baselineSnapshots: [{
+        target: "patch:main",
+        value: {
+          title: "Legacy",
+          filename: "",
+          filepath: "",
+          dirty: false,
+          locked: false,
+          presentation: false,
+          boxes: [{
+            targetPath: [],
+            runtimeId: "obj-1",
+            varName: "maxforge_main_obj_button",
+            maxclass: "button",
+            patchingRect: [0, 0, 24, 24],
+            managed: true,
+          }],
+          connections: [],
+        },
+      }],
+      pendingApplies: [],
+    }));
+
+    const restored = new JsonFilePatchStateStore(path).load()!;
+    expect(restored.baselineSnapshots.get("patch:main")?.boxes[0].attributes)
+      .toEqual({});
+  });
+
   it("uses a per-port default and supports explicit disable or override", () => {
     expect(stateFileFromEnvironment({}, 8766)).toMatch(/mcp-state-8766-v1\.json$/);
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766)).toBeUndefined();

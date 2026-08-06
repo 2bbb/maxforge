@@ -158,8 +158,24 @@ function parseSnapshotEntries(
     if (!isPatcherSnapshot(value)) {
       throw new Error(`Invalid ${field} snapshot for ${target}`);
     }
-    return [target, value];
+    return [target, normalizeSnapshot(value)];
   }));
+}
+
+function normalizeSnapshot(
+  snapshot: MaxforgePatcherSnapshot
+): MaxforgePatcherSnapshot {
+  return {
+    ...snapshot,
+    boxes: snapshot.boxes.map((box) => ({
+      ...box,
+      attributes: isRecord(box.attributes) ? box.attributes : {},
+    })) as MaxforgePatcherSnapshot["boxes"],
+    connections: snapshot.connections.map((connection) => ({
+      ...connection,
+      attributes: isRecord(connection.attributes) ? connection.attributes : {},
+    })) as MaxforgePatcherSnapshot["connections"],
+  };
 }
 
 function parseEntries(

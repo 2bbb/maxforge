@@ -227,6 +227,7 @@ button_0 = button at(160, 20)
           varName: output.varName,
           port: 0,
         },
+        attributes: {},
       }],
     };
 
@@ -272,6 +273,8 @@ function snapshot(
       maxclass: box.maxclass,
       patchingRect: override?.patchingRect ?? [...box.patchingRect] as [number, number, number, number],
       managed: true,
+      comment: box.comment,
+      attributes: { ...box.attributes },
       ...(override?.text !== undefined
         ? { text: override.text }
         : box.text !== undefined
@@ -294,6 +297,7 @@ function snapshot(
       varName: connection.destination.varName,
       port: connection.destination.port,
     },
+    attributes: {},
   }));
   return {
     title: "Reconcile test",
@@ -319,6 +323,8 @@ function snapshotBox(
     maxclass: box.maxclass,
     patchingRect: box.patchingRect,
     managed: true,
+    comment: box.comment,
+    attributes: { ...box.attributes },
     ...(box.text === undefined ? {} : { text: box.text }),
   };
 }

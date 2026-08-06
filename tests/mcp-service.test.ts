@@ -15,7 +15,10 @@ import {
   PatchPlanTransport,
   SaveMaxPatchRequest,
 } from "../src/mcp/bridge.js";
-import { MaxforgePatchService } from "../src/mcp/service.js";
+import {
+  diffPatcherSnapshots,
+  MaxforgePatchService,
+} from "../src/mcp/service.js";
 import {
   PatchServiceState,
   PatchStateStore,
@@ -225,6 +228,87 @@ describe("MaxforgePatchService", () => {
         after: { patchingRect: [120, 80, 66, 22] },
       }],
     });
+  });
+
+  it("reports live comment, box attribute, and patch-cord attribute edits", async () => {
+    const transport = new FakeTransport();
+    const service = new MaxforgePatchService(database, transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+    });
+    const managed = transport.snapshot.boxes[0];
+    const manual = {
+      targetPath: [],
+      runtimeId: "obj-manual",
+      varName: "manual_button",
+      maxclass: "button",
+      patchingRect: [180, 50, 24, 24] as [number, number, number, number],
+      managed: false,
+      attributes: {},
+    };
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: [{
+        ...managed,
+        comment: "human label",
+        attributes: { presentation: 1 },
+      }, manual],
+      connections: [{
+        targetPath: [],
+        source: {
+          runtimeId: managed.runtimeId,
+          varName: managed.varName,
+          port: 0,
+        },
+        destination: {
+          runtimeId: manual.runtimeId,
+          varName: manual.varName,
+          port: 0,
+        },
+        attributes: { hidden: 1 },
+      }],
+    };
+
+    const result = await service.inspectPatch("patch-a", "voices");
+
+    expect(result.managedChangeCount).toBe(2);
+    expect(result.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "box_changed",
+        managed: true,
+        fields: ["comment", "attributes"],
+      }),
+      expect.objectContaining({
+        kind: "connection_added",
+        managed: true,
+        connection: expect.objectContaining({ attributes: { hidden: 1 } }),
+      }),
+    ]));
+  });
+
+  it("distinguishes patch-cord attribute edits from topology changes", () => {
+    const baseline = patcherSnapshot();
+    const connection = {
+      targetPath: [],
+      source: { runtimeId: "obj-1", varName: "maxforge_voices_obj_osc", port: 0 },
+      destination: { runtimeId: "obj-2", varName: "manual", port: 0 },
+      attributes: { hidden: 0 },
+    };
+    const current = {
+      ...baseline,
+      connections: [{ ...connection, attributes: { hidden: 1 } }],
+    };
+
+    expect(diffPatcherSnapshots(
+      { ...baseline, connections: [connection] },
+      current
+    )).toEqual([expect.objectContaining({
+      kind: "connection_changed",
+      managed: true,
+      fields: ["attributes"],
+    })]);
   });
 
   it("blocks a later apply after a managed manual edit", async () => {
@@ -643,6 +727,7 @@ function patcherSnapshot(): MaxforgePatcherSnapshot {
       patchingRect: [50, 50, 80, 22],
       managed: true,
       text: "cycle~ 440",
+      attributes: {},
     }],
     connections: [],
   };

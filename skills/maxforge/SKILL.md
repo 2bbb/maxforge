@@ -83,7 +83,9 @@ for i in 0..7 {
    `maxforge_reconcile_patch` and apply with `manualChanges: "merge"` only when
    it reports `canApply: true`. Use `maxforge_create_patch` when isolation in a
    new Max window is required. Prefer the dedicated `maxforge-mcp` skill for
-   sustained live control. Never treat a timeout as success.
+   sustained live control. Never treat a timeout as success. Inspection reports
+   text/comments plus bounded scalar or flat-array box/patch-cord attributes;
+   it intentionally omits volatile values, opaque attributes, and nested data.
 8. After an MCP process restart, provide the previous complete DSL as
    `currentDsl` when Max reports an initialized scope. A revision hash is not a
    recoverable graph.

@@ -290,9 +290,10 @@ Arguments:
 The result includes:
 
 - patcher title, file path, dirty/locked/presentation state;
-- every box's nested path, runtime ID, scripting name, Max class, text,
-  position, and maxforge ownership;
-- source/destination endpoints for every patch cord;
+- every box's nested path, runtime ID, scripting name, Max class, text/comment,
+  position, bounded serializable attributes, and maxforge ownership;
+- source/destination endpoints and exposed serializable attributes for every
+  patch cord;
 - exact box and connection changes since the last acknowledged apply;
 - separate managed and unmanaged change counts.
 
@@ -538,15 +539,17 @@ optimistic concurrency.
 - The complete plan is validated before mutation.
 - Protocol v1 is not transactional. A runtime failure may leave partial patch
   mutation; the revision is not advanced.
-- Structural inspection currently covers box identity, varname, class, text,
-  patching rectangle, nesting, and patch cords. It deliberately excludes
-  volatile runtime values and arbitrary object attributes to avoid reporting
-  normal performance changes as patch edits.
+- Structural inspection covers box identity, varname, class, text/comment,
+  patching rectangle, nesting, patch cords, and dirty user-readable/writable
+  attributes whose values are serializable Max atoms. It excludes volatile
+  `value`, identity/file/pointer fields, opaque attributes, and nested data so
+  normal performance changes are not reported as patch edits.
 - A comparison baseline is persisted when state persistence is enabled. Without
   one, Maxforge reports the current graph but does not fabricate change history.
-- Reconciliation preserves observed text, position, deletion, and patch-cord
-  edits on existing managed identities. It cannot reconstruct arbitrary object
-  attributes omitted from inspection.
+- Reconciliation preserves observed text/comment, position, supported
+  attributes, deletion, and patch-cord edits on existing managed identities.
+  Opaque, runtime-only, or structured attributes omitted from inspection remain
+  outside the merge model.
 - Moving a managed box into a different patcher path is not treated as an
   identity-preserving edit. Represent the intended reparenting in complete DSL
   and resolve the resulting delete/add conflict explicitly.

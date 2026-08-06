@@ -81,15 +81,17 @@ omit it. A revision is optimistic concurrency control, not rollback.
 1. `disconnect` obsolete or replaced connections.
 2. `delete` obsolete or structurally changed boxes, deepest patchers first.
 3. `create` new or structurally changed boxes, parent patchers first.
-4. `set` mutable attributes. Version 1 only emits `patching_rect`.
+4. `set` mutable text, comments, positions, and serializable attributes.
 5. `connect` new or restored connections.
 
 Each operation contains a `targetPath` of parent subpatcher scripting names.
 An empty path targets the patcher containing the Max-side consumer.
 
-Object text, class, inlet/outlet shape, comments, and custom attribute changes
-are structural in version 1. Such changes recreate the object. Position-only
-changes emit `set` and preserve the object instance.
+Message/comment text, inlet/outlet comments, positions, and changed scalar or
+flat-array attributes emit `set` and preserve the object instance. `newobj`
+text changes still recreate the object because they can change class and port
+shape. Class/port changes, attribute removal, and unsupported structured
+attribute values also use replacement rather than an unsafe partial update.
 
 ## Consumer requirements
 
@@ -206,14 +208,19 @@ The snapshot response contains root patcher metadata plus flattened boxes and
 connections, and a top-level `structureToken` derived only from that sorted
 box/connection structure. Patcher title, file path, dirty state, lock state, and
 presentation mode do not affect the token. `targetPath` identifies nested
-patchers. Box records include
-`runtimeId`, `varName`, `maxclass`, `patchingRect`, `managed`, and `text` when
-the box exposes it. Connection records include both endpoint runtime IDs,
-varnames, and port indices.
+patchers. Box records include `runtimeId`, `varName`, `maxclass`,
+`patchingRect`, `managed`, optional `text`/`comment`, and an `attributes`
+object. Connection records include both endpoint runtime IDs, varnames, port
+indices, and their own `attributes` object.
 
-Inspection is structural by design. It does not serialize arbitrary object
-attributes or live values: doing so would confuse UI/DSP state changes with
-patch edits. Patchline color, hidden state, and midpoints are also omitted.
+Attribute inspection is intentionally bounded. The external serializes only
+dirty attributes that Max exposes as both user-readable and user-writable, and
+only when the value is a number, string, or flat array of those atoms. Identity,
+class, file-path, patcher-pointer, text/comment/position fields handled
+elsewhere, and the volatile `value` attribute are excluded. The same rule is
+applied to patch cords, so Max versions or objects that expose saved cord
+attributes can report changes such as hidden state, color, or midpoints without
+turning ordinary UI/DSP values into patch edits.
 
 The first apply is accepted only when the revision state is empty and the
 configured scope contains no managed root boxes. After success,

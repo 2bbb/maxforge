@@ -68,7 +68,8 @@ interface ManagedSnapshotBox {
 
 export type LiveSnapshotBoxResolver = (
   snapshot: MaxforgeSnapshotBox,
-  base: PatchBox
+  base: PatchBox,
+  baseline?: MaxforgeSnapshotBox
 ) => PatchBox;
 
 interface ManagedSnapshotEndpoint {
@@ -206,7 +207,7 @@ export function reconstructManagedGraph(
       snapshot: box,
       id,
       targetPath: box.targetPath,
-      box: resolveBox(box, baseBox),
+      box: resolveBox(box, baseBox, baselineBox),
     });
     runtimeEndpoints.set(runtimeKey(box.targetPath, box.runtimeId), {
       id,
@@ -284,7 +285,8 @@ function rebuildNode(
 
 function defaultLiveBox(
   snapshot: MaxforgeSnapshotBox,
-  base: PatchBox
+  base: PatchBox,
+  baseline?: MaxforgeSnapshotBox
 ): PatchBox {
   return {
     ...base,
@@ -292,7 +294,37 @@ function defaultLiveBox(
     maxclass: snapshot.maxclass,
     patchingRect: snapshot.patchingRect,
     text: snapshot.text,
+    comment: snapshot.comment,
+    attributes: resolveSnapshotAttributes(snapshot, base, baseline),
   };
+}
+
+export function resolveSnapshotAttributes(
+  snapshot: MaxforgeSnapshotBox,
+  base: PatchBox,
+  baseline?: MaxforgeSnapshotBox
+): PatchBox["attributes"] {
+  const attributes: Record<string, PatchBox["attributes"][string]> = {};
+  for (const [name, value] of Object.entries(base.attributes)) {
+    if (name in snapshot.attributes) {
+      attributes[name] = snapshot.attributes[name];
+    } else if (!baseline || !(name in baseline.attributes)) {
+      // Max omits unchanged/default attributes from inspection. Preserve an
+      // explicit DSL value until a captured baseline proves it was removed.
+      attributes[name] = value;
+    }
+  }
+  if (baseline) {
+    for (const [name, value] of Object.entries(snapshot.attributes)) {
+      if (
+        name in base.attributes ||
+        JSON.stringify(value) !== JSON.stringify(baseline.attributes[name])
+      ) {
+        attributes[name] = value;
+      }
+    }
+  }
+  return attributes;
 }
 
 function flattenBaseBoxes(
