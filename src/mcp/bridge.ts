@@ -438,6 +438,8 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         patcherId: request.patcherId,
         scope: request.scope,
         title: request.title,
+        host: this.host,
+        port: this.listeningPort,
       }), (error) => {
         if (error) this.rejectCreate(requestId, error);
       });

@@ -143,12 +143,16 @@ describe("MaxforgeWebSocketBridge", () => {
         patcherId: string;
         scope: string;
         title: string;
+        host: string;
+        port: number;
       };
       expect(request).toMatchObject({
         type: "maxforge.create_patch.request",
         patcherId: "generated-a",
         scope: "voices",
         title: "Generated voices",
+        host: "127.0.0.1",
+        port: status.port,
       });
       controller.send(JSON.stringify({
         type: "maxforge.patch.created",
