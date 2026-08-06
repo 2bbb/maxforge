@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import { bridgeOptionsFromEnvironment } from "../src/mcp/server.js";
+
+describe("maxforge MCP environment", () => {
+  it("keeps the unauthenticated default on loopback", () => {
+    expect(bridgeOptionsFromEnvironment({})).toMatchObject({
+      host: "127.0.0.1",
+      port: 8766,
+      token: undefined,
+    });
+  });
+
+  it("publishes to the LAN when a token is configured", () => {
+    expect(bridgeOptionsFromEnvironment({
+      MAXFORGE_WS_TOKEN: "studio-session_1",
+    })).toMatchObject({
+      host: "0.0.0.0",
+      port: 8766,
+      token: "studio-session_1",
+    });
+  });
+
+  it("respects an explicit authenticated bind address", () => {
+    expect(bridgeOptionsFromEnvironment({
+      MAXFORGE_WS_HOST: "192.168.1.20",
+      MAXFORGE_WS_PORT: "9000",
+      MAXFORGE_WS_TOKEN: "studio-session_1",
+    })).toMatchObject({
+      host: "192.168.1.20",
+      port: 9000,
+      token: "studio-session_1",
+    });
+  });
+});

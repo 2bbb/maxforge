@@ -143,16 +143,12 @@ describe("MaxforgeWebSocketBridge", () => {
         patcherId: string;
         scope: string;
         title: string;
-        host: string;
-        port: number;
       };
       expect(request).toMatchObject({
         type: "maxforge.create_patch.request",
         patcherId: "generated-a",
         scope: "voices",
         title: "Generated voices",
-        host: "127.0.0.1",
-        port: status.port,
       });
       controller.send(JSON.stringify({
         type: "maxforge.patch.created",
@@ -219,13 +215,52 @@ describe("MaxforgeWebSocketBridge", () => {
     })).rejects.toThrow("Exactly one patch-creation controller is required");
   });
 
-  it("rejects non-loopback binding", () => {
+  it("requires a token for non-loopback binding", () => {
     expect(
       () => new MaxforgeWebSocketBridge({ host: "0.0.0.0" })
-    ).toThrow('WebSocket host must be loopback-only, received "0.0.0.0"');
+    ).toThrow('WebSocket token is required for non-loopback host "0.0.0.0"');
     expect(
       () => new MaxforgeWebSocketBridge({ host: "localhost" })
-    ).toThrow('WebSocket host must be loopback-only, received "localhost"');
+    ).toThrow('WebSocket token is required for non-loopback host "localhost"');
+  });
+
+  it("authenticates clients when a LAN token is configured", async () => {
+    const bridge = new MaxforgeWebSocketBridge({
+      host: "0.0.0.0",
+      port: 0,
+      token: "studio-session_1",
+      applyTimeoutMs: 1000,
+    });
+    bridges.push(bridge);
+    const status = await bridge.start();
+
+    const authenticated = await connect(status.port);
+    authenticated.send(JSON.stringify({
+      type: "maxforge.authenticate",
+      token: "studio-session_1",
+    }));
+    await register(
+      bridge,
+      authenticated,
+      registration("patch-a", "voices", true)
+    );
+    expect(bridge.listPatches()).toHaveLength(1);
+
+    const rejected = await connect(status.port);
+    const closed = new Promise<number>((resolve) => {
+      rejected.once("close", (code) => resolve(code));
+    });
+    rejected.send(JSON.stringify({
+      type: "maxforge.authenticate",
+      token: "wrong-token",
+    }));
+    await expect(closed).resolves.toBe(1008);
+  });
+
+  it("rejects invalid token characters", () => {
+    expect(
+      () => new MaxforgeWebSocketBridge({ token: "contains spaces" })
+    ).toThrow("WebSocket token must contain 1 to 256 URL-safe characters");
   });
 });
 

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import { PatchPlan } from "../max/patch-graph.js";
 
@@ -133,6 +133,7 @@ export interface PatchPlanTransport {
 export interface MaxforgeBridgeOptions {
   readonly host?: string;
   readonly port?: number;
+  readonly token?: string;
   readonly applyTimeoutMs?: number;
 }
 
@@ -179,13 +180,16 @@ interface PendingCreate {
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
 const STRUCTURE_TOKEN_PATTERN = /^[a-f0-9]{16}$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{1,256}$/;
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 
 export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly host: string;
   private readonly requestedPort: number;
+  private readonly token: string | undefined;
   private readonly applyTimeoutMs: number;
   private readonly clients = new Set<WebSocket>();
+  private readonly authenticatedClients = new Set<WebSocket>();
   private readonly registrations = new Map<string, RegisteredClient>();
   private readonly clientPatcherIds = new Map<WebSocket, string>();
   private readonly pendingApplies = new Map<string, PendingApply>();
@@ -198,11 +202,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   constructor(options: MaxforgeBridgeOptions = {}) {
     this.host = options.host ?? "127.0.0.1";
     this.requestedPort = options.port ?? 8766;
+    this.token = options.token;
     this.applyTimeoutMs = options.applyTimeoutMs ?? 5000;
 
-    if (!isLoopbackHost(this.host)) {
+    if (this.token !== undefined && !TOKEN_PATTERN.test(this.token)) {
       throw new Error(
-        `WebSocket host must be loopback-only, received "${this.host}"`
+        "WebSocket token must contain 1 to 256 URL-safe characters"
+      );
+    }
+    if (!isLoopbackHost(this.host) && this.token === undefined) {
+      throw new Error(
+        `WebSocket token is required for non-loopback host "${this.host}"`
       );
     }
     if (
@@ -262,6 +272,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
 
     for (const client of this.clients) client.terminate();
     this.clients.clear();
+    this.authenticatedClients.clear();
     this.registrations.clear();
     this.clientPatcherIds.clear();
 
@@ -427,8 +438,6 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         patcherId: request.patcherId,
         scope: request.scope,
         title: request.title,
-        host: this.host,
-        port: this.listeningPort,
       }), (error) => {
         if (error) this.rejectCreate(requestId, error);
       });
@@ -471,6 +480,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
 
   private addClient(client: WebSocket): void {
     this.clients.add(client);
+    if (this.token === undefined) this.authenticatedClients.add(client);
     client.on("message", (data) => this.handleMessage(client, data.toString()));
     client.on("close", () => this.removeClient(client));
     client.on("error", (error) => this.rejectPendingForClient(client, error));
@@ -478,6 +488,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
 
   private removeClient(client: WebSocket): void {
     this.clients.delete(client);
+    this.authenticatedClients.delete(client);
     const patcherId = this.clientPatcherIds.get(client);
     this.clientPatcherIds.delete(client);
     if (patcherId) {
@@ -488,6 +499,20 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   }
 
   private handleMessage(client: WebSocket, raw: string): void {
+    if (!this.authenticatedClients.has(client)) {
+      const suppliedToken = parseAuthenticationToken(raw);
+      if (
+        suppliedToken === undefined ||
+        this.token === undefined ||
+        !tokensEqual(suppliedToken, this.token)
+      ) {
+        client.close(1008, "authentication failed");
+        return;
+      }
+      this.authenticatedClients.add(client);
+      return;
+    }
+
     const event = parseBridgeEvent(raw);
     if (!event) return;
 
@@ -1055,6 +1080,30 @@ function isIdentifier(value: unknown): value is string {
 
 function isLoopbackHost(host: string): boolean {
   return host === "127.0.0.1" || host === "::1";
+}
+
+function parseAuthenticationToken(raw: string): string | undefined {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (
+      !isRecord(value) ||
+      value.type !== "maxforge.authenticate" ||
+      typeof value.token !== "string" ||
+      !TOKEN_PATTERN.test(value.token)
+    ) {
+      return undefined;
+    }
+    return value.token;
+  } catch {
+    return undefined;
+  }
+}
+
+function tokensEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left);
+  const rightBytes = Buffer.from(right);
+  return leftBytes.length === rightBytes.length &&
+    timingSafeEqual(leftBytes, rightBytes);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -9,16 +9,30 @@ import { MaxforgeWebSocketBridge } from "./bridge.js";
 import { createMaxforgeMcpServer } from "./mcp-server.js";
 import { MaxforgePatchService } from "./service.js";
 
+export function bridgeOptionsFromEnvironment(
+  environment: NodeJS.ProcessEnv
+): ConstructorParameters<typeof MaxforgeWebSocketBridge>[0] {
+  const token = optionalEnvironment(environment, "MAXFORGE_WS_TOKEN");
+  return {
+    host: environment.MAXFORGE_WS_HOST ?? (token ? "0.0.0.0" : "127.0.0.1"),
+    port: integerEnvironment(environment, "MAXFORGE_WS_PORT", 8766),
+    token,
+    applyTimeoutMs: integerEnvironment(
+      environment,
+      "MAXFORGE_APPLY_TIMEOUT_MS",
+      5000
+    ),
+  };
+}
+
 export async function main(): Promise<void> {
   const [database, version] = await Promise.all([
     loadDatabase(),
     packageVersion(),
   ]);
-  const bridge = new MaxforgeWebSocketBridge({
-    host: process.env.MAXFORGE_WS_HOST ?? "127.0.0.1",
-    port: integerEnvironment("MAXFORGE_WS_PORT", 8766),
-    applyTimeoutMs: integerEnvironment("MAXFORGE_APPLY_TIMEOUT_MS", 5000),
-  });
+  const bridge = new MaxforgeWebSocketBridge(
+    bridgeOptionsFromEnvironment(process.env)
+  );
   const status = await bridge.start();
   const service = new MaxforgePatchService(database, bridge);
   let handle;
@@ -47,8 +61,20 @@ export async function main(): Promise<void> {
   process.stdin.once("end", () => void shutdown());
 }
 
-function integerEnvironment(name: string, fallback: number): number {
-  const raw = process.env[name];
+function optionalEnvironment(
+  environment: NodeJS.ProcessEnv,
+  name: string
+): string | undefined {
+  const value = environment[name];
+  return value === undefined || value.length === 0 ? undefined : value;
+}
+
+function integerEnvironment(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  fallback: number
+): number {
+  const raw = environment[name];
   if (raw === undefined) return fallback;
   const value = Number(raw);
   if (!Number.isInteger(value)) {
