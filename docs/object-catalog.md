@@ -105,8 +105,11 @@ errors.
 
 ### Abstraction declarations
 
-An abstraction declaration maps the DSL object name to a `.maxpat` file used
-by Max's search path. `ports: "derive"` (also the default when `ports` is
+An abstraction declaration identifies a `.maxpat` file used by Max's search
+path. The declaration name must equal the filename without `.maxpat`; maxforge
+does not implement abstraction aliases or embed the referenced file in the
+generated patch. The file must exist even when ports are explicit.
+`ports: "derive"` (also the default when `ports` is
 omitted) reads only the abstraction's root patcher:
 
 - root `inlet` and `outlet` boxes determine counts;

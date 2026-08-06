@@ -386,6 +386,10 @@ source and reads abstractions before a build. Imported files use the
 [`objects-v1` schema](https://2bit.jp/maxforge/schema/objects-v1.json) and may
 not recursively import more catalogs.
 
+An abstraction `name` must match its `.maxpat` filename. maxforge validates the
+file and its port metadata but does not embed it; its directory must still be
+available on Max's search path.
+
 The MCP server intentionally does not search its working directory. Set an
 absolute `MAXFORGE_CONFIG` path in the MCP client configuration, then call
 `maxforge_catalog` to inspect the catalog actually loaded by that server.

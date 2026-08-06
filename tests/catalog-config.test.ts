@@ -171,6 +171,35 @@ describe("project object catalogs", () => {
     });
   });
 
+  it("validates abstraction identity and existence with explicit ports", async () => {
+    const root = await temporaryDirectory();
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      abstractions: [{
+        name: "missing.voice",
+        path: "./patchers/other.voice.maxpat",
+        ports: { mode: "fixed", inlets: 1, outlets: ["signal"] },
+      }],
+    });
+
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      'Abstraction name "missing.voice" must match its .maxpat filename'
+    );
+
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      abstractions: [{
+        name: "missing.voice",
+        path: "./patchers/missing.voice.maxpat",
+        ports: { mode: "fixed", inlets: 1, outlets: ["signal"] },
+      }],
+    });
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "file does not exist"
+    );
+  });
+
   it("discovers config upward from the input DSL", async () => {
     const root = await temporaryDirectory();
     const nested = join(root, "patches", "voices");

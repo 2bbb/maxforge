@@ -103,7 +103,7 @@
       "required": ["name", "path"],
       "properties": {
         "name": { "$ref": "#/$defs/name" },
-        "path": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1, "pattern": "\\.maxpat$" },
         "ports": {
           "oneOf": [
             { "const": "derive" },

@@ -114,7 +114,9 @@ for i in 0..7 {
   and plan discover it upward from the input; `--config` selects one explicitly.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use dynamic mode only when the shape actually varies. Use `ports: "derive"`
-  for an abstraction whose root `inlet`/`outlet` boxes are authoritative.
+  for an abstraction whose root `inlet`/`outlet` boxes are authoritative. Its
+  catalog name must match the existing `.maxpat` filename; the file is not
+  embedded and Max still needs its directory on the search path.
 - Catalog metadata does not install or probe an external, put an abstraction on
   Max's search path, or prove availability on another machine.
 - When changing the catalog locally, run

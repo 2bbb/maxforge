@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { dirname, join, parse, resolve } from "node:path";
+import { basename, dirname, extname, join, parse, resolve } from "node:path";
 import * as z from "zod/v4";
 import { loadDatabase } from "./object-db.js";
 import { BoxJSON, ObjectDatabase, ObjectDef, PatcherJSON } from "./types.js";
@@ -238,6 +238,18 @@ async function abstractionInfo(
   sourceDirectory: string
 ): Promise<CustomObjectInfo> {
   const abstractionPath = resolve(sourceDirectory, declaration.path);
+  if (extname(abstractionPath) !== ".maxpat") {
+    throw new Error(`Abstraction path must reference a .maxpat file: ${abstractionPath}`);
+  }
+  if (basename(abstractionPath, extname(abstractionPath)) !== declaration.name) {
+    throw new Error(
+      `Abstraction name "${declaration.name}" must match its .maxpat filename: ` +
+      abstractionPath
+    );
+  }
+  if (!await isFile(abstractionPath)) {
+    throw new Error(`Could not read abstraction ${abstractionPath}: file does not exist`);
+  }
   const ports = declaration.ports && declaration.ports !== "derive"
     ? declaration.ports
     : await deriveAbstractionPorts(abstractionPath);

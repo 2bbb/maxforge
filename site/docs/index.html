@@ -331,6 +331,7 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           <li><code>doctor</code> validates root/imported catalogs and reads referenced abstraction metadata before compilation.</li>
           <li>Fixed ports are exact. Dynamic ports require a representative shape but do not impose a false upper connection bound.</li>
           <li><code>ports: "derive"</code> counts root <code>inlet</code>/<code>outlet</code> boxes and infers signal outlets from incoming source metadata.</li>
+          <li>An abstraction name must match its existing <code>.maxpat</code> filename. The file is validated but not embedded; Max still needs its directory on the search path.</li>
           <li>Imported catalogs cannot recursively import more catalogs. Accidental name collisions fail unless <code>override: true</code> is explicit.</li>
         </ul>
         <p>
