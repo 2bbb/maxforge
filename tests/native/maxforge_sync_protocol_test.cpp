@@ -116,6 +116,20 @@ void test_network_configuration() {
 	);
 }
 
+void test_safe_set_attributes() {
+	require(sync_protocol::is_safe_set_attribute("patching_rect"), "position rejected");
+	require(sync_protocol::is_safe_set_attribute("presentation_rect"), "presentation rejected");
+	require(sync_protocol::is_safe_set_attribute("textcolor"), "color rejected");
+	require(sync_protocol::is_safe_set_attribute("_private_style"), "underscore rejected");
+	require(!sync_protocol::is_safe_set_attribute(""), "empty attribute accepted");
+	require(!sync_protocol::is_safe_set_attribute("2color"), "numeric prefix accepted");
+	require(!sync_protocol::is_safe_set_attribute("patching rect"), "spaced attribute accepted");
+	require(!sync_protocol::is_safe_set_attribute("maxclass"), "class mutation accepted");
+	require(!sync_protocol::is_safe_set_attribute("varname"), "identity mutation accepted");
+	require(!sync_protocol::is_safe_set_attribute("patcher"), "patcher mutation accepted");
+	require(!sync_protocol::is_safe_set_attribute("filename"), "file mutation accepted");
+}
+
 void test_managed_identity() {
 	const auto variable_name = sync_protocol::expected_variable_name(
 		"voice",
@@ -437,6 +451,7 @@ int main() {
 	const std::vector<test_case> test_cases{
 		{"identifiers", test_identifiers},
 		{"network configuration", test_network_configuration},
+		{"safe set attributes", test_safe_set_attributes},
 		{"managed identity", test_managed_identity},
 		{"revisions, paths, and subpatchers", test_revisions_paths_and_subpatchers},
 		{"valid state transition", test_valid_state_transition},

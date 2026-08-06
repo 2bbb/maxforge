@@ -128,6 +128,28 @@ auto has_maxpat_extension(const std::string &path) -> bool {
 	return true;
 }
 
+auto is_safe_set_attribute(const std::string &attribute) -> bool {
+	if(attribute.empty()) return false;
+	const auto first = static_cast<unsigned char>(attribute.front());
+	if(std::isalpha(first) == 0 && attribute.front() != '_') return false;
+	for(std::size_t index{1}; index < attribute.size(); index++) {
+		if(!is_word_character(attribute[index])) return false;
+	}
+
+	static const std::unordered_set<std::string> reserved{
+		"id",
+		"maxclass",
+		"varname",
+		"patcher",
+		"numinlets",
+		"numoutlets",
+		"outlettype",
+		"filename",
+		"filepath"
+	};
+	return reserved.count(attribute) == 0;
+}
+
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

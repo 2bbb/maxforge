@@ -19,6 +19,11 @@ export type PatchValue =
   | readonly PatchValue[]
   | { readonly [key: string]: PatchValue };
 
+export type PatchSetValue =
+  | string
+  | number
+  | readonly (string | number)[];
+
 export interface PatchEndpoint {
   readonly id: string;
   readonly varName: string;
@@ -86,8 +91,8 @@ export type PatchOperation =
       readonly targetPath: readonly string[];
       readonly id: string;
       readonly varName: string;
-      readonly attribute: "patching_rect";
-      readonly value: readonly [number, number, number, number];
+      readonly attribute: string;
+      readonly value: PatchSetValue;
     }
   | {
       readonly op: "connect";
@@ -225,7 +230,7 @@ export function diffPatchGraphs(current: PatchGraph, desired: PatchGraph): Patch
 
   for (const [key, currentEntry] of currentBoxes) {
     const desiredEntry = desiredBoxes.get(key);
-    if (desiredEntry && !sameBoxStructure(currentEntry.box, desiredEntry.box)) {
+    if (desiredEntry && requiresBoxReplacement(currentEntry.box, desiredEntry.box)) {
       replacedKeys.add(key);
     }
   }
@@ -302,6 +307,49 @@ export function diffPatchGraphs(current: PatchGraph, desired: PatchGraph): Patch
         varName: entry.box.varName,
         attribute: "patching_rect",
         value: entry.box.patchingRect,
+      });
+    }
+    if (
+      entry.box.maxclass !== "newobj" &&
+      entry.box.text !== undefined &&
+      currentEntry.box.text !== entry.box.text
+    ) {
+      sets.push({
+        op: "set",
+        targetPath: entry.targetPath,
+        id: entry.box.id,
+        varName: entry.box.varName,
+        attribute: "text",
+        value: entry.box.text,
+      });
+    }
+    if (
+      entry.box.comment !== undefined &&
+      currentEntry.box.comment !== entry.box.comment
+    ) {
+      sets.push({
+        op: "set",
+        targetPath: entry.targetPath,
+        id: entry.box.id,
+        varName: entry.box.varName,
+        attribute: "comment",
+        value: entry.box.comment,
+      });
+    }
+    for (const [attribute, value] of Object.entries(entry.box.attributes)) {
+      if (stableStringify(currentEntry.box.attributes[attribute]) === stableStringify(value)) {
+        continue;
+      }
+      // Unsupported structured values are classified as replacement changes by
+      // requiresBoxReplacement(), so no partial set operation can escape here.
+      if (!isSettablePatchValue(value)) continue;
+      sets.push({
+        op: "set",
+        targetPath: entry.targetPath,
+        id: entry.box.id,
+        varName: entry.box.varName,
+        attribute,
+        value,
       });
     }
   }
@@ -542,24 +590,41 @@ function connectionTouchesReplacement(
   return false;
 }
 
-function sameBoxStructure(left: PatchBox, right: PatchBox): boolean {
-  return stableStringify({
+function requiresBoxReplacement(left: PatchBox, right: PatchBox): boolean {
+  if (stableStringify({
     maxclass: left.maxclass,
     numinlets: left.numinlets,
     numoutlets: left.numoutlets,
     outlettype: left.outlettype,
-    text: left.text ?? null,
-    comment: left.comment ?? null,
-    attributes: left.attributes,
-  }) === stableStringify({
+  }) !== stableStringify({
     maxclass: right.maxclass,
     numinlets: right.numinlets,
     numoutlets: right.numoutlets,
     outlettype: right.outlettype,
-    text: right.text ?? null,
-    comment: right.comment ?? null,
-    attributes: right.attributes,
-  });
+  })) return true;
+  if (left.maxclass === "newobj" && left.text !== right.text) return true;
+  if (left.text !== undefined && right.text === undefined) return true;
+  if (left.comment !== undefined && right.comment === undefined) return true;
+  const attributeNames = new Set([
+    ...Object.keys(left.attributes),
+    ...Object.keys(right.attributes),
+  ]);
+  for (const attribute of attributeNames) {
+    const leftValue = left.attributes[attribute];
+    const rightValue = right.attributes[attribute];
+    if (stableStringify(leftValue) === stableStringify(rightValue)) continue;
+    if (!(attribute in right.attributes) || !isSettablePatchValue(rightValue)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isSettablePatchValue(value: PatchValue): value is PatchSetValue {
+  if (typeof value === "string" || typeof value === "number") return true;
+  return Array.isArray(value) && value.length > 0 && value.length <= 256 && value.every(
+    (item) => typeof item === "string" || typeof item === "number"
+  );
 }
 
 function sameRect(

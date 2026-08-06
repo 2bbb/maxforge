@@ -43,6 +43,7 @@ auto is_loopback_host(const std::string &host) -> bool;
 auto is_valid_network_host(const std::string &host) -> bool;
 auto is_valid_auth_token(const std::string &token) -> bool;
 auto has_maxpat_extension(const std::string &path) -> bool;
+auto is_safe_set_attribute(const std::string &attribute) -> bool;
 auto expected_variable_name(
 	const std::string &scope,
 	const std::string &id

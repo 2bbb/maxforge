@@ -190,6 +190,76 @@ osc -> gain
     ]);
   });
 
+  it("updates message text without deleting and recreating the box", () => {
+    const current = compileGraph('msg = message "before"');
+    const desired = compileGraph('msg = message "after"');
+
+    expect(diffPatchGraphs(current, desired).operations).toEqual([
+      {
+        op: "set",
+        targetPath: [],
+        id: "obj-msg",
+        varName: "maxforge_voices_obj_msg",
+        attribute: "text",
+        value: "after",
+      },
+    ]);
+  });
+
+  it("updates port comments and scalar attributes without replacement", () => {
+    const current = compileGraph(`
+fx = p pass {
+  input = inlet signal "before" @presentation 0
+}
+`);
+    const desired = compileGraph(`
+fx = p pass {
+  input = inlet signal "after" @presentation 1
+}
+`);
+
+    expect(diffPatchGraphs(current, desired).operations).toEqual([
+      {
+        op: "set",
+        targetPath: ["maxforge_voices_obj_fx"],
+        id: "obj-input",
+        varName: "maxforge_voices_obj_input",
+        attribute: "comment",
+        value: "after",
+      },
+      {
+        op: "set",
+        targetPath: ["maxforge_voices_obj_fx"],
+        id: "obj-input",
+        varName: "maxforge_voices_obj_input",
+        attribute: "presentation",
+        value: 1,
+      },
+    ]);
+  });
+
+  it("replaces boxes when an attribute or comment must be removed", () => {
+    const withAttribute = compileGraph("button = button @presentation 1");
+    const withoutAttribute = compileGraph("button = button");
+    expect(diffPatchGraphs(withAttribute, withoutAttribute).operations.map(
+      (operation) => operation.op
+    )).toEqual(["delete", "create"]);
+
+    const withComment = compileGraph(`
+fx = p pass {
+  input = inlet signal "label"
+}
+`);
+    const withoutComment = compileGraph(`
+fx = p pass {
+  input = inlet signal
+}
+`);
+    expect(diffPatchGraphs(withComment, withoutComment).operations.map(
+      (operation) => operation.op
+    )).toEqual(["delete", "create"]);
+  });
+
   it("keeps revisions stable when declarations are only reordered", () => {
     const first = compileGraph("osc = cycle~ 440\ngain = *~ 0.25\nosc -> gain");
     const reordered = compileGraph("gain = *~ 0.25\nosc = cycle~ 440\nosc -> gain");
@@ -333,7 +403,7 @@ fx = p pass {
     });
   });
 
-  it("recreates subpatcher contents when the parent definition changes", () => {
+  it("updates subpatcher attributes without recreating its contents", () => {
     const current = compileGraph(`
 fx = p pass @hidden 0 {
   in = inlet signal
@@ -350,8 +420,15 @@ fx = p pass @hidden 1 {
 `);
     const plan = diffPatchGraphs(current, desired);
 
-    expect(plan.operations.filter((operation) => operation.op === "delete")).toHaveLength(3);
-    expect(plan.operations.filter((operation) => operation.op === "create")).toHaveLength(3);
-    expect(plan.operations.at(-1)?.op).toBe("connect");
+    expect(plan.operations).toEqual([
+      {
+        op: "set",
+        targetPath: [],
+        id: "obj-fx",
+        varName: "maxforge_voices_obj_fx",
+        attribute: "hidden",
+        value: 1,
+      },
+    ]);
   });
 });

@@ -47,7 +47,7 @@ struct patch_operation {
 	std::string id;
 	std::string variable_name;
 	std::string attribute;
-	std::array<double, 4> value{};
+	std::vector<c74::max::t_atom> value;
 	box_definition box;
 };
 
@@ -463,6 +463,65 @@ auto rectangle_array(
 	return values;
 }
 
+auto patch_value_atoms(
+	const c74::max::t_dictionary *dictionary,
+	const char *key
+) -> std::vector<c74::max::t_atom>
+{
+	long count{};
+	c74::max::t_atom *atoms{};
+	if(
+		c74::max::dictionary_getatoms(
+			dictionary,
+			c74::max::gensym(key),
+			&count,
+			&atoms
+		) != c74::max::MAX_ERR_NONE ||
+		count <= 0 ||
+		!atoms
+	) {
+		throw std::runtime_error(std::string{"missing or invalid value: "} + key);
+	}
+	if(count == 1 && c74::max::atomisatomarray(atoms)) {
+		auto *array = reinterpret_cast<c74::max::t_atomarray *>(
+			c74::max::atom_getobj(atoms)
+		);
+		if(
+			!array ||
+			c74::max::atomarray_getatoms(array, &count, &atoms) !=
+				c74::max::MAX_ERR_NONE
+		) {
+			throw std::runtime_error("could not read set value array");
+		}
+	}
+	if(count <= 0 || 256 < count) {
+		throw std::runtime_error("set value must contain between 1 and 256 atoms");
+	}
+
+	std::vector<c74::max::t_atom> values;
+	values.reserve(static_cast<std::size_t>(count));
+	for(long index{}; index < count; index++) {
+		const auto type = c74::max::atom_gettype(atoms + index);
+		if(
+			type != c74::max::A_LONG &&
+			type != c74::max::A_FLOAT &&
+			type != c74::max::A_SYM &&
+			!c74::max::atomisstring(atoms + index)
+		) {
+			throw std::runtime_error("set values must contain only numbers or strings");
+		}
+		c74::max::t_atom value = atoms[index];
+		if(c74::max::atomisstring(&value)) {
+			c74::max::atom_setsym(
+				&value,
+				c74::max::gensym(atom_string(value).c_str())
+			);
+		}
+		values.push_back(value);
+	}
+	return values;
+}
+
 auto parse_endpoint(
 	const c74::max::t_dictionary *dictionary,
 	const std::string &scope
@@ -570,10 +629,21 @@ auto parse_operation(
 		result.id = dictionary_string(dictionary, "id");
 		result.variable_name = dictionary_string(dictionary, "varName");
 		result.attribute = dictionary_string(dictionary, "attribute");
-		result.value = rectangle_array(dictionary, "value");
+		result.value = patch_value_atoms(dictionary, "value");
 		sync_protocol::validate_identity(scope, result.id, result.variable_name);
-		if(result.attribute != "patching_rect") {
-			throw std::runtime_error("unsupported set attribute: " + result.attribute);
+		if(!sync_protocol::is_safe_set_attribute(result.attribute)) {
+			throw std::runtime_error("unsafe set attribute: " + result.attribute);
+		}
+		if(result.attribute == "patching_rect") {
+			if(result.value.size() != 4) {
+				throw std::runtime_error("patching_rect requires four numbers");
+			}
+			for(const auto &value : result.value) {
+				const auto type = c74::max::atom_gettype(&value);
+				if(type != c74::max::A_LONG && type != c74::max::A_FLOAT) {
+					throw std::runtime_error("patching_rect requires four numbers");
+				}
+			}
 		}
 		return result;
 	}
@@ -1224,15 +1294,19 @@ auto apply_set(
 	auto *box = find_named_box(patcher, operation.variable_name);
 	if(!box) return false;
 
-	std::array<c74::max::t_atom, 4> value_atoms{};
-	for(std::size_t index{}; index < value_atoms.size(); index++) {
-		c74::max::atom_setfloat(value_atoms.data() + index, operation.value[index]);
+	auto *attribute = c74::max::gensym(operation.attribute.c_str());
+	auto *target = box;
+	if(c74::max::object_attr_usercanset(target, attribute) == 0) {
+		target = c74::max::jbox_get_object(box);
+	}
+	if(!target || c74::max::object_attr_usercanset(target, attribute) == 0) {
+		return false;
 	}
 	return c74::max::object_attr_setvalueof(
-		box,
-		c74::max::gensym(operation.attribute.c_str()),
-		static_cast<long>(value_atoms.size()),
-		value_atoms.data()
+		target,
+		attribute,
+		static_cast<long>(operation.value.size()),
+		const_cast<c74::max::t_atom *>(operation.value.data())
 	) == c74::max::MAX_ERR_NONE;
 }
 
