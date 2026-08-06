@@ -103,9 +103,11 @@ hidden by claiming the ad-hoc build is equivalent.
 ## Versioned release procedure
 
 Keep `package.json`, `package-lock.json`, and `package-info.json` on the same
-version. The verifier rejects a mismatch between the two package manifests.
+version. `npm version <version> --no-git-tag-version` updates the first two;
+update `package-info.json` in the same release commit. The verifier rejects a
+mismatch between the two package manifests.
 
-For `v0.1.5`:
+Run the complete checks from a clean `main` checkout:
 
 ```bash
 npm test
@@ -114,10 +116,23 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build --build-config Release --output-on-failure
 python3 scripts/verify-max-package.py --source .
-git tag v0.1.5
-git push origin main v0.1.5
-gh release create v0.1.5 --verify-tag --generate-notes
+npm pack --dry-run
 ```
+
+Commit and push the synchronized version files. Wait for the `main` workflow to
+succeed before publishing either distribution. Publish npm from that exact
+commit, then create and publish the matching GitHub tag and release:
+
+```bash
+npm publish
+git tag v<VERSION>
+git push origin v<VERSION>
+gh release create v<VERSION> --verify-tag --generate-notes
+```
+
+For example, version `0.1.6` uses tag `v0.1.6`. Never move or reuse a published
+tag/version: npm versions are immutable, and GitHub and npm must identify the
+same source commit.
 
 Publishing the GitHub Release starts a clean macOS and Windows rebuild. Do not
 upload a locally built external as a substitute. Confirm that the workflow is
