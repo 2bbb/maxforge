@@ -126,7 +126,7 @@ fx = p passthrough at(40, 50) {
       {
         patcher: {
           fileversion: 1,
-          appversion: { major: 8, minor: 6, revision: 4, processor: "x86", platform: "macintel" },
+          appversion: { major: 9, minor: 0, revision: 0, architecture: "x64", modernui: 1 },
           classnamespace: "box",
           rect: [0, 0, 100, 100],
           bglocked: 0,

@@ -47,9 +47,6 @@ export interface AppVersion {
   revision: number;
   architecture?: string;
   modernui?: number;
-  /** Legacy fields accepted when decompiling older patches. */
-  processor?: string;
-  platform?: string;
 }
 
 export interface BoxWrapper {
