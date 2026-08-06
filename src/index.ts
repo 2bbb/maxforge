@@ -4,6 +4,7 @@ export { serialize } from "./core/serializer.js";
 export { decompile } from "./core/decompiler.js";
 export { loadDatabase, setDatabase } from "./core/object-db.js";
 export * from "./core/catalog-config.js";
+export * from "./core/bundle.js";
 export * from "./core/types.js";
 export * from "./max/patch-graph.js";
 export * from "./max/patch-merge.js";

@@ -11,10 +11,11 @@ import {
   diffPatchGraphs,
   patcherToPatchGraph,
   PatchGraph,
+  collectCatalogDependencies,
 } from "../index.js";
 import { toClipboardText, fromClipboardText } from "../core/clipboard.js";
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
-import { dirname, extname, resolve } from "path";
+import { cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
+import { basename, dirname, extname, join, resolve } from "path";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -47,6 +48,11 @@ async function main() {
 
   if (command === "doctor") {
     await doctorCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "bundle") {
+    await bundleCommand(args.slice(1));
     return;
   }
 
@@ -302,6 +308,115 @@ async function doctorCommand(cmdArgs: string[]) {
   for (const source of catalog.sources) console.log(`Source: ${source}`);
 }
 
+async function bundleCommand(cmdArgs: string[]) {
+  let inputFile = "";
+  let outputDirectory = "";
+  let configFile = "";
+  let packageName = "";
+
+  for (let i = 0; i < cmdArgs.length; i++) {
+    const argument = cmdArgs[i];
+    if (argument === "-o") {
+      outputDirectory = requiredOptionValue(cmdArgs, i);
+      i++;
+    } else if (argument === "--config") {
+      configFile = requiredOptionValue(cmdArgs, i);
+      i++;
+    } else if (argument === "--name") {
+      packageName = requiredOptionValue(cmdArgs, i);
+      i++;
+    } else if (!inputFile && !argument.startsWith("-")) {
+      inputFile = argument;
+    } else {
+      throw new Error(`Unknown bundle argument: ${argument}`);
+    }
+  }
+  if (!inputFile || !outputDirectory) {
+    throw new Error("bundle requires <input.maxdsl> and -o <package-directory>");
+  }
+
+  const inputPath = resolve(inputFile);
+  const outputPath = resolve(outputDirectory);
+  if (existsSync(outputPath) && readdirSync(outputPath).length > 0) {
+    throw new Error(`Bundle output directory is not empty: ${outputPath}`);
+  }
+  const source = readFileSync(inputPath, "utf8");
+  const { ast, errors } = parse(source);
+  if (errors.length > 0) {
+    reportDiagnostics(errors, []);
+    process.exit(1);
+  }
+  const catalog = await loadObjectCatalog({
+    configPath: configFile || undefined,
+    inputPath,
+  });
+  const result = compile(ast, catalog.database);
+  reportDiagnostics(result.errors, result.warnings);
+  if (!result.success || !result.output) process.exit(1);
+
+  const dependencies = await collectCatalogDependencies(result.output, catalog);
+  const title = packageName || basename(inputPath, extname(inputPath));
+  if (!/^[A-Za-z0-9._-]+$/.test(title)) {
+    throw new Error("Bundle name may contain only letters, digits, dot, underscore, and hyphen");
+  }
+  const mainRelative = `patchers/${title}.maxpat`;
+  const copies = new Map<string, string>();
+  copies.set(mainRelative, inputPath);
+  for (const dependency of dependencies) {
+    const sourcePaths = dependency.paths ?? (dependency.path ? [dependency.path] : []);
+    for (const sourcePath of sourcePaths) {
+      const relative = `${dependency.destination}/${basename(sourcePath)}`;
+      const previous = copies.get(relative);
+      if (previous && previous !== sourcePath) {
+        throw new Error(
+          `Bundle path collision for ${relative}: ${previous} and ${sourcePath}`
+        );
+      }
+      copies.set(relative, sourcePath);
+    }
+  }
+
+  const patchersDirectory = join(outputPath, "patchers");
+  mkdirSync(patchersDirectory, { recursive: true });
+  writeFileSync(join(outputPath, mainRelative), serialize(result.output), "utf8");
+
+  const filelist: Record<string, Record<string, never>> = { [mainRelative]: {} };
+  for (const [relative, sourcePath] of copies) {
+    if (relative === mainRelative) continue;
+    const destination = join(outputPath, relative);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(sourcePath, destination, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+    filelist[relative] = {};
+  }
+
+  const packageJson = JSON.parse(readFileSync(
+    new URL("../../package.json", import.meta.url),
+    "utf8"
+  )) as { version?: string; author?: string };
+  writeFileSync(join(outputPath, "package-info.json"), `${JSON.stringify({
+    title,
+    description: `Portable maxforge bundle for ${title}`,
+    version: packageJson.version ?? "0.0.0",
+    author: packageJson.author ?? "",
+    website: "https://github.com/2bbb/maxforge",
+    extends: "",
+    extensible: 0,
+    homepatcher: mainRelative,
+    max_version_min: "8.0",
+    os: {
+      macintosh: { externals: ["externals/"] },
+      windows: { externals: ["externals/"] },
+    },
+    filelist,
+  }, null, 2)}\n`, "utf8");
+  console.log(`Written bundle: ${outputPath}`);
+  console.log(`Dependencies: ${dependencies.length}`);
+}
+
 function requiredOptionValue(cmdArgs: string[], index: number): string {
   const option = cmdArgs[index];
   const value = cmdArgs[index + 1];
@@ -398,6 +513,7 @@ Usage:
   maxforge validate <input.maxdsl> [--config path] [--allow-unknown]
   maxforge plan <desired.maxdsl> [--config path] [--scope name] [--current current.maxdsl|maxpat] [-o plan.json] [--compact]
   maxforge doctor [--config path] [--input input.maxdsl]
+  maxforge bundle <input.maxdsl> -o package-directory [--config path] [--name package-name]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
@@ -406,6 +522,7 @@ Commands:
   validate        Validate .maxdsl without writing output
   plan            Build a managed PatchPlan for maxforge.sync
   doctor          Validate project catalog files and abstraction metadata
+  bundle          Build a portable Max package directory with declared dependencies
 
 Options:
   -o <file>          Output file path
@@ -416,6 +533,7 @@ Options:
   --current <file>   Current managed .maxdsl or scoped .maxpat snapshot
   --compact          Emit a single-line JSON plan
   --input <file>     Input path used for doctor config discovery
+  --name <name>      Package title and generated main patch name for bundle
 `);
 }
 

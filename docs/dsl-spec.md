@@ -415,16 +415,17 @@ and known identity-only alias warnings are documented in
 ### 5.2 Project catalog resolution
 
 Before lookup, CLI commands may merge a project object catalog over the bundled
-database. `compile`, `validate`, and `plan` search upward from the input DSL for
+database. `compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for
 `maxforge.config.json`; `--config` selects a file explicitly. Declarations can
 add fixed/dynamic third-party external metadata and map reusable abstraction
 names to `.maxpat` files. A collision is fatal unless the later declaration
 sets `override: true`.
 
 Inline DSL subpatchers are part of the grammar and do not require a catalog.
-External and abstraction declarations are compiler metadata only. They do not
-install a binary, add a directory to Max's search path, or prove runtime
-availability. See [`object-catalog.md`](object-catalog.md#project-object-catalogs)
+External and abstraction declarations are compiler metadata only during normal
+compilation. The separate `bundle` command copies referenced declarations with
+concrete paths into a Max package directory; it still does not prove runtime
+compatibility. See [`object-catalog.md`](object-catalog.md#project-object-catalogs)
 and the published `config-v1.json` schema.
 
 The MCP server never performs input-path discovery. Its database is fixed when

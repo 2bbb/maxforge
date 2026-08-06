@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
+    "pretest": "npm run build",
     "dev": "tsc --watch",
     "mcp": "node dist/mcp/server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",

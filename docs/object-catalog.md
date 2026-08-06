@@ -34,6 +34,7 @@ audited built-in database. Declare project-specific metadata in
     {
       "name": "vendor.filter~",
       "kind": "external",
+      "path": "./externals/vendor.filter~.mxo",
       "ports": {
         "mode": "fixed",
         "inlets": 2,
@@ -103,11 +104,18 @@ that external requires different values. `override: true` is required to
 replace an earlier built-in or imported definition; accidental collisions are
 errors.
 
+`path` is optional for ordinary compilation, where the target Max installation
+may already provide the external. It is required when that external is actually
+used by `maxforge bundle`. Use one string for a single target, or an array to
+include multiple platform artifacts (for example, `.mxo` and `.mxe64`). A macOS
+`.mxo` bundle directory is copied recursively under the generated package's
+`externals/` directory.
+
 ### Abstraction declarations
 
 An abstraction declaration identifies a `.maxpat` file used by Max's search
 path. The declaration name must equal the filename without `.maxpat`; maxforge
-does not implement abstraction aliases or embed the referenced file in the
+does not implement abstraction aliases or embed the referenced file in a single
 generated patch. The file must exist even when ports are explicit.
 `ports: "derive"` (also the default when `ports` is
 omitted) reads only the abstraction's root patcher:
@@ -123,6 +131,24 @@ This is static metadata extraction, not recursive compilation. If the patcher
 uses a dynamic convention that cannot be derived honestly, specify fixed or
 dynamic `ports` explicitly. Inline DSL subpatchers (`name = p child { ... }`)
 remain embedded in the generated patch and require no configuration file.
+
+### Portable package bundles
+
+`maxforge bundle input.maxdsl -o output-package` compiles the main patch under
+`patchers/`, copies every referenced declared abstraction and external to the
+standard `patchers/` or `externals/` directory, follows transitive custom-object
+references inside abstraction files, and writes `package-info.json`. The output
+directory must be empty. A used external without `path` is rejected rather than
+silently producing a non-portable package.
+
+Every copied dependency must have a unique basename within its destination
+directory. Collisions are rejected; maxforge does not silently overwrite or
+rename Max-search-path resources.
+
+The collector only follows names declared in the effective catalog. Built-in
+objects are not copied, and arbitrary files loaded by object arguments or
+messages are not inferred. Those assets still require explicit project-level
+packaging.
 
 ### Runtime boundary
 

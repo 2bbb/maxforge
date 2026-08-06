@@ -43,6 +43,9 @@ Try the generative example after cloning this repository:
 
 ```bash
 npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
+
+# Build a portable Max package directory with declared abstractions/externals
+npx maxforge@latest bundle input.maxdsl -o my-package
 ```
 
 For repository development:

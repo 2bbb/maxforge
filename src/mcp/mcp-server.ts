@@ -883,6 +883,9 @@ function catalogObjects(
         dynamicPorts: definition.dynamicPorts === true,
         source: custom?.source ?? "built-in",
         ...(custom?.path ? { path: custom.path } : {}),
+        ...(custom?.paths && custom.paths.length > 1
+          ? { paths: [...custom.paths] }
+          : {}),
       };
       if (
         normalizedQuery &&

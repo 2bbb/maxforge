@@ -34,6 +34,10 @@ const defaultSizeSchema = z.tuple([
 const externalSchema = z.object({
   name: z.string().min(1).regex(/^\S+$/, "object name cannot contain whitespace"),
   kind: z.literal("external"),
+  path: z.union([
+    z.string().min(1),
+    z.array(z.string().min(1)).min(1),
+  ]).optional(),
   serialization: z.object({
     maxclass: z.string().min(1),
   }).strict().optional(),
@@ -68,6 +72,8 @@ export interface CustomObjectInfo {
   readonly kind: "external" | "abstraction";
   readonly source: string;
   readonly path?: string;
+  /** All package artifacts for this object; older programmatic catalogs may provide only path. */
+  readonly paths?: readonly string[];
   readonly ports: "fixed" | "dynamic";
   readonly definition: ObjectDef;
 }
@@ -142,7 +148,11 @@ export async function loadObjectCatalog(
     }
 
     const info = entry.kind === "external"
-      ? externalInfo(entry.declaration as ExternalDeclaration, entry.source)
+      ? await externalInfo(
+        entry.declaration as ExternalDeclaration,
+        entry.source,
+        entry.sourceDirectory
+      )
       : await abstractionInfo(
         entry.declaration as AbstractionDeclaration,
         entry.source,
@@ -213,10 +223,22 @@ function appendEntries(
   }
 }
 
-function externalInfo(
+async function externalInfo(
   declaration: ExternalDeclaration,
-  source: string
-): CustomObjectInfo {
+  source: string,
+  sourceDirectory: string
+): Promise<CustomObjectInfo> {
+  const declaredPaths = declaration.path === undefined
+    ? []
+    : Array.isArray(declaration.path) ? declaration.path : [declaration.path];
+  const externalPaths = [...new Set(
+    declaredPaths.map((path) => resolve(sourceDirectory, path))
+  )].sort((left, right) => left.localeCompare(right));
+  for (const externalPath of externalPaths) {
+    if (!await exists(externalPath)) {
+      throw new Error(`Could not read external ${externalPath}: path does not exist`);
+    }
+  }
   const definition = definitionFromPorts(
     declaration.ports,
     declaration.serialization?.maxclass ?? "newobj",
@@ -227,6 +249,8 @@ function externalInfo(
     name: declaration.name,
     kind: "external",
     source,
+    path: externalPaths[0],
+    paths: externalPaths,
     ports: definition.dynamicPorts ? "dynamic" : "fixed",
     definition,
   };
@@ -264,6 +288,7 @@ async function abstractionInfo(
     kind: "abstraction",
     source,
     path: abstractionPath,
+    paths: [abstractionPath],
     ports: definition.dynamicPorts ? "dynamic" : "fixed",
     definition,
   };
@@ -362,6 +387,15 @@ function cloneDatabase(database: ObjectDatabase): ObjectDatabase {
 async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
   } catch {
     return false;
   }
