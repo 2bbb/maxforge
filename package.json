@@ -51,6 +51,7 @@
     "skills/",
     "docs/dsl-spec.md",
     "docs/agent-guide.md",
+    "docs/architecture.md",
     "docs/mcp.md",
     "docs/object-catalog.md",
     "docs/patch-sync.md",

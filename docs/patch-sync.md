@@ -5,15 +5,19 @@ a maxforge DSL fragment with a live Max patcher.
 
 ## Boundary
 
-The TypeScript library is the compiler and planner. It produces a `PatchPlan`;
-it does not mutate Max. The included `maxforge.sync` external validates and
-applies the plan through the Max SDK.
+The DSL frontend is one input adapter. It compiles desired text into the shared
+`PatchGraph` domain, which produces a `PatchPlan`; neither the graph protocol nor
+the native external interprets DSL. The included `maxforge.sync` external
+validates and applies plans through the Max SDK.
 
 ```text
 DSL -> PatchGraph -> diffPatchGraphs(current, desired) -> PatchPlan -> Max consumer
 ```
 
 The protocol version is currently `1`.
+
+See [Architecture](architecture.md) for the dependency rules between the DSL,
+patch domain, MCP application service, WebSocket transport, and native host.
 
 ## Scope and ownership
 

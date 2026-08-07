@@ -5,8 +5,8 @@
 
 [Website](https://2bit.jp/maxforge/) · [Documentation](https://2bit.jp/maxforge/docs/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
 
-Unofficial text-first DSL compiler for generating Max/MSP `.maxpat` patches.
-Write compact text, get valid Max patch JSON.
+Unofficial text-first toolkit for generating and managing Max/MSP patches.
+Compile compact DSL to `.maxpat`, or reconcile it with a live patch through MCP.
 
 maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.
 
@@ -15,7 +15,9 @@ maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.
 maxforge is for the boring part of Max patching: creating many similar objects,
 placing them, and wiring them consistently. Instead of duplicating objects by
 hand in the Max GUI, describe the patch as concise `.maxdsl` text and compile it
-to `.maxpat`.
+to `.maxpat`. The experimental live-control stack can also treat that DSL as
+desired state and reconcile it with an open patch without making DSL part of the
+native transport protocol.
 
 It supports:
 
@@ -583,13 +585,18 @@ src/
     serializer.ts      JSON serialization
     types.ts           Type definitions
   max/
-    patch-graph.ts     Managed desired graph and PatchPlan diff
+    dsl-patch-graph.ts DSL compiler → managed PatchGraph adapter
+    patch-graph.ts     Managed graph, revisions, and PatchPlan diff
+    patch-protocol.ts  Transport-neutral live patch contracts
+    patch-snapshot.ts  Snapshot comparison and attribute reconstruction
     thispatcher.ts     thispatcher command generation
   mcp/
     server.ts          stdio MCP executable
     mcp-server.ts      Agent-facing tools, help, and schemas
-    service.ts         Desired-state and inspection baseline service
-    bridge.ts          Loopback WebSocket transport to Max
+    patch-adapter.ts   Desired graph and live metadata adapter contract
+    dsl-patch-adapter.ts DSL/catalog implementation of that contract
+    service.ts         Live state, reconciliation, and persistence coordinator
+    bridge.ts          WebSocket transport implementation for Max
 source/projects/
   maxforge.sync/       Native min-api PatchPlan consumer
 deps/
@@ -600,6 +607,7 @@ schema/
   config-v1.json       maxforge.config.json JSON Schema
   objects-v1.json      Reusable catalog JSON Schema
 docs/
+  architecture.md      Module boundaries and dependency rules
   dsl-spec.md          Formal DSL specification (EBNF)
   agent-guide.md       AI agent documentation
   object-catalog.md    Catalog evidence, dynamic ports, and non-claims
