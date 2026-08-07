@@ -16,7 +16,7 @@ import {
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotBox,
   MaxforgeSnapshotConnection,
-} from "./bridge.js";
+} from "../max/patch-protocol.js";
 
 export type PatchReconciliationConflict =
   | PatchMergeConflict

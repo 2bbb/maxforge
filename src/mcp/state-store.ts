@@ -12,7 +12,7 @@ import {
   PatchGraph,
   PatchGraphNode,
 } from "../max/patch-graph.js";
-import type { MaxforgePatcherSnapshot } from "./bridge.js";
+import type { MaxforgePatcherSnapshot } from "../max/patch-protocol.js";
 
 export interface PendingPatchApply {
   readonly baseRevision: string;

@@ -24,7 +24,7 @@ import {
   MaxforgeSnapshotConnection,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
-} from "./bridge.js";
+} from "../max/patch-protocol.js";
 import {
   PatchStateStore,
   PendingPatchApply,

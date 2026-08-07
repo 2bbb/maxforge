@@ -19,7 +19,7 @@ import {
   OpenMaxPatchRequest,
   PatchPlanTransport,
   SaveMaxPatchRequest,
-} from "../src/mcp/bridge.js";
+} from "../src/max/patch-protocol.js";
 import { createMaxforgeMcpServer } from "../src/mcp/mcp-server.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
 import { PatchPlan } from "../src/max/patch-graph.js";

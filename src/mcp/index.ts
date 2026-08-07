@@ -1,4 +1,5 @@
 export * from "./bridge.js";
+export * from "../max/patch-protocol.js";
 export * from "./mcp-server.js";
 export * from "./service.js";
 export * from "./state-store.js";

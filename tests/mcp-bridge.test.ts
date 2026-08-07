@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import {
-  MaxforgePatchRegistration,
   MaxforgeWebSocketBridge,
   parseBridgeEvent,
 } from "../src/mcp/bridge.js";
+import { MaxforgePatchRegistration } from "../src/max/patch-protocol.js";
 import {
   createEmptyPatchGraph,
   diffPatchGraphs,

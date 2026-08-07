@@ -5,7 +5,7 @@ import {
   searchObjectCatalog,
 } from "../core/catalog-config.js";
 import { MaxforgePatchService } from "./service.js";
-import { PatchPlanTransport } from "./bridge.js";
+import { PatchPlanTransport } from "../max/patch-protocol.js";
 
 const scopeSchema = z
   .string()

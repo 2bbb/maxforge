@@ -14,7 +14,7 @@ import {
   OpenMaxPatchRequest,
   PatchPlanTransport,
   SaveMaxPatchRequest,
-} from "../src/mcp/bridge.js";
+} from "../src/max/patch-protocol.js";
 import {
   diffPatcherSnapshots,
   MaxforgePatchService,
