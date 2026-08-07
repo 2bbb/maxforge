@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
-import { compileDslToPatchGraph } from "../src/max/patch-graph.js";
+import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import {
   JsonFilePatchStateStore,
   stateFileFromEnvironment,

@@ -23,10 +23,8 @@ import {
   PatchServiceState,
   PatchStateStore,
 } from "../src/mcp/state-store.js";
-import {
-  compileDslToPatchGraph,
-  PatchPlan,
-} from "../src/max/patch-graph.js";
+import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
+import { PatchPlan } from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
 

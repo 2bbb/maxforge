@@ -4,13 +4,13 @@ import {
 } from "../core/types.js";
 import { lookupObject } from "../core/object-db.js";
 import {
-  compileDslToPatchGraph,
   createEmptyPatchGraph,
   diffPatchGraphs,
   PatchGraph,
   PatchBox,
   PatchPlan,
 } from "../max/patch-graph.js";
+import { compileDslToPatchGraph } from "../max/dsl-patch-graph.js";
 import {
   PatchReconciliationConflict,
   reconcilePatchGraphs,

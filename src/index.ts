@@ -7,6 +7,7 @@ export * from "./core/catalog-config.js";
 export * from "./core/bundle.js";
 export * from "./core/types.js";
 export * from "./max/patch-graph.js";
+export * from "./max/dsl-patch-graph.js";
 export * from "./max/patch-protocol.js";
 export * from "./max/patch-merge.js";
 export * from "./max/thispatcher.js";

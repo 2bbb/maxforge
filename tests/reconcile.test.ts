@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
-  compileDslToPatchGraph,
   PatchGraph,
 } from "../src/max/patch-graph.js";
+import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import { MaxforgePatcherSnapshot } from "../src/max/patch-protocol.js";
 import { reconcilePatchGraphs } from "../src/mcp/reconcile.js";
 

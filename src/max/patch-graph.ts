@@ -1,15 +1,5 @@
 import { createHash } from "node:crypto";
-import { compile } from "../core/compiler.js";
-import {
-  ASTNode,
-  BoxJSON,
-  CompileError,
-  CompileWarning,
-  ErrorCode,
-  ObjectDatabase,
-  PatcherJSON,
-} from "../core/types.js";
-import { parse } from "../dsl/parser.js";
+import type { BoxJSON, PatcherJSON } from "../core/types.js";
 
 export type PatchValue =
   | string
@@ -59,13 +49,6 @@ export interface PatchGraph {
   readonly scope: string;
   readonly revision: string;
   readonly patcher: PatchGraphNode;
-}
-
-export interface PatchGraphCompileResult {
-  success: boolean;
-  errors: CompileError[];
-  warnings: CompileWarning[];
-  graph?: PatchGraph;
 }
 
 export type PatchOperation =
@@ -139,44 +122,6 @@ interface FlatGraph {
   connections: FlatConnection[];
 }
 
-export function compileDslToPatchGraph(
-  source: string,
-  database: ObjectDatabase,
-  scope: string,
-  allowUnknown = false
-): PatchGraphCompileResult {
-  const scopeError = validateScope(scope);
-  if (scopeError) {
-    return { success: false, errors: [scopeError], warnings: [] };
-  }
-
-  const { ast, errors: parseErrors } = parse(source);
-  if (parseErrors.length > 0) {
-    return { success: false, errors: parseErrors, warnings: [] };
-  }
-
-  const varNameError = findReservedVarName(ast);
-  if (varNameError) {
-    return { success: false, errors: [varNameError], warnings: [] };
-  }
-
-  const result = compile(ast, database, allowUnknown);
-  if (!result.success) {
-    return {
-      success: false,
-      errors: result.errors,
-      warnings: result.warnings,
-    };
-  }
-
-  return {
-    success: true,
-    errors: [],
-    warnings: result.warnings,
-    graph: compiledPatcherToPatchGraph(result.output!, scope),
-  };
-}
-
 /**
  * Convert a live or saved Max patcher snapshot into managed state.
  * Only boxes whose existing varname belongs to the requested scope are included.
@@ -185,8 +130,7 @@ export function patcherToPatchGraph(
   patcher: PatcherJSON | PatcherJSON["patcher"],
   scope: string
 ): PatchGraph {
-  const scopeError = validateScope(scope);
-  if (scopeError) throw new Error(scopeError.message);
+  assertValidPatchScope(scope);
 
   const root = "patcher" in patcher ? patcher.patcher : patcher;
   const graphNode = snapshotPatcherNodeToGraph(root, scope);
@@ -201,8 +145,7 @@ export function createPatchGraph(
   scope: string,
   patcher: PatchGraphNode
 ): PatchGraph {
-  const scopeError = validateScope(scope);
-  if (scopeError) throw new Error(scopeError.message);
+  assertValidPatchScope(scope);
 
   const immutablePatcher = cloneAndFreezePatcher(patcher);
   return Object.freeze({
@@ -404,7 +347,7 @@ export function managedVarName(scope: string, id: string): string {
   return `maxforge_${scope}_obj_${match[1]}`;
 }
 
-function compiledPatcherToPatchGraph(
+export function compiledPatcherToPatchGraph(
   patcher: PatcherJSON | PatcherJSON["patcher"],
   scope: string
 ): PatchGraph {
@@ -789,30 +732,13 @@ function toPatchValue(value: unknown): PatchValue {
   return String(value);
 }
 
-function validateScope(scope: string): CompileError | null {
-  if (/^[A-Za-z_]\w*$/.test(scope)) return null;
-  return {
-    code: ErrorCode.SYNTAX_ERROR,
-    message: `Invalid maxforge scope: "${scope}". Use letters, digits, and underscores.`,
-  };
+export function isValidPatchScope(scope: string): boolean {
+  return /^[A-Za-z_]\w*$/.test(scope);
 }
 
-function findReservedVarName(ast: ASTNode): CompileError | null {
-  for (const statement of ast.statements) {
-    if (statement.type !== "connection" && statement.attrs?.varname) {
-      return {
-        code: ErrorCode.RESERVED_ATTRIBUTE,
-        message: "Managed patch graphs reserve @varname for stable object identity",
-        line: statement.line,
-      };
-    }
-    if (statement.type === "subpatcher_def") {
-      const nested = findReservedVarName({
-        type: "program",
-        statements: statement.body,
-      });
-      if (nested) return nested;
-    }
-  }
-  return null;
+function assertValidPatchScope(scope: string): void {
+  if (isValidPatchScope(scope)) return;
+  throw new Error(
+    `Invalid maxforge scope: "${scope}". Use letters, digits, and underscores.`
+  );
 }
