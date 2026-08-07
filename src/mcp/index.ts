@@ -1,5 +1,7 @@
 export * from "./bridge.js";
+export * from "./dsl-patch-adapter.js";
 export * from "../max/patch-protocol.js";
+export * from "../max/patch-snapshot.js";
 export * from "./mcp-server.js";
 export * from "./service.js";
 export * from "./state-store.js";

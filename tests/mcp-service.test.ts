@@ -15,10 +15,9 @@ import {
   PatchPlanTransport,
   SaveMaxPatchRequest,
 } from "../src/max/patch-protocol.js";
-import {
-  diffPatcherSnapshots,
-  MaxforgePatchService,
-} from "../src/mcp/service.js";
+import { MaxforgePatchService } from "../src/mcp/service.js";
+import { diffPatcherSnapshots } from "../src/max/patch-snapshot.js";
+import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 import {
   PatchServiceState,
   PatchStateStore,
@@ -28,10 +27,17 @@ import { PatchPlan } from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
 
+function createService(
+  transport: PatchPlanTransport,
+  store?: PatchStateStore
+): MaxforgePatchService {
+  return new MaxforgePatchService(new DslPatchAdapter(database), transport, store);
+}
+
 describe("MaxforgePatchService", () => {
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     const first = await service.applyDsl({
       patcherId: "patch-a",
@@ -62,7 +68,7 @@ describe("MaxforgePatchService", () => {
 
   it("compiles read-only plans against the same remembered state used by apply", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -84,7 +90,7 @@ describe("MaxforgePatchService", () => {
 
   it("does not advance remembered state when Max rejects the plan", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     transport.failure = new Error("rejected");
 
     await expect(service.applyDsl({
@@ -99,7 +105,7 @@ describe("MaxforgePatchService", () => {
   it("requires current DSL after MCP restarts against initialized Max state", async () => {
     const transport = new FakeTransport();
     transport.liveRevisions.set("patch-a:voices", "a".repeat(64));
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     await expect(service.applyDsl({
       patcherId: "patch-a",
@@ -112,14 +118,14 @@ describe("MaxforgePatchService", () => {
   it("restores managed graph and inspection baseline across MCP restarts", async () => {
     const transport = new FakeTransport();
     const store = new MemoryStateStore();
-    const firstService = new MaxforgePatchService(database, transport, store);
+    const firstService = createService(transport, store);
     const first = await firstService.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 440",
     });
 
-    const restarted = new MaxforgePatchService(database, transport, store);
+    const restarted = createService(transport, store);
     expect(restarted.getManagedRevisions()).toEqual({
       "patch-a:voices": first.plan.targetRevision,
     });
@@ -138,7 +144,7 @@ describe("MaxforgePatchService", () => {
   it("recovers an acknowledged apply after the acknowledgement was lost", async () => {
     const transport = new FakeTransport();
     const store = new MemoryStateStore();
-    const service = new MaxforgePatchService(database, transport, store);
+    const service = createService(transport, store);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -155,7 +161,7 @@ describe("MaxforgePatchService", () => {
     expect(store.state?.pendingApplies.size).toBe(1);
 
     transport.failureAfterApply = undefined;
-    const restarted = new MaxforgePatchService(database, transport, store);
+    const restarted = createService(transport, store);
     const preview = restarted.compilePlan({
       patcherId: "patch-a",
       scope: "voices",
@@ -173,7 +179,7 @@ describe("MaxforgePatchService", () => {
   it("rejects caller-provided current DSL when its revision differs from Max", async () => {
     const transport = new FakeTransport();
     transport.liveRevisions.set("patch-a:voices", "b".repeat(64));
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     await expect(service.applyDsl({
       patcherId: "patch-a",
@@ -186,7 +192,7 @@ describe("MaxforgePatchService", () => {
 
   it("reports DSL diagnostics without sending an invalid plan", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     await expect(service.applyDsl({
       patcherId: "patch-a",
@@ -198,7 +204,7 @@ describe("MaxforgePatchService", () => {
 
   it("reports exact structural changes without reading the screen", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -230,7 +236,7 @@ describe("MaxforgePatchService", () => {
 
   it("reports live comment, box attribute, and patch-cord attribute edits", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -311,7 +317,7 @@ describe("MaxforgePatchService", () => {
 
   it("blocks a later apply after a managed manual edit", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -335,7 +341,7 @@ describe("MaxforgePatchService", () => {
 
   it("reconciles a managed live edit with an independent desired addition", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     const baseDsl = "osc = cycle~ 440 at(50, 50)";
     await service.applyDsl({
       patcherId: "patch-a",
@@ -404,7 +410,7 @@ describe("MaxforgePatchService", () => {
 
   it("rejects merge when live and desired DSL change the same field", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -439,7 +445,7 @@ describe("MaxforgePatchService", () => {
 
   it("recomputes port metadata when a live object text changes", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     const currentDsl = "osc = cycle~ 440 at(50, 50)";
     await service.applyDsl({
       patcherId: "patch-a",
@@ -490,7 +496,7 @@ describe("MaxforgePatchService", () => {
         text: "cycle~ 880",
       })),
     };
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     const preview = await service.reconcilePlan({
       patcherId: "patch-a",
@@ -513,7 +519,7 @@ describe("MaxforgePatchService", () => {
 
   it("does not misreport an acknowledged apply as failed when baseline capture fails", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
     transport.postApplyInspectionFailure = new Error("snapshot timeout");
 
     const result = await service.applyDsl({
@@ -540,7 +546,7 @@ describe("MaxforgePatchService", () => {
         text: "cycle~ 880",
       })),
     };
-    const service = new MaxforgePatchService(database, transport);
+    const service = createService(transport);
 
     const result = await service.applyDsl({
       patcherId: "patch-a",

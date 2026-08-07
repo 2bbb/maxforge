@@ -1,34 +1,30 @@
-import {
-  CompileWarning,
-  ObjectDatabase,
-} from "../core/types.js";
-import { lookupObject } from "../core/object-db.js";
+import type { CompileWarning } from "../core/types.js";
 import {
   createEmptyPatchGraph,
   diffPatchGraphs,
   PatchGraph,
-  PatchBox,
   PatchPlan,
 } from "../max/patch-graph.js";
-import { compileDslToPatchGraph } from "../max/dsl-patch-graph.js";
 import {
   PatchReconciliationConflict,
   reconcilePatchGraphs,
   reconstructManagedGraph,
-  resolveSnapshotAttributes,
 } from "./reconcile.js";
 import {
   MaxforgeAppliedEvent,
   MaxforgePatcherSnapshot,
-  MaxforgeSnapshotBox,
-  MaxforgeSnapshotConnection,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
 } from "../max/patch-protocol.js";
 import {
+  diffPatcherSnapshots,
+  type PatchSnapshotChange,
+} from "../max/patch-snapshot.js";
+import {
   PatchStateStore,
   PendingPatchApply,
 } from "./state-store.js";
+import type { PatchGraphAdapter } from "./dsl-patch-adapter.js";
 
 export interface CompilePlanRequest {
   readonly patcherId: string;
@@ -70,50 +66,6 @@ export interface ReconcilePlanResult {
   readonly warnings: readonly CompileWarning[];
 }
 
-export type PatchSnapshotChange =
-  | {
-      readonly kind: "box_added";
-      readonly managed: boolean;
-      readonly box: MaxforgeSnapshotBox;
-    }
-  | {
-      readonly kind: "box_removed";
-      readonly managed: boolean;
-      readonly box: MaxforgeSnapshotBox;
-    }
-  | {
-      readonly kind: "box_changed";
-      readonly managed: boolean;
-      readonly fields: readonly (
-        | "varName"
-        | "maxclass"
-        | "patchingRect"
-        | "text"
-        | "comment"
-        | "attributes"
-        | "managed"
-      )[];
-      readonly before: MaxforgeSnapshotBox;
-      readonly after: MaxforgeSnapshotBox;
-    }
-  | {
-      readonly kind: "connection_changed";
-      readonly managed: boolean;
-      readonly fields: readonly "attributes"[];
-      readonly before: MaxforgeSnapshotConnection;
-      readonly after: MaxforgeSnapshotConnection;
-    }
-  | {
-      readonly kind: "connection_added";
-      readonly managed: boolean;
-      readonly connection: MaxforgeSnapshotConnection;
-    }
-  | {
-      readonly kind: "connection_removed";
-      readonly managed: boolean;
-      readonly connection: MaxforgeSnapshotConnection;
-    };
-
 export interface InspectPatchResult {
   readonly snapshot: MaxforgeSnapshotEvent;
   readonly comparisonAvailable: boolean;
@@ -129,7 +81,7 @@ export class MaxforgePatchService {
   private readonly pendingApplies: Map<string, PendingPatchApply>;
 
   constructor(
-    private database: ObjectDatabase,
+    private readonly patchAdapter: PatchGraphAdapter,
     private readonly transport: PatchPlanTransport,
     private readonly stateStore?: PatchStateStore
   ) {
@@ -140,12 +92,8 @@ export class MaxforgePatchService {
     this.pendingApplies = new Map(state?.pendingApplies);
   }
 
-  replaceDatabase(database: ObjectDatabase): void {
-    this.database = database;
-  }
-
   compilePlan(request: CompilePlanRequest): CompilePlanResult {
-    const desired = this.compileGraph(request.desiredDsl, request.scope);
+    const desired = this.patchAdapter.compile(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
     this.assertLiveRevision(request.patcherId, request.scope, current.graph);
     this.assertNoPreservedManualEdits(request, current.graph);
@@ -177,7 +125,7 @@ export class MaxforgePatchService {
       warnings = reconciliation.warnings;
       manualChangesMerged = reconciliation.managedChangeCount;
     } else {
-      const desired = this.compileGraph(request.desiredDsl, request.scope);
+      const desired = this.patchAdapter.compile(request.desiredDsl, request.scope);
       const current = this.resolveCurrentGraph(request);
       this.assertLiveRevision(request.patcherId, request.scope, current.graph);
       this.assertNoPreservedManualEdits(request, current.graph);
@@ -235,7 +183,7 @@ export class MaxforgePatchService {
   async reconcilePlan(
     request: CompilePlanRequest
   ): Promise<ReconcilePlanResult> {
-    const desired = this.compileGraph(request.desiredDsl, request.scope);
+    const desired = this.patchAdapter.compile(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
     this.assertLiveRevision(request.patcherId, request.scope, current.graph);
     const intent = request.currentDsl !== undefined
@@ -261,7 +209,7 @@ export class MaxforgePatchService {
       desired.graph,
       snapshot.patcher,
       baseline,
-      (box, baseBox) => this.resolveLiveBox(box, baseBox)
+      (box, baseBox) => this.patchAdapter.resolveLiveBox(box, baseBox)
     );
     const changes = baseline
       ? diffPatcherSnapshots(baseline, snapshot.patcher)
@@ -362,7 +310,7 @@ export class MaxforgePatchService {
         current,
         snapshot.patcher,
         undefined,
-        (box, baseBox) => this.resolveLiveBox(box, baseBox)
+        (box, baseBox) => this.patchAdapter.resolveLiveBox(box, baseBox)
       );
       managedChangeCount =
         diffPatchGraphs(current, observed.graph).operations.length +
@@ -400,7 +348,7 @@ export class MaxforgePatchService {
         expectedGraph,
         snapshot.patcher,
         undefined,
-        (box, baseBox) => this.resolveLiveBox(box, baseBox)
+        (box, baseBox) => this.patchAdapter.resolveLiveBox(box, baseBox)
       );
       if (
         observed.conflicts.length > 0 ||
@@ -430,7 +378,7 @@ export class MaxforgePatchService {
   } {
     this.resolvePendingApply(targetKey(request.patcherId, request.scope));
     if (request.currentDsl !== undefined) {
-      return this.compileGraph(request.currentDsl, request.scope);
+      return this.patchAdapter.compile(request.currentDsl, request.scope);
     }
 
     const managed = this.managedGraphs.get(
@@ -564,49 +512,6 @@ export class MaxforgePatchService {
       );
     }
   }
-
-  private compileGraph(
-    source: string,
-    scope: string
-  ): { graph: PatchGraph; warnings: readonly CompileWarning[] } {
-    const result = compileDslToPatchGraph(source, this.database, scope);
-    if (!result.success || !result.graph) {
-      const diagnostics = result.errors.map((error) => {
-        const location = error.line ? `Line ${error.line}: ` : "";
-        return `${location}[${error.code}] ${error.message}`;
-      });
-      throw new Error(diagnostics.join("\n") || "DSL compilation failed");
-    }
-    return {
-      graph: result.graph,
-      warnings: result.warnings,
-    };
-  }
-
-  private resolveLiveBox(
-    snapshot: MaxforgeSnapshotBox,
-    base: PatchBox,
-    baseline?: MaxforgeSnapshotBox
-  ): PatchBox {
-    const objectText = base.maxclass === "newobj"
-      ? snapshot.text
-      : snapshot.maxclass;
-    const resolved = !base.patcher && objectText
-      ? lookupObject(objectText, this.database, true)
-      : null;
-    return {
-      ...base,
-      varName: snapshot.varName,
-      maxclass: resolved?.maxclass ?? base.maxclass,
-      numinlets: resolved?.def.numinlets ?? base.numinlets,
-      numoutlets: resolved?.def.numoutlets ?? base.numoutlets,
-      outlettype: resolved?.def.outlettype ?? base.outlettype,
-      patchingRect: snapshot.patchingRect,
-      text: snapshot.text,
-      comment: snapshot.comment,
-      attributes: resolveSnapshotAttributes(snapshot, base, baseline),
-    };
-  }
 }
 
 export class PatchReconciliationError extends Error {
@@ -623,207 +528,4 @@ export class PatchReconciliationError extends Error {
 
 function targetKey(patcherId: string, scope: string): string {
   return `${patcherId}:${scope}`;
-}
-
-export function diffPatcherSnapshots(
-  baseline: MaxforgePatcherSnapshot,
-  current: MaxforgePatcherSnapshot
-): readonly PatchSnapshotChange[] {
-  const changes: PatchSnapshotChange[] = [];
-  const baselineBoxes = new Map(
-    baseline.boxes.map((box) => [snapshotBoxKey(box), box])
-  );
-  const currentBoxes = new Map(
-    current.boxes.map((box) => [snapshotBoxKey(box), box])
-  );
-
-  for (const [key, box] of baselineBoxes) {
-    const currentBox = currentBoxes.get(key);
-    if (!currentBox) {
-      changes.push({ kind: "box_removed", managed: box.managed, box });
-      continue;
-    }
-    const fields = changedBoxFields(box, currentBox);
-    if (fields.length > 0) {
-      changes.push({
-        kind: "box_changed",
-        managed: box.managed || currentBox.managed,
-        fields,
-        before: box,
-        after: currentBox,
-      });
-    }
-  }
-  for (const [key, box] of currentBoxes) {
-    if (!baselineBoxes.has(key)) {
-      changes.push({ kind: "box_added", managed: box.managed, box });
-    }
-  }
-
-  const baselineConnections = new Map(
-    baseline.connections.map((connection) => [
-      snapshotConnectionKey(connection),
-      connection,
-    ])
-  );
-  const currentConnections = new Map(
-    current.connections.map((connection) => [
-      snapshotConnectionKey(connection),
-      connection,
-    ])
-  );
-  const baselineManagedBoxes = managedBoxKeys(baseline);
-  const currentManagedBoxes = managedBoxKeys(current);
-
-  for (const [key, connection] of baselineConnections) {
-    const currentConnection = currentConnections.get(key);
-    if (!currentConnection) {
-      changes.push({
-        kind: "connection_removed",
-        managed: connectionTouchesManagedBox(
-          connection,
-          baselineManagedBoxes
-        ),
-        connection,
-      });
-    } else if (!sameSnapshotAttributes(
-      connection.attributes,
-      currentConnection.attributes
-    )) {
-      changes.push({
-        kind: "connection_changed",
-        managed: connectionTouchesManagedBox(
-          connection,
-          baselineManagedBoxes
-        ) || connectionTouchesManagedBox(
-          currentConnection,
-          currentManagedBoxes
-        ),
-        fields: ["attributes"],
-        before: connection,
-        after: currentConnection,
-      });
-    }
-  }
-  for (const [key, connection] of currentConnections) {
-    if (!baselineConnections.has(key)) {
-      changes.push({
-        kind: "connection_added",
-        managed: connectionTouchesManagedBox(
-          connection,
-          currentManagedBoxes
-        ),
-        connection,
-      });
-    }
-  }
-
-  return changes.sort((left, right) =>
-    snapshotChangeKey(left).localeCompare(snapshotChangeKey(right))
-  );
-}
-
-function snapshotBoxKey(box: MaxforgeSnapshotBox): string {
-  return `${pathKey(box.targetPath)}\u0000${box.runtimeId}`;
-}
-
-function changedBoxFields(
-  baseline: MaxforgeSnapshotBox,
-  current: MaxforgeSnapshotBox
-): Array<
-  | "varName"
-  | "maxclass"
-  | "patchingRect"
-  | "text"
-  | "comment"
-  | "attributes"
-  | "managed"
-> {
-  const fields: Array<
-    | "varName"
-    | "maxclass"
-    | "patchingRect"
-    | "text"
-    | "comment"
-    | "attributes"
-    | "managed"
-  > = [];
-  if (baseline.varName !== current.varName) fields.push("varName");
-  if (baseline.maxclass !== current.maxclass) fields.push("maxclass");
-  if (
-    baseline.patchingRect.some(
-      (value, index) => value !== current.patchingRect[index]
-    )
-  ) {
-    fields.push("patchingRect");
-  }
-  if (baseline.text !== current.text) fields.push("text");
-  if (baseline.comment !== current.comment) fields.push("comment");
-  if (!sameSnapshotAttributes(baseline.attributes, current.attributes)) {
-    fields.push("attributes");
-  }
-  if (baseline.managed !== current.managed) fields.push("managed");
-  return fields;
-}
-
-function snapshotConnectionKey(
-  connection: MaxforgeSnapshotConnection
-): string {
-  return [
-    pathKey(connection.targetPath),
-    connection.source.runtimeId,
-    connection.source.port,
-    connection.destination.runtimeId,
-    connection.destination.port,
-  ].join("\u0000");
-}
-
-function managedBoxKeys(snapshot: MaxforgePatcherSnapshot): ReadonlySet<string> {
-  return new Set(
-    snapshot.boxes
-      .filter((box) => box.managed)
-      .map((box) => snapshotBoxKey(box))
-  );
-}
-
-function connectionTouchesManagedBox(
-  connection: MaxforgeSnapshotConnection,
-  managedBoxes: ReadonlySet<string>
-): boolean {
-  const path = pathKey(connection.targetPath);
-  return managedBoxes.has(`${path}\u0000${connection.source.runtimeId}`) ||
-    managedBoxes.has(`${path}\u0000${connection.destination.runtimeId}`);
-}
-
-function snapshotChangeKey(change: PatchSnapshotChange): string {
-  if (change.kind === "box_added" || change.kind === "box_removed") {
-    return `${change.kind}\u0000${snapshotBoxKey(change.box)}`;
-  }
-  if (change.kind === "box_changed") {
-    return `${change.kind}\u0000${snapshotBoxKey(change.after)}`;
-  }
-  if (change.kind === "connection_changed") {
-    return `${change.kind}\u0000${snapshotConnectionKey(change.after)}`;
-  }
-  return `${change.kind}\u0000${snapshotConnectionKey(change.connection)}`;
-}
-
-function sameSnapshotAttributes(
-  left: Readonly<Record<string, unknown>>,
-  right: Readonly<Record<string, unknown>>
-): boolean {
-  return JSON.stringify(sortSnapshotAttributes(left)) ===
-    JSON.stringify(sortSnapshotAttributes(right));
-}
-
-function sortSnapshotAttributes(
-  attributes: Readonly<Record<string, unknown>>
-): Readonly<Record<string, unknown>> {
-  return Object.fromEntries(
-    Object.entries(attributes).sort(([left], [right]) => left.localeCompare(right))
-  );
-}
-
-function pathKey(path: readonly string[]): string {
-  return path.join("/");
 }

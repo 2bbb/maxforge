@@ -22,6 +22,7 @@ import {
 } from "../src/max/patch-protocol.js";
 import { createMaxforgeMcpServer } from "../src/mcp/mcp-server.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
+import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 import { PatchPlan } from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
@@ -82,13 +83,15 @@ const reloadedCatalog: LoadedObjectCatalog = {
 describe("maxforge MCP protocol surface", () => {
   it("lists tools and compiles a plan over an MCP transport", async () => {
     const transport = new FakeTransport();
-    const service = new MaxforgePatchService(configuredDatabase, transport);
+    const patchAdapter = new DslPatchAdapter(configuredDatabase);
+    const service = new MaxforgePatchService(patchAdapter, transport);
     let reloadShouldFail = false;
     const server = createMaxforgeMcpServer({
       service,
       transport,
       version: "test",
       catalog,
+      patchAdapter,
       reloadCatalog: async () => {
         if (reloadShouldFail) throw new Error("invalid replacement catalog");
         return reloadedCatalog;

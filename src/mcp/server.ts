@@ -8,6 +8,7 @@ import { loadObjectCatalog } from "../core/catalog-config.js";
 import { MaxforgeWebSocketBridge } from "./bridge.js";
 import { createMaxforgeMcpServer } from "./mcp-server.js";
 import { MaxforgePatchService } from "./service.js";
+import { DslPatchAdapter } from "./dsl-patch-adapter.js";
 import {
   JsonFilePatchStateStore,
   stateFileFromEnvironment,
@@ -51,7 +52,8 @@ export async function main(): Promise<void> {
   const stateStore = stateFile
     ? new JsonFilePatchStateStore(stateFile)
     : undefined;
-  const service = new MaxforgePatchService(catalog.database, bridge, stateStore);
+  const patchAdapter = new DslPatchAdapter(catalog.database);
+  const service = new MaxforgePatchService(patchAdapter, bridge, stateStore);
   let handle;
   try {
     handle = serveStdio(() =>
@@ -60,6 +62,7 @@ export async function main(): Promise<void> {
         transport: bridge,
         version,
         catalog,
+        patchAdapter,
         reloadCatalog: () => loadObjectCatalog(catalogOptions),
       })
     );

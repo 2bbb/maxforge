@@ -6,6 +6,7 @@ import {
 } from "../core/catalog-config.js";
 import { MaxforgePatchService } from "./service.js";
 import { PatchPlanTransport } from "../max/patch-protocol.js";
+import { DslPatchAdapter } from "./dsl-patch-adapter.js";
 
 const scopeSchema = z
   .string()
@@ -320,6 +321,7 @@ export interface CreateMcpServerOptions {
   readonly transport: PatchPlanTransport;
   readonly version: string;
   readonly catalog: LoadedObjectCatalog;
+  readonly patchAdapter: DslPatchAdapter;
   readonly reloadCatalog: () => Promise<LoadedObjectCatalog>;
 }
 
@@ -483,7 +485,7 @@ export function createMaxforgeMcpServer(
       try {
         const previous = currentCatalog;
         const replacement = await options.reloadCatalog();
-        options.service.replaceDatabase(replacement.database);
+        options.patchAdapter.replaceDatabase(replacement.database);
         currentCatalog = replacement;
         return toolResult({
           previous: catalogStatus(previous),
