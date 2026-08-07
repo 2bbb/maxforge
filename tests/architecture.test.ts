@@ -26,6 +26,8 @@ describe("module boundaries", () => {
   });
 
   it("does not re-export patch-domain internals from the MCP entry point", () => {
-    expect(source("src/mcp/index.ts")).not.toContain("../max/");
+    const mcpIndex = source("src/mcp/index.ts");
+    expect(mcpIndex).not.toContain("../max/");
+    expect(mcpIndex).not.toContain("./dsl-patch-adapter.js");
   });
 });
