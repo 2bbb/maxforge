@@ -3,6 +3,7 @@ import type {
   MaxforgeSnapshotBox,
   MaxforgeSnapshotConnection,
 } from "./patch-protocol.js";
+import type { PatchBox } from "./patch-graph.js";
 
 export type PatchSnapshotChange =
   | {
@@ -47,6 +48,34 @@ export type PatchSnapshotChange =
       readonly managed: boolean;
       readonly connection: MaxforgeSnapshotConnection;
     };
+
+export function resolveSnapshotAttributes(
+  snapshot: MaxforgeSnapshotBox,
+  base: PatchBox,
+  baseline?: MaxforgeSnapshotBox
+): PatchBox["attributes"] {
+  const attributes: Record<string, PatchBox["attributes"][string]> = {};
+  for (const [name, value] of Object.entries(base.attributes)) {
+    if (name in snapshot.attributes) {
+      attributes[name] = snapshot.attributes[name];
+    } else if (!baseline || !(name in baseline.attributes)) {
+      // Max omits unchanged/default attributes from inspection. Preserve an
+      // explicit DSL value until a captured baseline proves it was removed.
+      attributes[name] = value;
+    }
+  }
+  if (baseline) {
+    for (const [name, value] of Object.entries(snapshot.attributes)) {
+      if (
+        name in base.attributes ||
+        JSON.stringify(value) !== JSON.stringify(baseline.attributes[name])
+      ) {
+        attributes[name] = value;
+      }
+    }
+  }
+  return attributes;
+}
 
 export function diffPatcherSnapshots(
   baseline: MaxforgePatcherSnapshot,

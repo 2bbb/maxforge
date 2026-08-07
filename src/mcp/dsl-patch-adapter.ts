@@ -3,19 +3,8 @@ import type { CompileWarning, ObjectDatabase } from "../core/types.js";
 import { compileDslToPatchGraph } from "../max/dsl-patch-graph.js";
 import type { PatchBox, PatchGraph } from "../max/patch-graph.js";
 import type { MaxforgeSnapshotBox } from "../max/patch-protocol.js";
-import { resolveSnapshotAttributes } from "./reconcile.js";
-
-export interface PatchGraphAdapter {
-  compile(
-    source: string,
-    scope: string
-  ): { graph: PatchGraph; warnings: readonly CompileWarning[] };
-  resolveLiveBox(
-    snapshot: MaxforgeSnapshotBox,
-    base: PatchBox,
-    baseline?: MaxforgeSnapshotBox
-  ): PatchBox;
-}
+import { resolveSnapshotAttributes } from "../max/patch-snapshot.js";
+import type { PatchGraphAdapter } from "./patch-adapter.js";
 
 export class DslPatchAdapter implements PatchGraphAdapter {
   constructor(private database: ObjectDatabase) {}

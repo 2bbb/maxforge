@@ -17,6 +17,7 @@ import {
   MaxforgeSnapshotBox,
   MaxforgeSnapshotConnection,
 } from "../max/patch-protocol.js";
+import { resolveSnapshotAttributes } from "../max/patch-snapshot.js";
 
 export type PatchReconciliationConflict =
   | PatchMergeConflict
@@ -297,34 +298,6 @@ function defaultLiveBox(
     comment: snapshot.comment,
     attributes: resolveSnapshotAttributes(snapshot, base, baseline),
   };
-}
-
-export function resolveSnapshotAttributes(
-  snapshot: MaxforgeSnapshotBox,
-  base: PatchBox,
-  baseline?: MaxforgeSnapshotBox
-): PatchBox["attributes"] {
-  const attributes: Record<string, PatchBox["attributes"][string]> = {};
-  for (const [name, value] of Object.entries(base.attributes)) {
-    if (name in snapshot.attributes) {
-      attributes[name] = snapshot.attributes[name];
-    } else if (!baseline || !(name in baseline.attributes)) {
-      // Max omits unchanged/default attributes from inspection. Preserve an
-      // explicit DSL value until a captured baseline proves it was removed.
-      attributes[name] = value;
-    }
-  }
-  if (baseline) {
-    for (const [name, value] of Object.entries(snapshot.attributes)) {
-      if (
-        name in base.attributes ||
-        JSON.stringify(value) !== JSON.stringify(baseline.attributes[name])
-      ) {
-        attributes[name] = value;
-      }
-    }
-  }
-  return attributes;
 }
 
 function flattenBaseBoxes(

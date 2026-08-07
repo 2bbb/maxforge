@@ -24,7 +24,7 @@ import {
   PatchStateStore,
   PendingPatchApply,
 } from "./state-store.js";
-import type { PatchGraphAdapter } from "./dsl-patch-adapter.js";
+import type { PatchGraphAdapter } from "./patch-adapter.js";
 
 export interface CompilePlanRequest {
   readonly patcherId: string;
