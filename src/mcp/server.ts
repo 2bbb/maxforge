@@ -62,7 +62,8 @@ export async function main(): Promise<void> {
         transport: bridge,
         version,
         catalog,
-        patchAdapter,
+        replaceObjectDatabase: (database) =>
+          patchAdapter.replaceDatabase(database),
         reloadCatalog: () => loadObjectCatalog(catalogOptions),
       })
     );

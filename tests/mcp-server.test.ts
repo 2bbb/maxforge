@@ -91,7 +91,8 @@ describe("maxforge MCP protocol surface", () => {
       transport,
       version: "test",
       catalog,
-      patchAdapter,
+      replaceObjectDatabase: (database) =>
+        patchAdapter.replaceDatabase(database),
       reloadCatalog: async () => {
         if (reloadShouldFail) throw new Error("invalid replacement catalog");
         return reloadedCatalog;
@@ -125,6 +126,10 @@ describe("maxforge MCP protocol surface", () => {
         definitions.find((tool) => tool.name === "maxforge_apply_dsl")
           ?.description
       ).toContain("Do not retry");
+      expect(JSON.stringify(
+        definitions.find((tool) => tool.name === "maxforge_inspect_patch")
+          ?.outputSchema
+      )).toContain("connection_changed");
 
       const help = await client.request(3, "tools/call", {
         name: "maxforge_help",
