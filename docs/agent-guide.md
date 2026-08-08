@@ -230,16 +230,22 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    scope、titleを指定し、既存`.maxpat`を対象にするなら
    `maxforge_open_patch`へMax host上の絶対pathを指定して登録完了まで待つ。
 5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
-6. managed manual changeがあれば、完全なdesired DSLを
-   `maxforge_reconcile_patch`へ渡す。`canApply: true`でなければ適用しない。
-7. 通常経路では`maxforge_compile_plan`、手動変更の統合経路ではreconcileが
+6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。layout、object設定、
+   annotation、ownership、routing等のsignalは「何が変わったか」の証拠であり、
+   人間の意図そのものと断定しない。複数の解釈が次の操作を変える場合だけ確認する。
+7. 現在のmanaged graphを次の基準にするなら、reviewが返した正確な
+   structure tokenで`maxforge_adopt_live_changes`を呼ぶ。次の完全なdesired DSLが
+   既にあるなら`maxforge_reconcile_patch`へ渡す。`canAdopt: true`または
+   `canApply: true`でなければ進めない。unmanaged追加を暗黙に所有しない。
+8. adopt後は受け入れたmanaged変更をworking DSLへ反映する。通常経路では
+   `maxforge_compile_plan`、手動変更の統合経路ではreconcileが
    返したplanを確認する。
-8. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
+9. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
    場合だけ`manualChanges: "merge"`を指定する。
-9. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
+10. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いする。
-10. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
-11. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
+11. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
+12. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
     dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
     `discard: true`を渡すまで拒否される。
 
@@ -247,6 +253,10 @@ MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の
 `currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
 
 managed manual changeをinspectしただけではbaselineは更新されない。
+`maxforge_review_live_changes`は差分を中立的なsignalへ分類するが、意図を捏造しない。
+現在のlive managed graphを受け入れる場合は、同じstructure tokenが有効な間だけ
+`maxforge_adopt_live_changes`で採用できる。既にMax上にある編集は再実行せず、
+zero-operation planでnative revisionを進める。採用後はworking DSLも更新する。
 `maxforge_reconcile_patch`は前回graph・live snapshot・次のdesired DSLを三者比較し、
 非競合変更だけを保持する。同一fieldの競合やchange-vs-deleteは明示的に解消する。
 apply側は再inspectした構造tokenをplanへ埋め込み、native externalが変更直前に

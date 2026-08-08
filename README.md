@@ -251,9 +251,19 @@ human-readable status and local diagnostics. See
 - `maxforge_save_patch`
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
+- `maxforge_review_live_changes`
+- `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
+
+`maxforge_review_live_changes` turns live differences into neutral evidence such
+as layout, object-configuration, annotation, ownership, and routing signals. It
+does not pretend that a structural difference proves human intent. Once the
+agent and human have accepted the managed edits, `maxforge_adopt_live_changes`
+binds adoption to the reviewed structure token, reconstructs the managed graph,
+and advances the native revision without replaying edits already made in Max.
+Unmanaged additions remain outside automatic ownership.
 
 `maxforge_reconcile_patch` performs a read-only three-way merge of the last
 agent intent, the current live Max graph, and the next complete DSL. Apply with

@@ -151,9 +151,36 @@ describe("maxforge MCP protocol surface", () => {
             topic: "recovery",
             steps: expect.arrayContaining([
               expect.stringContaining("currentDsl"),
+              expect.stringContaining("maxforge_review_live_changes"),
+              expect.stringContaining("maxforge_adopt_live_changes"),
             ]),
             rules: expect.arrayContaining([
               expect.stringContaining("never silently chooses"),
+            ]),
+          },
+        },
+      });
+
+      const workflowHelp = await client.request(31, "tools/call", {
+        name: "maxforge_help",
+        arguments: { topic: "workflow" },
+      });
+      expect(workflowHelp).toMatchObject({
+        result: {
+          structuredContent: {
+            topic: "workflow",
+            steps: expect.arrayContaining([
+              expect.stringContaining("evidence of what changed"),
+              expect.stringContaining("exact reviewed structure token"),
+              expect.stringContaining("update the working complete DSL"),
+            ]),
+            rules: expect.arrayContaining([
+              expect.stringContaining("diff proves human intent"),
+              expect.stringContaining("not silently claimed"),
+            ]),
+            relatedTools: expect.arrayContaining([
+              "maxforge_review_live_changes",
+              "maxforge_adopt_live_changes",
             ]),
           },
         },

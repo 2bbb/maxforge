@@ -80,8 +80,11 @@ for i in 0..7 {
    first, then list patches, select the explicit `patcherId`, inspect it,
    preview with `maxforge_compile_plan`, and apply the complete desired state
    with `maxforge_apply_dsl`. If managed manual edits exist, use
-   `maxforge_reconcile_patch` and apply with `manualChanges: "merge"` only when
-   it reports `canApply: true`. Use `maxforge_create_patch` when isolation in a
+   `maxforge_review_live_changes` to separate observed evidence from inferred
+   intent. Adopt an accepted current baseline with its exact structure token,
+   or use `maxforge_reconcile_patch` and apply with `manualChanges: "merge"`
+   only when it reports `canApply: true`. Update the complete working DSL after
+   either path. Use `maxforge_create_patch` when isolation in a
    new Max window is required. Prefer the dedicated `maxforge-mcp` skill for
    sustained live control. Never treat a timeout as success. Inspection reports
    text/comments plus bounded scalar or flat-array box/patch-cord attributes;

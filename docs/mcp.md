@@ -166,12 +166,16 @@ The safe live sequence is fixed:
 5. create a blank target with `maxforge_create_patch`, or open an existing file
    with `maxforge_open_patch`, only when a separate target is required
 6. `maxforge_inspect_patch`
-7. if managed changes exist, `maxforge_reconcile_patch` with complete desired DSL
-8. require `canApply: true`, then review warnings and destructive operations
-9. otherwise use `maxforge_compile_plan` for the ordinary no-drift path
-10. `maxforge_apply_dsl` with the same target and desired DSL; set
+7. if live changes exist, call `maxforge_review_live_changes`; treat its signals
+   as evidence to interpret, not as a claim about the human's intent
+8. either adopt accepted managed edits with the exact returned structure token,
+   or reconcile them with the next complete desired DSL; never do both blindly
+9. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
+   and destructive operations
+10. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
+11. `maxforge_apply_dsl` with the same target and desired DSL; set
    `manualChanges: "merge"` only after successful reconciliation
-11. verify acknowledgement revision, inspect again, and call
+12. verify acknowledgement revision, inspect again, and call
     `maxforge_save_patch` only when persistence is intended
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
@@ -301,11 +305,59 @@ The result includes:
 - exact box and connection changes since the last acknowledged apply;
 - separate managed and unmanaged change counts.
 
-The comparison baseline is captured immediately after a successful
-`maxforge_apply_dsl`. Inspection is read-only and does not advance that
-baseline. Before the first apply, or after the MCP process restarts,
+The comparison baseline is captured immediately after a successful apply or
+adoption. Inspection is read-only and does not advance that baseline. Before
+the first baseline, or when persistence was disabled/unavailable,
 `comparisonAvailable` is `false`: the full live snapshot remains available,
 but the server cannot honestly claim which prior action caused its state.
+
+### `maxforge_review_live_changes`
+
+Inspects the target and converts changes since the comparison baseline into a
+structured, neutral review. Signals include layout, object configuration,
+annotation, box attributes, ownership, object addition/removal, routing, and
+connection attributes. The result also includes the raw changes, managed and
+unmanaged runtime IDs, `canAdopt`, conflicts, and the exact `structureToken`.
+
+This tool reports **what changed**, not **why it changed**. A moved box may be a
+cosmetic cleanup, a grouping hint, or an accidental drag. The agent should use
+the conversation and surrounding graph to infer likely intent, state uncertainty
+when more than one explanation remains, and ask the human only when that
+ambiguity changes the next action.
+
+Unmanaged additions are useful context but are not silently claimed by the
+managed scope. A newly introduced reserved managed identity, ownership conflict,
+or unsupported structural change makes `canAdopt` false.
+
+### `maxforge_adopt_live_changes`
+
+Accepts the exact reviewed live managed structure as the new acknowledged and
+agent-intent baseline.
+
+Arguments:
+
+- `patcherId` — registered target patch;
+- `scope` — target managed namespace;
+- `expectedStructureToken` — token returned by the immediately preceding
+  `maxforge_review_live_changes` call.
+
+Adoption re-inspects Max and rejects a stale token. When safe, it reconstructs
+the managed graph from the live snapshot and sends a zero-operation plan whose
+only state transition is the native revision. It does not replay moves, text
+changes, deletions, or rewiring that already happened in Max. A zero-operation
+acknowledgement is therefore valid only through this token-bound adoption path;
+it is not a general way to bypass revision validation.
+
+After adoption, update the working complete DSL to represent every adopted
+managed edit before the next desired-state apply. Adoption updates persisted
+PatchGraph state, not the agent's source file or chat-held DSL text. If the DSL
+is left stale, a later complete apply can request the human's accepted changes
+be removed.
+
+Use adoption when the human's current managed patch should become the baseline
+before the agent plans the next step. Use `maxforge_reconcile_patch` instead when
+the agent already has a concrete next complete DSL and needs to merge live edits
+with that desired change in one preview/apply cycle.
 
 ### `maxforge_reconcile_patch`
 
@@ -419,6 +471,26 @@ pass the same object to `maxforge_apply_dsl` with `manualChanges` added:
 { "manualChanges": "merge" }
 ```
 
+To accept the current human edits before authoring the next DSL, review and
+adopt instead:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated"
+}
+```
+
+Pass the returned token without modification:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "expectedStructureToken": "<token from maxforge_review_live_changes>"
+}
+```
+
 Review `plan.operations` and `warnings` from `maxforge_compile_plan`. A
 successful `maxforge_apply_dsl` result has this top-level shape:
 
@@ -526,7 +598,7 @@ optimistic concurrency.
 | Reconciliation reports conflicts | Both sides changed the same field, one changed a box the other deleted, a new reserved identity appeared, or a desired replacement would destroy an unmanaged cord | Resolve the listed conflict explicitly; do not force or retry the apply |
 | Apply times out or transport disconnects | Acknowledgement is missing; Max may be unchanged, applied, or partially mutated | Do not retry; call status and inspect first |
 | `baselineCaptured: false` | Max acknowledged apply but the follow-up snapshot failed | Treat apply as successful, inspect explicitly, and do not repeat solely for baseline capture |
-| `comparisonAvailable: false` | No baseline exists in this MCP process | Use the full snapshot; do not invent historical changes |
+| `comparisonAvailable: false` | No persisted comparison baseline is available | Use the full snapshot; do not invent historical changes |
 
 ## Failure contract
 

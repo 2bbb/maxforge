@@ -276,7 +276,9 @@ const HELP_CONTENT = {
       "After editing configured catalog files, call maxforge_reload_catalog and verify the replacement digest before compiling.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
-      "If managed edits exist, call maxforge_reconcile_patch and require canApply=true before preserving them.",
+      "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
+      "To accept the current managed graph as the baseline, call maxforge_adopt_live_changes with the exact reviewed structure token. If a concrete next DSL is already ready, use maxforge_reconcile_patch instead and require canApply=true.",
+      "After adoption, update the working complete DSL with every accepted managed edit before compiling the next desired state.",
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
@@ -285,6 +287,8 @@ const HELP_CONTENT = {
     ],
     rules: [
       "DSL is complete desired state, not an imperative edit; omitted managed objects are removed.",
+      "Never claim that a diff proves human intent. Ask only when unresolved interpretations would change the next action.",
+      "Unmanaged additions are context and are not silently claimed by adoption.",
       "Ordinary compile/apply is rejected while the acknowledged graph still differs from the agent's last desired DSL due to preserved human edits.",
       "Apply binds the inspected live structure token; Max rejects the plan if the patch changes before native mutation.",
       "Never mutate an unlisted patcherId or a scope different from the registration.",
@@ -295,6 +299,8 @@ const HELP_CONTENT = {
       "maxforge_reload_catalog",
       "maxforge_list_patches",
       "maxforge_inspect_patch",
+      "maxforge_review_live_changes",
+      "maxforge_adopt_live_changes",
       "maxforge_reconcile_patch",
       "maxforge_compile_plan",
       "maxforge_apply_dsl",
@@ -331,7 +337,9 @@ const HELP_CONTENT = {
       "After an MCP process restart, call maxforge_status and verify that the expected state file and managed revision were restored, then inspect the target.",
       "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
       "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
-      "If inspect reports managed manual changes, call maxforge_reconcile_patch with the next complete desired DSL.",
+      "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
+      "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then update the working complete DSL.",
+      "If a concrete next desired DSL is ready, call maxforge_reconcile_patch instead.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
       "If baselineCaptured is false, the apply still succeeded; do not repeat it solely to obtain a baseline.",
@@ -339,12 +347,15 @@ const HELP_CONTENT = {
     ],
     rules: [
       "Persistent state stores graphs and inspection baselines; a revision hash alone still cannot reconstruct either.",
+      "Adoption rejects a stale structure token and advances revision without replaying edits that already exist in Max.",
       "Reconciliation preserves non-conflicting managed edits but never silently chooses between conflicting changes.",
       "Protocol v1 attempts generated reverse operations after a runtime mutation failure, but is not transactional; inspect before retrying while the revision remains unchanged.",
     ],
     relatedTools: [
       "maxforge_status",
       "maxforge_inspect_patch",
+      "maxforge_review_live_changes",
+      "maxforge_adopt_live_changes",
       "maxforge_reconcile_patch",
       "maxforge_apply_dsl",
       "maxforge_save_patch",
@@ -357,11 +368,13 @@ const HELP_CONTENT = {
       "Select targets only from maxforge_list_patches.",
       "Preview every nontrivial change with maxforge_compile_plan.",
       "Inspect after apply and separate managed from unmanaged changes.",
+      "Review live changes before attributing intent or accepting them as desired state.",
     ],
     rules: [
       "Only exact maxforge_<scope>_obj_... scripting names belong to the managed scope.",
       "Titles and filenames are display metadata and are not stable identities.",
       "Unmanaged standalone edits do not block apply, but cords touching managed boxes do.",
+      "Adoption applies only to the managed graph and requires the exact reviewed structure token.",
       "Apply-side inspection is bound to native mutation by a structure token; a later human edit rejects the plan instead of being overwritten.",
       "LAN mode uses token authentication over plaintext WebSocket. Keep it on a trusted LAN; it is not an Internet-facing security boundary.",
       "Catalog membership is compiler metadata and does not prove that Max can instantiate an external or find an abstraction.",
@@ -372,6 +385,8 @@ const HELP_CONTENT = {
       "maxforge_list_patches",
       "maxforge_compile_plan",
       "maxforge_inspect_patch",
+      "maxforge_review_live_changes",
+      "maxforge_adopt_live_changes",
     ],
   },
 } as const;
@@ -400,7 +415,10 @@ export function createMaxforgeMcpServer(
         "Before using a project external or abstraction, confirm it with " +
         "maxforge_catalog; membership is metadata, not a Max runtime probe. " +
         "Always select patcherId and scope from maxforge_list_patches, inspect the " +
-        "live patch, preview the complete desired DSL with maxforge_compile_plan, " +
+        "live patch, and review live differences before attributing human intent. " +
+        "Adopt an accepted managed baseline only with the exact reviewed structure " +
+        "token, or reconcile it with a concrete next complete DSL. After adoption, " +
+        "update the working DSL. Preview complete desired DSL with maxforge_compile_plan, " +
         "then pass the same complete DSL to maxforge_apply_dsl. Omitted managed " +
         "objects are deleted. Success requires acknowledgement.revision to equal " +
         "targetRevision and statePersisted to be true. Never retry a timeout or " +

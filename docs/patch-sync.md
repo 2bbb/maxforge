@@ -80,6 +80,12 @@ the live patch immediately before validation and reject a token mismatch before
 any operation runs. MCP apply plans include this token; standalone CLI plans may
 omit it. A revision is optimistic concurrency control, not rollback.
 
+An empty operation list may still advance the revision when MCP adopts managed
+human edits that already exist in Max. That acknowledgement is safe only when
+the service reconstructed the target graph from the live snapshot and bound the
+plan to that snapshot's `baseStructureToken`. It is not a generic revision-reset
+mechanism and must not be used to acknowledge an uninspected graph.
+
 ## Operations
 
 `PatchPlan.operations` is ordered and JSON-serializable:
@@ -264,5 +270,8 @@ both root objects and objects inside `p generated_bank`.
 - MCP comparison baselines begin after an acknowledged apply and survive normal
   process restarts. A snapshot cannot reconstruct edit history predating the
   first stored baseline.
+- Human-edit review classifies observed differences but cannot prove intent.
+  Token-bound adoption can accept managed edits without replaying them; it does
+  not automatically claim unmanaged boxes or rewrite the agent's working DSL.
 - Patchline metadata (`midpoints`, `color`, `hidden`, and `disabled`) is not
   managed in protocol version 1 and is lost if a connection must be recreated.

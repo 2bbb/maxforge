@@ -1,6 +1,6 @@
 ---
 name: maxforge-mcp
-description: Operate live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use when an AI agent must inspect the currently registered Max patch, create an isolated patch window, preview and apply complete maxforge DSL, verify revision acknowledgements, or recover from MCP restart, timeout, controller, registration, baseline, or managed-drift errors. Do not use for offline .maxpat compilation when no live Max connection is required; use the maxforge skill instead.
+description: Operate and collaboratively edit live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use when an AI agent must inspect the currently registered Max patch, interpret and adopt human edits, create an isolated patch window, preview and apply complete maxforge DSL, verify revision acknowledgements, or recover from MCP restart, timeout, controller, registration, baseline, or managed-drift errors. Do not use for offline .maxpat compilation when no live Max connection is required; use the maxforge skill instead.
 ---
 
 # Maxforge MCP
@@ -22,6 +22,8 @@ Require these MCP tools:
 - `maxforge_save_patch`
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
+- `maxforge_review_live_changes`
+- `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
@@ -53,32 +55,41 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
-8. Call `maxforge_compile_plan` with the target and complete `desiredDsl`.
-   Review warnings and every `delete`, `disconnect`, and replacement operation.
-   If inspection reports managed edits, call `maxforge_reconcile_patch`
-   instead and require `canApply: true`. Read every structured conflict when it
-   is false; never convert a conflict into an overwrite.
-9. State the target, operation count, destructive operations, and stop
+8. If inspection reports live changes, call `maxforge_review_live_changes`.
+   Treat its layout, configuration, annotation, ownership, and routing signals
+   as evidence, not as certainty about the human's intent. Infer intent from
+   the graph and conversation; ask the human only when competing interpretations
+   would produce different next actions.
+9. Choose one drift path. If the accepted current managed graph should become
+   the baseline, call `maxforge_adopt_live_changes` with the exact reviewed
+   structure token. If a concrete next desired DSL is already ready, call
+   `maxforge_reconcile_patch` and require `canApply: true`. Do not silently
+   claim unmanaged additions, and never convert a conflict into an overwrite.
+10. After adoption, immediately update the working complete DSL with every
+    accepted managed edit. Otherwise call `maxforge_compile_plan` with the
+    target and complete `desiredDsl`. Review warnings and every `delete`,
+    `disconnect`, and replacement operation.
+11. State the target, operation count, destructive operations, and stop
    condition before mutation.
-10. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
+12. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
    Set `manualChanges: "merge"` only when reconciliation of that exact target
    and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
    Apply repeats inspection and binds its structure token; if the human edits
    the patch before native mutation, treat the resulting rejection as fresh
    drift and inspect again.
-11. Count success only when `acknowledgement.revision` equals `targetRevision`.
+13. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
-12. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
+14. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
-13. After a merged apply, update the working complete DSL to include the
+15. After a merged apply, update the working complete DSL to include the
     preserved human edits. Until it is aligned, continue through reconciliation;
     ordinary compile/apply is intentionally rejected to prevent a silent revert.
-14. Apply does not persist the Max document. Call `maxforge_save_patch` only
+16. Apply does not persist the Max document. Call `maxforge_save_patch` only
     when persistence is intended. Omit `path` only for an already-saved patch;
     save-as requires an absolute Max-host path and explicit `overwrite: true`
     to replace a file.
-15. Use `maxforge_close_patch` only when closure is intended. Dirty state is
+17. Use `maxforge_close_patch` only when closure is intended. Dirty state is
     rejected unless `discard: true` is explicit; save first otherwise.
 
 ## Desired DSL rule
@@ -114,9 +125,19 @@ and target revisions.
 
 ### Managed manual edit detected
 
-Inspection alone does not accept or reset a baseline. Call
-`maxforge_reconcile_patch` with the next complete desired DSL. It performs a
-three-way merge of the previous agent intent, current Max graph, and next
+Inspection alone does not accept or reset a baseline. First call
+`maxforge_review_live_changes`. Its signals describe structural evidence and
+must not be presented as a certain explanation of the human's intent.
+
+If the reviewed managed graph is the state that should survive, adopt it using
+the exact returned structure token. Adoption re-inspects, rejects stale review,
+reconstructs the managed graph, and advances native revision with zero
+structural operations because the edit is already live. Then fold the adopted
+text, position, deletion, and connection changes into the working complete DSL.
+
+If the agent already has a next desired DSL, call `maxforge_reconcile_patch`
+instead. It performs a three-way merge of the previous agent intent, current
+Max graph, and next
 desired graph while retaining the acknowledged graph for native revision safety.
 When `canApply` is true, apply the same DSL with `manualChanges: "merge"`.
 Resolve same-field, change-vs-delete, new-managed-identity, and unmanaged-cord
@@ -156,7 +177,8 @@ do not guess a target.
 - Operate only on targets returned by `maxforge_list_patches`.
 - Manage only exact `maxforge_<scope>_obj_...` scripting names.
 - Preview nontrivial changes before apply.
-- Reconcile managed human edits before preserving them; merge mode is opt-in.
+- Review managed human edits before interpreting them. Adopt an accepted live
+  baseline or reconcile it with a concrete next DSL; both paths are opt-in.
 - Never remove or fabricate `baseStructureToken`; it prevents stale inspected
   state from being mutated after a concurrent human edit.
 - Keep the default unauthenticated WebSocket bridge on loopback. For trusted-LAN
