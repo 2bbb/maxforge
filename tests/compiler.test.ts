@@ -772,6 +772,38 @@ describe("edge cases", () => {
     }
   });
 
+  it("parses at(x,y,width,height) with precise and negative coordinates", () => {
+    const source = `osc = cycle~ 440 at(-12.5, 20.25, 123.5, 31)`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const obj = ast.statements[0];
+    if (obj.type !== "object_def") throw new Error("expected object definition");
+    expect(obj.pos).toEqual([-12.5, 20.25]);
+    expect(obj.size).toEqual([123.5, 31]);
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.boxes[0].box.patching_rect).toEqual([
+      -12.5, 20.25, 123.5, 31,
+    ]);
+  });
+
+  it.each([
+    "osc = cycle~ 440 at(10, 20, 0, 30)",
+    "osc = cycle~ 440 at(10, 20, -1, 30)",
+    "osc = cycle~ 440 at(10, 20, 30)",
+    "osc = cycle~ 440 at(10, 20, 30, 40, 50)",
+    "osc = cycle~ 440 at(10, 20, 1e999, 30)",
+    "osc = cycle~ 440 at(10, 20",
+    "osc = cycle~ 440 at(10, 20))",
+    "osc = cycle~ 440 at((10, 20))",
+  ])("rejects an invalid position suffix: %s", (source) => {
+    const { errors } = parse(source);
+    expect(errors).toEqual([
+      expect.objectContaining({ code: "E007", line: 1 }),
+    ]);
+  });
+
   it("respects at(x,y) in compiled output", () => {
     const source = `
 a = cycle~ 440 at(100, 200)

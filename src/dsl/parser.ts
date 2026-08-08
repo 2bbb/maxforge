@@ -65,7 +65,13 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     const subpatcherMatch = line.match(/^(\w+)\s*=\s*p\s+(\w+)(.*?)\s*\{$/);
     if (subpatcherMatch) {
       const [, name, subpatcherName, attrText] = subpatcherMatch;
-      const { text: cleanSubpatcherText, pos } = parsePositionSuffix(`p ${subpatcherName}${attrText}`);
+      const {
+        text: cleanSubpatcherText,
+        pos,
+        size,
+        errors: positionErrors,
+      } = parsePositionSuffix(`p ${subpatcherName}${attrText}`);
+      appendSyntaxErrors(errors, positionErrors, current.line);
       const { attrs, errors: attributeErrors } = parseAttributes(cleanSubpatcherText);
       appendSyntaxErrors(errors, attributeErrors, current.line);
       const { body, endLine } = parseSubpatcherBody(lines, i + 1, current.line, errors);
@@ -76,6 +82,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
         body,
         line: current.line,
         pos,
+        size,
         attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
       } as SubpatcherDefStmt);
       i = endLine + 1;
@@ -89,6 +96,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
       let objectText = line.substring(eqIdx + 1).trim();
       if (/^\w+$/.test(name)) {
         const positioned = parsePositionSuffix(objectText);
+        appendSyntaxErrors(errors, positioned.errors, current.line);
         objectText = positioned.text;
         const {
           text: cleanText,
@@ -106,6 +114,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
           objectText: cleanText,
           line: current.line,
           pos: positioned.pos,
+          size: positioned.size,
           attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
         } as ObjectDefStmt);
         i++;

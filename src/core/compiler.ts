@@ -98,7 +98,7 @@ export function compile(
         ? ["signal"]
         : result.def.outlettype,
       dynamicPorts: result.def.dynamicPorts,
-      defaultSize: result.def.defaultSize,
+      defaultSize: stmt.size ?? result.def.defaultSize,
       text: isPortObject ? undefined : (result.text || undefined),
       comment: portSpec?.comment,
       line: stmt.line,
@@ -181,7 +181,7 @@ export function compile(
       numinlets: inlets.length,
       numoutlets: outlets.length,
       outlettype: outletTypes,
-      defaultSize: [100, 22],
+      defaultSize: stmt.size ?? [100, 22],
       text: `p ${stmt.subpatcherName}`,
       line: stmt.line,
       patcher: subResult.output!.patcher,

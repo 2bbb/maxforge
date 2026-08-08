@@ -317,7 +317,8 @@ Inspects the target and converts changes since the comparison baseline into a
 structured, neutral review. Signals include layout, object configuration,
 annotation, box attributes, ownership, object addition/removal, routing, and
 connection attributes. The result also includes the raw changes, managed and
-unmanaged runtime IDs, `canAdopt`, conflicts, and the exact `structureToken`.
+unmanaged runtime IDs, `canAdopt`, conflicts, the exact `structureToken`, and
+`proposedWorkingDsl` when the reviewed managed graph round-trips losslessly.
 
 This tool reports **what changed**, not **why it changed**. A moved box may be a
 cosmetic cleanup, a grouping hint, or an accidental drag. The agent should use
@@ -327,7 +328,9 @@ ambiguity changes the next action.
 
 Unmanaged additions are useful context but are not silently claimed by the
 managed scope. A newly introduced reserved managed identity, ownership conflict,
-or unsupported structural change makes `canAdopt` false.
+or unsupported structural change makes `canAdopt` false. Protocol v1 does not
+represent patch-cord attributes in `PatchGraph`, so a managed cord metadata edit
+is reported but cannot be adopted as desired state.
 
 ### `maxforge_adopt_live_changes`
 
@@ -349,10 +352,19 @@ acknowledgement is therefore valid only through this token-bound adoption path;
 it is not a general way to bypass revision validation.
 
 After adoption, update the working complete DSL to represent every adopted
-managed edit before the next desired-state apply. Adoption updates persisted
-PatchGraph state, not the agent's source file or chat-held DSL text. If the DSL
-is left stale, a later complete apply can request the human's accepted changes
-be removed.
+managed edit before the next desired-state apply by replacing the working source
+with the returned `workingDsl`. The service generates this source from the
+adopted graph and verifies that recompilation produces the exact same revision.
+Explicit `at(x, y, width, height)` preserves human resize edits. Adoption
+updates persisted PatchGraph state but cannot rewrite an agent's source file or
+chat state itself. If the returned DSL is ignored, a later complete apply can
+request the human's accepted changes be removed.
+
+`workingDsl` is canonical for the managed graph, not a reproduction of the
+original authoring text. It expands `for`/`if` macros into explicit objects and
+omits patch-level title/description/size because protocol v1 does not manage
+those fields. Preserve a separate authored DSL when macro structure matters;
+use returned `workingDsl` as the revision-safe baseline or `currentDsl`.
 
 Use adoption when the human's current managed patch should become the baseline
 before the agent plans the next step. Use `maxforge_reconcile_patch` instead when
@@ -426,13 +438,24 @@ it does not trust a stale preview. The resulting plan carries the inspected
 validation and rejects the request if any box or cord changed in the interval.
 `manualChangesMerged` reports the managed change count used by that apply.
 
+Every successful apply returns `workingDsl`, an explicit source generated from
+the acknowledged graph and verified to compile to the exact target revision.
+Use it as the next complete source. This is mandatory after merge mode because
+it contains human edits preserved in the merged graph even when they were not
+present in the submitted `desiredDsl`. When
+`workingDslRequiredAsCurrent: true`, include that exact source as `currentDsl`
+in every subsequent preview and apply request until a successful apply returns
+the flag as false. Read-only compile/reconcile calls do not persist alignment;
+passing it only to the preview and omitting it from apply keeps the stale-source
+guard active.
+
 The service tracks the acknowledged merged graph separately from the agent's
 last submitted desired graph. This prevents a later ordinary apply using stale
 DSL from silently reverting a previously preserved human edit. While those
 graphs differ, ordinary compile/apply is rejected; use reconciliation again, or
 provide a complete `currentDsl` that already includes every preserved edit.
-After a merged apply, inspect and update the working DSL if future sessions must
-be restart-safe.
+The returned `workingDsl` is that aligned source; do not keep editing the stale
+pre-merge DSL.
 
 Standalone unmanaged edits remain outside the managed graph. A cord between an
 unmanaged box and a managed box is preserved while that managed box remains in
@@ -491,6 +514,9 @@ Pass the returned token without modification:
 }
 ```
 
+On success, retain the returned `workingDsl` as the complete source for the next
+edit. Do not reconstruct it from summaries or apply the pre-adoption DSL again.
+
 Review `plan.operations` and `warnings` from `maxforge_compile_plan`. A
 successful `maxforge_apply_dsl` result has this top-level shape:
 
@@ -507,6 +533,8 @@ successful `maxforge_apply_dsl` result has this top-level shape:
     "operations": 3
   },
   "baselineCaptured": true,
+  "workingDsl": "<complete explicit DSL for the acknowledged graph>",
+  "workingDslRequiredAsCurrent": false,
   "manualChangesMerged": 0,
   "warnings": []
 }

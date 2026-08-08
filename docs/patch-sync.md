@@ -272,6 +272,11 @@ both root objects and objects inside `p generated_bank`.
   first stored baseline.
 - Human-edit review classifies observed differences but cannot prove intent.
   Token-bound adoption can accept managed edits without replaying them; it does
-  not automatically claim unmanaged boxes or rewrite the agent's working DSL.
+  not automatically claim unmanaged boxes. It returns a lossless explicit
+  working DSL, but the agent must replace its own source with that result.
+- Generated working DSL is an explicit managed-graph representation. It does
+  not preserve authoring macros or patch-level metadata that PatchGraph does not
+  own.
 - Patchline metadata (`midpoints`, `color`, `hidden`, and `disabled`) is not
-  managed in protocol version 1 and is lost if a connection must be recreated.
+  managed in protocol version 1, cannot be adopted as managed desired state,
+  and is lost if a connection must be recreated.

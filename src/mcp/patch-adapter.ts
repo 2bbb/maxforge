@@ -7,6 +7,7 @@ export interface PatchGraphAdapter {
     source: string,
     scope: string
   ): { graph: PatchGraph; warnings: readonly CompileWarning[] };
+  serialize(graph: PatchGraph): string;
   resolveLiveBox(
     snapshot: MaxforgeSnapshotBox,
     base: PatchBox,

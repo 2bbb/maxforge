@@ -1,6 +1,9 @@
 import { lookupObject } from "../core/object-db.js";
 import type { CompileWarning, ObjectDatabase } from "../core/types.js";
-import { compileDslToPatchGraph } from "../max/dsl-patch-graph.js";
+import {
+  compileDslToPatchGraph,
+  patchGraphToDsl,
+} from "../max/dsl-patch-graph.js";
 import type { PatchBox, PatchGraph } from "../max/patch-graph.js";
 import type { MaxforgeSnapshotBox } from "../max/patch-protocol.js";
 import { resolveSnapshotAttributes } from "../max/patch-snapshot.js";
@@ -29,6 +32,18 @@ export class DslPatchAdapter implements PatchGraphAdapter {
       graph: result.graph,
       warnings: result.warnings,
     };
+  }
+
+  serialize(graph: PatchGraph): string {
+    const source = patchGraphToDsl(graph);
+    const roundTrip = this.compile(source, graph.scope).graph;
+    if (roundTrip.revision !== graph.revision) {
+      throw new Error(
+        `Managed graph ${graph.revision} cannot be represented losslessly as DSL; ` +
+        `round-trip produced ${roundTrip.revision}`
+      );
+    }
+    return source;
   }
 
   resolveLiveBox(

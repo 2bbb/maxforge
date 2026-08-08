@@ -64,6 +64,7 @@ describe("MaxforgePatchService", () => {
     expect(service.getManagedRevisions()).toEqual({
       "patch-a:voices": second.plan.targetRevision,
     });
+    expect(second.workingDsl).toContain("osc_1 = cycle~ 660");
   });
 
   it("compiles read-only plans against the same remembered state used by apply", async () => {
@@ -516,12 +517,48 @@ describe("MaxforgePatchService", () => {
     });
     expect(adopted.acknowledgement?.operations).toBe(0);
     expect(transport.plans.at(-1)?.operations).toEqual([]);
+    expect(adopted.workingDsl).toContain("a -> c");
+    expect(adopted.proposedWorkingDsl).toBe(adopted.workingDsl);
 
     const rewiredDsl = initialDsl.replace("a -> b", "a -> c");
     expect(service.compilePlan({
       patcherId: "patch-a",
       scope: "voices",
       desiredDsl: rewiredDsl,
+    }).plan.operations).toEqual([]);
+  });
+
+  it("returns lossless working DSL for an adopted human move and resize", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        patchingRect: [-12.5, 20.25, 123.5, 31] as const,
+      })),
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review.canAdopt).toBe(true);
+    expect(review.proposedWorkingDsl).toContain(
+      "osc = cycle~ 440 at(-12.5, 20.25, 123.5, 31)"
+    );
+    const adopted = await service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    });
+    expect(adopted.workingDsl).toBe(review.proposedWorkingDsl);
+    expect(service.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: adopted.workingDsl,
     }).plan.operations).toEqual([]);
   });
 
@@ -546,6 +583,104 @@ describe("MaxforgePatchService", () => {
       managed: true,
       fields: ["attributes"],
     })]);
+  });
+
+  it("blocks adoption of managed patch-cord metadata not represented by protocol v1", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const dsl = "a = button\nb = button\na -> b";
+    transport.snapshot = snapshotForDsl(dsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: dsl,
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      connections: transport.snapshot.connections.map((connection) => ({
+        ...connection,
+        attributes: { hidden: 1 },
+      })),
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review.canAdopt).toBe(false);
+    expect(review.adoptionBlockedReason).toContain(
+      "protocol version 1 does not represent patch-cord metadata"
+    );
+    expect(review.proposedWorkingDsl).toBeUndefined();
+    await expect(service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    })).rejects.toThrow("cannot be adopted");
+  });
+
+  it("blocks adoption of an added managed patch cord with metadata", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const dsl = "a = button\nb = button";
+    transport.snapshot = snapshotForDsl(dsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: dsl,
+    });
+    const [a, b] = transport.snapshot.boxes;
+    transport.snapshot = {
+      ...transport.snapshot,
+      connections: [{
+        ...snapshotConnection(a, b),
+        attributes: { hidden: 1 },
+      }],
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review.canAdopt).toBe(false);
+    expect(review.adoptionBlockedReason).toContain(
+      "protocol version 1 does not represent patch-cord metadata"
+    );
+    expect(review.proposedWorkingDsl).toBeUndefined();
+    await expect(service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    })).rejects.toThrow("cannot be adopted");
+  });
+
+  it("blocks adoption of a removed managed patch cord with metadata", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const dsl = "a = button\nb = button\na -> b";
+    const snapshot = snapshotForDsl(dsl, "voices");
+    transport.snapshot = {
+      ...snapshot,
+      connections: snapshot.connections.map((connection) => ({
+        ...connection,
+        attributes: { hidden: 1 },
+      })),
+    };
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: dsl,
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      connections: [],
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review.canAdopt).toBe(false);
+    expect(review.adoptionBlockedReason).toContain(
+      "protocol version 1 does not represent patch-cord metadata"
+    );
+    expect(review.proposedWorkingDsl).toBeUndefined();
+    await expect(service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    })).rejects.toThrow("cannot be adopted");
   });
 
   it("blocks a later apply after a managed manual edit", async () => {
@@ -624,6 +759,8 @@ describe("MaxforgePatchService", () => {
     });
 
     expect(applied.manualChangesMerged).toBe(1);
+    expect(applied.workingDslRequiredAsCurrent).toBe(true);
+    expect(applied.workingDsl).toContain("osc = cycle~ 880");
     expect(applied.plan.operations).toEqual([
       expect.objectContaining({
         op: "create",
@@ -639,6 +776,30 @@ describe("MaxforgePatchService", () => {
       desiredDsl:
         `${desiredDsl}\nmeter = meter~ at(50, 150)`,
     })).toThrow("contains previously merged manual edits");
+    expect(service.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      currentDsl: applied.workingDsl,
+      desiredDsl: `${applied.workingDsl}\nmeter = meter~ at(50, 150)`,
+    }).plan.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        box: expect.objectContaining({ id: "obj-meter" }),
+      }),
+    ]);
+
+    const alignedDesiredDsl =
+      `${applied.workingDsl}\nmeter = meter~ at(50, 150)`;
+    transport.snapshot = snapshotForDsl(applied.workingDsl, "voices");
+    transport.snapshotAfterApply = snapshotForDsl(alignedDesiredDsl, "voices");
+    const aligned = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      currentDsl: applied.workingDsl,
+      desiredDsl: alignedDesiredDsl,
+    });
+    expect(aligned.workingDslRequiredAsCurrent).toBe(false);
+    expect(aligned.baselineCaptured).toBe(true);
   });
 
   it("rejects merge when live and desired DSL change the same field", async () => {

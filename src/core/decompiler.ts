@@ -1,9 +1,15 @@
 import { PatcherJSON, BoxJSON, LineJSON } from "./types.js";
 import { extractBoxAttrs } from "./attributes.js";
 
+export interface DecompileOptions {
+  readonly boxName?: (box: BoxJSON) => string | undefined;
+  readonly includeBoxSize?: boolean;
+}
+
 export function decompile(
   patch: PatcherJSON,
-  subpatcherOutletTypes: readonly string[] = []
+  subpatcherOutletTypes: readonly string[] = [],
+  options: DecompileOptions = {}
 ): string {
   const lines: string[] = [];
   const p = patch.patcher;
@@ -24,11 +30,16 @@ export function decompile(
   for (const bw of p.boxes) {
     const box = bw.box;
     const signalPort = signalPortIds.has(box.id);
-    const name = generateName(box, usedNames, signalPort);
+    const name = generateName(
+      box,
+      usedNames,
+      signalPort,
+      options.boxName?.(box)
+    );
     idToName.set(box.id, name);
     usedNames.add(name);
 
-    const dslLine = boxToDSL(box, name, signalPort);
+    const dslLine = boxToDSL(box, name, signalPort, options);
     lines.push(dslLine);
   }
 
@@ -46,8 +57,23 @@ export function decompile(
 function generateName(
   box: BoxJSON,
   usedNames: Set<string>,
-  signalPort: boolean
+  signalPort: boolean,
+  preferredName?: string
 ): string {
+  if (preferredName !== undefined) {
+    if (!/^\w+$/.test(preferredName)) {
+      throw new Error(
+        `Preferred DSL name ${JSON.stringify(preferredName)} is not a valid identifier`
+      );
+    }
+    if (usedNames.has(preferredName)) {
+      throw new Error(
+        `Preferred DSL name ${JSON.stringify(preferredName)} is duplicated`
+      );
+    }
+    return preferredName;
+  }
+
   const base = nameFromBox(box, signalPort);
   let name = base;
   let counter = 2;
@@ -112,10 +138,15 @@ function sanitizeName(name: string): string {
   return n || "obj";
 }
 
-function boxToDSL(box: BoxJSON, name: string, signalPort: boolean): string {
+function boxToDSL(
+  box: BoxJSON,
+  name: string,
+  signalPort: boolean,
+  options: DecompileOptions
+): string {
   const { serialized: attrs, omitted } = extractBoxAttrs(box);
   const attrSuffix = attrs.length > 0 ? " " + attrs.join(" ") : "";
-  const posSuffix = positionSuffix(box);
+  const posSuffix = positionSuffix(box, options.includeBoxSize ?? false);
   const withOmissionNotice = (line: string) => omitted.length === 0
     ? line
     : `${omitted.map((key) =>
@@ -152,7 +183,11 @@ function boxToDSL(box: BoxJSON, name: string, signalPort: boolean): string {
   if (box.maxclass === "newobj" && box.text && box.text.startsWith("p ")) {
     const subName = box.text.substring(2);
     if (box.patcher) {
-      const inner = decompile({ patcher: box.patcher }, box.outlettype ?? []);
+      const inner = decompile(
+        { patcher: box.patcher },
+        box.outlettype ?? [],
+        options
+      );
       const innerLines = inner.trim().split("\n");
       const body = innerLines.map((l) => "  " + l).join("\n");
       return withOmissionNotice(
@@ -236,9 +271,11 @@ function isEscaped(text: string, index: number): boolean {
   return slashCount % 2 === 1;
 }
 
-function positionSuffix(box: BoxJSON): string {
-  const [x, y] = box.patching_rect;
-  return ` at(${Math.round(x)}, ${Math.round(y)})`;
+function positionSuffix(box: BoxJSON, includeBoxSize: boolean): string {
+  const [x, y, width, height] = box.patching_rect;
+  return includeBoxSize
+    ? ` at(${x}, ${y}, ${width}, ${height})`
+    : ` at(${Math.round(x)}, ${Math.round(y)})`;
 }
 
 function lineToDSL(pl: LineJSON, idToName: Map<string, string>): string | null {

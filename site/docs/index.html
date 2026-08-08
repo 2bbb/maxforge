@@ -273,13 +273,14 @@ patch "Title" | "Description" | 800x600</code></pre>
         </p>
 
         <h3>Objects</h3>
-        <pre><code>name = type [arguments...] [@attribute value...] [at(x, y)]</code></pre>
+        <pre><code>name = type [arguments...] [@attribute value...] [at(x, y[, width, height])]</code></pre>
         <ul>
           <li><code>name</code> is unique inside its patcher and becomes a stable generated box ID.</li>
           <li>The catalog contains 320 Max names/aliases with local identity evidence plus the project-owned <code>maxforge.sync</code> external.</li>
           <li>Attributes become Max box properties; structural keys such as <code>id</code>, <code>maxclass</code>, <code>text</code>, and <code>patching_rect</code> are reserved.</li>
           <li>Write <code>\@attribute</code> when the literal <code>@attribute</code> must remain inside a <code>newobj</code> text string.</li>
           <li>Omit <code>at(x, y)</code> for automatic topological layout.</li>
+          <li>Use <code>at(x, y, width, height)</code> when a resized box must round-trip exactly.</li>
         </ul>
         <pre><code>osc = cycle~ 440
 freq = number @minimum 0 @maximum 127
@@ -484,9 +485,9 @@ source[1] -&gt; destination[2]</code></pre>
           <li><span>05</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
           <li><span>06</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Its signals describe evidence, not proven human intent.</div></li>
           <li><span>07</span><div>Adopt an accepted current baseline with <code>maxforge_adopt_live_changes</code> and the exact reviewed token, or reconcile it with a concrete next complete DSL.</div></li>
-          <li><span>08</span><div>After adoption, update the working complete DSL. Otherwise call <code>maxforge_compile_plan</code> and review warnings, deletes, and structural recreation.</div></li>
+          <li><span>08</span><div>After adoption, replace the working source with returned <code>workingDsl</code>. Otherwise call <code>maxforge_compile_plan</code> and review warnings, deletes, and structural recreation.</div></li>
           <li><span>09</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
-          <li><span>10</span><div>Verify the acknowledged revision, inspect again, and preserve every accepted human edit in the working DSL.</div></li>
+          <li><span>10</span><div>Verify the revision and retain returned <code>workingDsl</code>. While <code>workingDslRequiredAsCurrent</code> is true, include it as <code>currentDsl</code> in every preview and apply.</div></li>
         </ol>
         <div class="docs-callout docs-callout-danger">
           <strong>Desired state, not commands</strong>
@@ -511,8 +512,8 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_save_patch</code></td><td>Save or save-as explicitly; apply never saves automatically and overwrite is opt-in.</td></tr>
               <tr><td><code>maxforge_close_patch</code></td><td>Close a registered patch; dirty-state discard is explicit and opt-in.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
-              <tr><td><code>maxforge_review_live_changes</code></td><td>Classify layout, configuration, annotation, ownership, and routing evidence without claiming why the human edited it.</td></tr>
-              <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact structure token and advance revision without replaying live edits.</td></tr>
+              <tr><td><code>maxforge_review_live_changes</code></td><td>Classify layout, configuration, annotation, ownership, and routing evidence; provide proposed working DSL when lossless.</td></tr>
+              <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>
               <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>
               <tr><td><code>maxforge_apply_dsl</code></td><td>Compile, send, acknowledge, and capture a new inspection baseline.</td></tr>
@@ -569,7 +570,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td>Apply timed out</td><td>Do not retry. Call <code>maxforge_help</code> with <code>recovery</code>, inspect the live patch, and determine whether Max applied the revision.</td></tr>
               <tr><td>MCP process restarted</td><td>Check <code>maxforge_status</code>, restored state path/revision, then inspect. Exact <code>currentDsl</code> is required only when persistence was disabled or unavailable.</td></tr>
               <tr><td>Max or the patch restarted</td><td>Wait for registration, then status → list → inspect before compiling another plan.</td></tr>
-              <tr><td>Managed manual edit detected</td><td>Review first. Adopt the accepted current baseline with its exact token, or reconcile with a concrete next DSL. Update the complete working DSL after either path.</td></tr>
+              <tr><td>Managed manual edit detected</td><td>Review first. Adopt the accepted current baseline with its exact token and retain returned <code>workingDsl</code>, or reconcile with a concrete next DSL.</td></tr>
               <tr><td>Unmanaged manual edit detected</td><td>Review it. Unmanaged-only edits are reported but do not block managed mutation.</td></tr>
             </tbody>
           </table>

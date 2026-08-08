@@ -97,7 +97,7 @@ for i in 0..7 {
 
 ## Syntax reminders
 
-- Object: `name = object args... [@attr values...] [at(x, y)]`
+- Object: `name = object args... [@attr values...] [at(x, y[, width, height])]`
 - Escape a literal Max object-text attribute as `\@attr`; plain `@attr` is a maxforge box property.
 - Connection: `a -> b -> c`, or `src[1] -> dst[2]` for outlet/inlet indices.
 - Subpatcher: `fx = p name { ... }` with `inlet`/`outlet` objects inside.

@@ -28,7 +28,7 @@ It supports:
 - **320 Max 9 object names/aliases with local identity evidence**, plus the project-owned `maxforge.sync` external; port metadata has explicit fixed, argument-dependent, and dynamic categories
 - **Project object catalogs** for third-party externals and reusable `.maxpat` abstractions
 - **Subpatcher support** with nested recursion
-- **Auto-layout** via topological sort, with optional `at(x, y)` override
+- **Auto-layout** via topological sort, with optional `at(x, y)` position or `at(x, y, width, height)` rectangle override
 - **Bounded macro expansion** — `for`, `if`/`else`, and `${expr}` for generating large repeated patches without unbounded output
 - **Desired-state diff plans** — stable managed IDs and ordered patch operations for live patch synchronization
 
@@ -263,7 +263,8 @@ does not pretend that a structural difference proves human intent. Once the
 agent and human have accepted the managed edits, `maxforge_adopt_live_changes`
 binds adoption to the reviewed structure token, reconstructs the managed graph,
 and advances the native revision without replaying edits already made in Max.
-Unmanaged additions remain outside automatic ownership.
+It returns round-trip-checked `workingDsl` for the next Agent edit. Unmanaged
+additions remain outside automatic ownership.
 
 `maxforge_reconcile_patch` performs a read-only three-way merge of the last
 agent intent, the current live Max graph, and the next complete DSL. Apply with
@@ -460,7 +461,7 @@ filename. Quoted title/description text uses JSON escapes and may contain `|`.
 ### Object Definition
 
 ```maxdsl
-name = type [args...] [@attr value...] [at(x, y)]
+name = type [args...] [@attr value...] [at(x, y[, width, height])]
 ```
 
 - `name` — identifier, unique within scope
@@ -468,6 +469,7 @@ name = type [args...] [@attr value...] [at(x, y)]
 - `@attr value` — optional attributes; emitted directly as box JSON properties
 - escape a literal Max object-text attribute as `\@attr`; otherwise maxforge treats it as a box JSON property
 - `at(x, y)` — optional position override; omit for auto-layout
+- `at(x, y, width, height)` — preserve an explicit resized box rectangle
 - structural keys such as `id`, `maxclass`, `patching_rect`, `text`, and `patcher` are reserved and cannot be set with `@`
 
 ```maxdsl

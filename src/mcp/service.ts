@@ -56,6 +56,8 @@ export interface ApplyDslResult {
   readonly manualChangesMerged: number;
   readonly statePersisted: boolean;
   readonly stateWarning?: string;
+  readonly workingDsl: string;
+  readonly workingDslRequiredAsCurrent: boolean;
 }
 
 export interface ReconcilePlanResult {
@@ -86,6 +88,7 @@ export interface ReviewLiveChangesResult extends InspectPatchResult {
   readonly canAdopt: boolean;
   readonly adoptionBlockedReason?: string;
   readonly conflicts: readonly PatchReconciliationConflict[];
+  readonly proposedWorkingDsl?: string;
 }
 
 export interface AdoptLiveChangesRequest {
@@ -101,6 +104,7 @@ export interface AdoptLiveChangesResult extends ReviewLiveChangesResult {
   readonly acknowledgement?: MaxforgeAppliedEvent;
   readonly statePersisted: boolean;
   readonly stateWarning?: string;
+  readonly workingDsl: string;
 }
 
 export class MaxforgePatchService {
@@ -172,6 +176,9 @@ export class MaxforgePatchService {
       warnings = [...current.warnings, ...desired.warnings];
     }
 
+    const workingDsl = this.patchAdapter.serialize(nextGraph);
+    const workingDslRequiredAsCurrent =
+      nextGraph.revision !== intentGraph.revision;
     const key = targetKey(request.patcherId, request.scope);
     this.pendingApplies.set(key, {
       baseRevision: plan.baseRevision,
@@ -204,6 +211,8 @@ export class MaxforgePatchService {
       baselineCaptured: baseline.captured,
       manualChangesMerged,
       statePersisted: persistence.persisted,
+      workingDsl,
+      workingDslRequiredAsCurrent,
       ...(baseline.warning ? { baselineWarning: baseline.warning } : {}),
       ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
     };
@@ -342,18 +351,33 @@ export class MaxforgePatchService {
       (box, baseBox, baselineBox) =>
         this.patchAdapter.resolveLiveBox(box, baseBox, baselineBox)
     );
+    const representationIssue = adoptionRepresentationIssue(changes);
+    let proposedWorkingDsl: string | undefined;
+    let serializationIssue: string | undefined;
+    if (observed.conflicts.length === 0 && !representationIssue) {
+      try {
+        proposedWorkingDsl = this.patchAdapter.serialize(observed.graph);
+      } catch (error) {
+        serializationIssue = error instanceof Error
+          ? error.message
+          : String(error);
+      }
+    }
+    const adoptionBlockedReason = observed.conflicts.length > 0
+      ? "Live edits cannot be reconstructed as a safe managed graph. " +
+        "Resolve every reported conflict before adoption."
+      : representationIssue ?? serializationIssue;
     return {
       ...base,
       acknowledgedRevision: acknowledged.revision,
       observedManagedRevision: observed.graph.revision,
-      canAdopt: observed.conflicts.length === 0,
+      canAdopt:
+        observed.conflicts.length === 0 &&
+        adoptionBlockedReason === undefined &&
+        proposedWorkingDsl !== undefined,
       conflicts: observed.conflicts,
-      ...(observed.conflicts.length > 0
-        ? {
-            adoptionBlockedReason:
-              "Live edits cannot be reconstructed as a safe managed graph. Resolve every reported conflict before adoption.",
-          }
-        : {}),
+      ...(proposedWorkingDsl ? { proposedWorkingDsl } : {}),
+      ...(adoptionBlockedReason ? { adoptionBlockedReason } : {}),
     };
   }
 
@@ -386,6 +410,8 @@ export class MaxforgePatchService {
     }
 
     const changes = diffPatcherSnapshots(baseline, snapshot.patcher);
+    const representationIssue = adoptionRepresentationIssue(changes);
+    if (representationIssue) throw new Error(representationIssue);
     const observed = reconstructManagedGraph(
       acknowledged,
       snapshot.patcher,
@@ -396,6 +422,7 @@ export class MaxforgePatchService {
     if (observed.conflicts.length > 0) {
       throw new PatchReconciliationError(observed.conflicts);
     }
+    const workingDsl = this.patchAdapter.serialize(observed.graph);
 
     const revisionAdvanced = acknowledged.revision !== observed.graph.revision;
     let acknowledgement: MaxforgeAppliedEvent | undefined;
@@ -435,11 +462,13 @@ export class MaxforgePatchService {
       observedManagedRevision: observed.graph.revision,
       canAdopt: true,
       conflicts: [],
+      proposedWorkingDsl: workingDsl,
       previousRevision: acknowledged.revision,
       adoptedRevision: observed.graph.revision,
       revisionAdvanced,
       ...(acknowledgement ? { acknowledgement } : {}),
       statePersisted: persistence.persisted,
+      workingDsl,
       ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
     };
   }
@@ -693,6 +722,27 @@ export class MaxforgePatchService {
       );
     }
   }
+}
+
+function adoptionRepresentationIssue(
+  changes: readonly PatchSnapshotChange[]
+): string | undefined {
+  if (changes.some((change) =>
+    change.managed && (
+      change.kind === "connection_changed" ||
+      (
+        (change.kind === "connection_added" ||
+          change.kind === "connection_removed") &&
+        Object.keys(change.connection.attributes).length > 0
+      )
+    )
+  )) {
+    return "Managed patch-cord attribute edits cannot be adopted because " +
+      "protocol version 1 does not represent patch-cord metadata in the " +
+      "managed PatchGraph. Revert the metadata edit or recreate the cord " +
+      "without relying on its attributes.";
+  }
+  return undefined;
 }
 
 export class PatchReconciliationError extends Error {

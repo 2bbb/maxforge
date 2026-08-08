@@ -1,4 +1,4 @@
-# maxdsl Formal Specification v1.4
+# maxdsl Formal Specification v1.5
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Design principles:
 - **Minimal syntax** — only describe WHAT (objects + connections), not HOW (IDs, boilerplate)
 - **Strict grammar** — no ambiguity, every valid program has exactly one parse tree
 - **Object database resolution** — port metadata comes from audited fixed records, explicit argument rules, or a declared dynamic shape
-- **Optional position override** — `at(x, y)` pins an object to a specific coordinate; un-pinned objects use auto-layout
+- **Optional rectangle override** — `at(x, y)` pins position and `at(x, y, width, height)` also preserves a resized box; un-pinned objects use auto-layout
 - **Object attributes** — `@key value` pairs set arbitrary box properties (minimum, maximum, size, etc.)
 - **Macro expansion for repetition** — `for`, `if`, and `${expr}` generate repetitive object graphs before parsing
 
@@ -35,7 +35,7 @@ size              ::= INTEGER , 'x' , INTEGER ;
 
 object_def        ::= IDENT , '=' , object_text , { attribute } , [ position ] , NEWLINE ;
 object_text       ::= { non_newline } , { trimmed } ;
-position          ::= 'at' , '(' , INTEGER , ',' , INTEGER , ')' ;
+position          ::= 'at' , '(' , NUMBER , ',' , NUMBER , [ ',' , NUMBER , ',' , NUMBER ] , ')' ;
 attribute         ::= '@' , IDENT , attr_value , { attr_value } ;
 attr_value        ::= NUMBER | STRING | unquoted_token ;
 
@@ -140,12 +140,13 @@ port_spec ::= '[' INTEGER [ ':' INTEGER ] ']'
 ### 3.7 Position Specifier
 
 ```
-position ::= 'at' '(' INTEGER ',' INTEGER ')'
+position ::= 'at' '(' NUMBER ',' NUMBER [ ',' NUMBER ',' NUMBER ] ')'
 ```
 
 - Appears at the end of an object definition line.
-- `x` and `y` are pixel coordinates in the Max patching rect.
-- Spaces around the numbers and comma are allowed: `at(100,200)`, `at(100, 200)`, `at( 100, 200 )`.
+- `x` and `y` are pixel coordinates in the Max patching rect and may be negative or fractional.
+- Optional `width` and `height` preserve an explicitly resized box and must be positive.
+- Spaces around numbers and commas are allowed: `at(100,200)`, `at(100, 200)`, `at(-12.5, 20.25, 123.5, 31)`.
 - If present, auto-layout is skipped for this object.
 
 ### 3.8 Attributes
@@ -155,7 +156,7 @@ attribute ::= '@' IDENT attr_value { attr_value }
 attr_value ::= NUMBER | STRING | unquoted_token
 ```
 
-- `@key value` pairs appear between the object text and the optional `at(x, y)`.
+- `@key value` pairs appear between the object text and the optional `at(...)`.
 - Each `@` token starts a new attribute; values are consumed until the next `@` or `at(` or end of line.
 - Single-value attributes emit a scalar in the box JSON; multi-value emit an array.
 - String values can be quoted (`"Courier"`) or unquoted (`Arial`).
@@ -283,7 +284,7 @@ patch "Patch Name" | "Description text" | 800x600
 ### 4.2 Object Definition
 
 ```
-name = type [args...] [@attr val ...] [at(x, y)]
+name = type [args...] [@attr val ...] [at(x, y[, width, height])]
 ```
 
 - `name` — IDENT, must be unique within the current scope (patcher/subpatcher).
@@ -293,7 +294,8 @@ name = type [args...] [@attr val ...] [at(x, y)]
 - Generated box IDs are derived from the DSL name (`name` → `obj-name`) and stay
   stable when unrelated statements are inserted or reordered.
 - Attributes are emitted as box JSON keys after structural keys are generated. Reserved structural keys are rejected.
-- `at(x, y)` — **Optional** position override. Pins the object to coordinate `(x, y)`. Objects without `at()` are positioned by auto-layout.
+- `at(x, y)` — **Optional** position override.
+- `at(x, y, width, height)` — also preserves the complete box rectangle. Objects without `at()` are positioned by auto-layout.
 
 When compiling to a managed patch graph, `@varname` is additionally reserved.
 The synchronization layer assigns a scope-owned scripting name for identity and
@@ -325,7 +327,7 @@ ownership tracking.
 ### 4.3 Subpatcher Definition
 
 ```
-name = p subpatcher_name [@attr value...] [at(x, y)] {
+name = p subpatcher_name [@attr value...] [at(x, y[, width, height])] {
   ...statements...
 }
 ```
@@ -334,7 +336,7 @@ name = p subpatcher_name [@attr value...] [at(x, y)] {
 - `p` — literal keyword.
 - `subpatcher_name` — IDENT, used in the Max text field as `p subpatcher_name`.
 - Attributes after `subpatcher_name` apply to the parent subpatcher box.
-- `at(x, y)` pins the parent subpatcher box position.
+- `at(x, y)` pins the parent subpatcher box position; four values also preserve its size.
 - `{ }` — contains inner statements (objects, connections, nested subpatchers).
 - `numinlets` / `numoutlets` are auto-derived from the count of `inlet`/`outlet` objects inside.
 - Inner object IDs use the same `obj-<DSL name>` derivation in the nested
@@ -512,7 +514,7 @@ There is no special feedback routing. Nodes left unvisited by the topological tr
 
 ### 6.3 Manual override
 
-Objects with `at(x, y)` are **pinned** to the specified coordinates. Auto-layout skips pinned objects and positions only un-pinned ones.
+Objects with either `at(...)` form are **pinned** to the specified coordinates. Auto-layout skips pinned objects and positions only un-pinned ones.
 
 ```maxdsl
 # pinned at (50, 30)
@@ -525,7 +527,10 @@ osc = cycle~ 440
 dac = ezdac~ at(50, 300)
 ```
 
-The decompiler emits `at(x, y)` from the first two values of `patching_rect` so positions survive decompile/recompile. Width and height are still derived from the object database/defaults; they are not represented in DSL syntax.
+The general `.maxpat` decompiler emits `at(x, y)` and therefore preserves
+position while deriving size from object defaults. The managed PatchGraph
+serializer emits `at(x, y, width, height)` because human resize adoption must
+round-trip the complete managed rectangle exactly.
 
 ## 7. Output Format
 

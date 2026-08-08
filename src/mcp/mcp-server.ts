@@ -265,6 +265,7 @@ const liveChangeReviewSchema = z.object({
   canAdopt: z.boolean(),
   adoptionBlockedReason: z.string().optional(),
   conflicts: z.array(reconciliationConflictSchema),
+  proposedWorkingDsl: z.string().optional(),
   snapshot: snapshotEventSchema,
 });
 
@@ -278,11 +279,11 @@ const HELP_CONTENT = {
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
       "To accept the current managed graph as the baseline, call maxforge_adopt_live_changes with the exact reviewed structure token. If a concrete next DSL is already ready, use maxforge_reconcile_patch instead and require canApply=true.",
-      "After adoption, update the working complete DSL with every accepted managed edit before compiling the next desired state.",
+      "After adoption, replace the working source with the returned workingDsl before compiling the next desired state.",
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
-      "After a merged apply, update the working complete DSL to include preserved human edits or keep using reconciliation for later changes.",
+      "After every apply, retain returned workingDsl as the next complete source. While workingDslRequiredAsCurrent is true, include it as currentDsl in every preview and apply request until a successful apply realigns intent state.",
       "Use maxforge_save_patch explicitly after successful mutation; apply changes live state but does not save the document.",
     ],
     rules: [
@@ -338,7 +339,7 @@ const HELP_CONTENT = {
       "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
       "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
       "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
-      "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then update the working complete DSL.",
+      "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then replace the working source with its returned workingDsl.",
       "If a concrete next desired DSL is ready, call maxforge_reconcile_patch instead.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
@@ -418,7 +419,7 @@ export function createMaxforgeMcpServer(
         "live patch, and review live differences before attributing human intent. " +
         "Adopt an accepted managed baseline only with the exact reviewed structure " +
         "token, or reconcile it with a concrete next complete DSL. After adoption, " +
-        "update the working DSL. Preview complete desired DSL with maxforge_compile_plan, " +
+        "use the returned workingDsl. Preview complete desired DSL with maxforge_compile_plan, " +
         "then pass the same complete DSL to maxforge_apply_dsl. Omitted managed " +
         "objects are deleted. Success requires acknowledgement.revision to equal " +
         "targetRevision and statePersisted to be true. Never retry a timeout or " +
@@ -810,7 +811,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Adopt reviewed human edits",
       description:
-        "Accept the exact reviewed live structure as the next managed and agent-intent baseline without replaying the human's structural edits. Requires the structure token returned by maxforge_review_live_changes. Safe managed edits advance the native revision with a zero-operation, token-bound plan; conflicts are rejected. Update the working complete DSL to represent every adopted managed edit before the next desired-state apply.",
+        "Accept the exact reviewed live structure as the next managed and agent-intent baseline without replaying the human's structural edits. Requires the structure token returned by maxforge_review_live_changes. Safe managed edits advance the native revision with a zero-operation, token-bound plan; conflicts and unrepresentable protocol-v1 patch-cord metadata are rejected. Returns lossless workingDsl for the next desired-state edit.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),
@@ -825,6 +826,7 @@ export function createMaxforgeMcpServer(
         acknowledgement: acknowledgementSchema.optional(),
         statePersisted: z.boolean(),
         stateWarning: z.string().optional(),
+        workingDsl: z.string(),
       }),
       annotations: {
         readOnlyHint: false,
@@ -943,6 +945,8 @@ export function createMaxforgeMcpServer(
         manualChangesMerged: z.number().int().nonnegative(),
         statePersisted: z.boolean(),
         stateWarning: z.string().optional(),
+        workingDsl: z.string(),
+        workingDslRequiredAsCurrent: z.boolean(),
         warnings: z.array(warningSchema),
       }),
       annotations: {
@@ -964,6 +968,8 @@ export function createMaxforgeMcpServer(
           baselineCaptured: result.baselineCaptured,
           manualChangesMerged: result.manualChangesMerged,
           statePersisted: result.statePersisted,
+          workingDsl: result.workingDsl,
+          workingDslRequiredAsCurrent: result.workingDslRequiredAsCurrent,
           ...(result.baselineWarning
             ? { baselineWarning: result.baselineWarning }
             : {}),

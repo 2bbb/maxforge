@@ -52,7 +52,7 @@ title/descriptionはJSON文字列escapeを使い、quote内の`|`は区切りで
 ### Object Definition
 
 ```
-name = type [args...] [@attr val ...] [at(x, y)]
+name = type [args...] [@attr val ...] [at(x, y[, width, height])]
 ```
 
 - `name` — 英字/アンダースコア始まりの識別子。スコープ内で一意。
@@ -61,6 +61,7 @@ name = type [args...] [@attr val ...] [at(x, y)]
 - `@attr val` — **省略可**の属性指定。box JSONに直接出力される。
 - newobjの`text`にMax attributeを残す場合は`\@attr`と書く。未escapeの`@attr`はbox JSON propertyとして解釈される。
 - `at(x, y)` — **省略可**の座標指定。指定するとauto-layoutを上書き。省略時は自動配置。
+- `at(x, y, width, height)` — resizeを含む完全なbox rectangleを保持する。
 
 **属性の書き方:**
 
@@ -237,13 +238,17 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    structure tokenで`maxforge_adopt_live_changes`を呼ぶ。次の完全なdesired DSLが
    既にあるなら`maxforge_reconcile_patch`へ渡す。`canAdopt: true`または
    `canApply: true`でなければ進めない。unmanaged追加を暗黙に所有しない。
-8. adopt後は受け入れたmanaged変更をworking DSLへ反映する。通常経路では
+8. adopt後は返された`workingDsl`でworking sourceを置き換える。要約から再構築
+   しない。通常経路では
    `maxforge_compile_plan`、手動変更の統合経路ではreconcileが
    返したplanを確認する。
 9. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
    場合だけ`manualChanges: "merge"`を指定する。
 10. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
-   結果だけを成功扱いする。
+   結果だけを成功扱いし、返された`workingDsl`を次の完全なsourceとして保持する。
+   `workingDslRequiredAsCurrent: true`なら、成功したapplyがflagをfalseにするまで、
+   previewとapplyの両方でそのsourceを`currentDsl`として渡す。read-only previewは
+   alignmentを永続化しない。
 11. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
 12. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
     dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
@@ -256,7 +261,9 @@ managed manual changeをinspectしただけではbaselineは更新されない�
 `maxforge_review_live_changes`は差分を中立的なsignalへ分類するが、意図を捏造しない。
 現在のlive managed graphを受け入れる場合は、同じstructure tokenが有効な間だけ
 `maxforge_adopt_live_changes`で採用できる。既にMax上にある編集は再実行せず、
-zero-operation planでnative revisionを進める。採用後はworking DSLも更新する。
+zero-operation planでnative revisionを進める。返された`workingDsl`は同一revisionへ
+round-trip検証済みなので、次の完全なdesired sourceとして保持する。protocol v1で
+管理しないpatch-cord metadataは採用を拒否し、黙って失わない。
 `maxforge_reconcile_patch`は前回graph・live snapshot・次のdesired DSLを三者比較し、
 非競合変更だけを保持する。同一fieldの競合やchange-vs-deleteは明示的に解消する。
 apply側は再inspectした構造tokenをplanへ埋め込み、native externalが変更直前に
@@ -460,7 +467,8 @@ node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 
 - オブジェクト名は `text` の先頭トークンまたは `maxclass` から推定され、重複時は `_2`, `_3` が付く
 - 演算子オブジェクト（`*~`, `+~`等）は意味名に変換（`mul`, `add`等）
-- `patching_rect` の x/y は `at(x, y)` として出力する（幅/高さはDSLでは表現しない）
+- 通常のdecompileは`patching_rect`のx/yを`at(x, y)`として出力する。
+- human edit adoptionが返すworking DSLはresizeを失わないよう`at(x, y, width, height)`を使う。
 - DSL→maxpat→DSLのラウンドトリップで box数/line数が一致することを確認済み
 
 ## Best Practices

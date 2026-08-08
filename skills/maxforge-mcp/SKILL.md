@@ -65,8 +65,11 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    structure token. If a concrete next desired DSL is already ready, call
    `maxforge_reconcile_patch` and require `canApply: true`. Do not silently
    claim unmanaged additions, and never convert a conflict into an overwrite.
-10. After adoption, immediately update the working complete DSL with every
-    accepted managed edit. Otherwise call `maxforge_compile_plan` with the
+10. After adoption, immediately replace the working complete source with the
+    returned `workingDsl`; it is round-trip checked and uses four-value `at()`
+    when resize must survive. It is explicit managed state, so do not claim it
+    preserves `for`/`if` authoring structure or patch-level metadata. Otherwise
+    call `maxforge_compile_plan` with the
     target and complete `desiredDsl`. Review warnings and every `delete`,
     `disconnect`, and replacement operation.
 11. State the target, operation count, destructive operations, and stop
@@ -82,9 +85,12 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
     apply failure.
 14. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
-15. After a merged apply, update the working complete DSL to include the
-    preserved human edits. Until it is aligned, continue through reconciliation;
-    ordinary compile/apply is intentionally rejected to prevent a silent revert.
+15. After every apply, retain returned `workingDsl` as the next complete source.
+    This is mandatory after a merge because it includes preserved human edits
+    that may not exist in submitted `desiredDsl`. If
+    `workingDslRequiredAsCurrent` is true, pass the exact returned source as
+    `currentDsl` in every preview and apply until a successful apply clears the
+    flag. A read-only preview does not persist this alignment.
 16. Apply does not persist the Max document. Call `maxforge_save_patch` only
     when persistence is intended. Omit `path` only for an already-saved patch;
     save-as requires an absolute Max-host path and explicit `overwrite: true`
@@ -132,21 +138,24 @@ must not be presented as a certain explanation of the human's intent.
 If the reviewed managed graph is the state that should survive, adopt it using
 the exact returned structure token. Adoption re-inspects, rejects stale review,
 reconstructs the managed graph, and advances native revision with zero
-structural operations because the edit is already live. Then fold the adopted
-text, position, deletion, and connection changes into the working complete DSL.
+structural operations because the edit is already live. Replace the working
+complete source with returned `workingDsl`; do not recreate it from summaries.
+Managed patch-cord metadata is not represented by protocol v1 and therefore
+blocks adoption rather than being silently discarded.
 
 If the agent already has a next desired DSL, call `maxforge_reconcile_patch`
 instead. It performs a three-way merge of the previous agent intent, current
-Max graph, and next
-desired graph while retaining the acknowledged graph for native revision safety.
+Max graph, and next desired graph while retaining the acknowledged graph for
+native revision safety.
 When `canApply` is true, apply the same DSL with `manualChanges: "merge"`.
 Resolve same-field, change-vs-delete, new-managed-identity, and unmanaged-cord
 conflicts explicitly. Do not force a winner or fall back to ordinary apply.
 
-After success, inspect and fold preserved text, position, deletion, and
-connection edits into the working complete DSL. This is required for clean
-restart recovery because the pre-merge agent DSL no longer hashes to Max's
-acknowledged merged revision.
+After success, inspect and replace the working complete source with returned
+`workingDsl`. This is required because the pre-merge agent DSL no longer hashes
+to Max's acknowledged merged revision. When `workingDslRequiredAsCurrent` is
+true, keep passing it as `currentDsl` to both preview and apply until a
+successful apply clears the flag.
 
 Unmanaged standalone edits remain outside the managed graph. A cord touching a
 managed box is preserved only while that box is not deleted or structurally

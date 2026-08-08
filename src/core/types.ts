@@ -149,6 +149,7 @@ export interface ObjectDefStmt {
   objectText: string;
   line: number;
   pos?: [number, number];
+  size?: [number, number];
   attrs?: Record<string, AttrValue[]>;
 }
 
@@ -167,6 +168,7 @@ export interface SubpatcherDefStmt {
   body: Statement[];
   line: number;
   pos?: [number, number];
+  size?: [number, number];
   attrs?: Record<string, AttrValue[]>;
 }
 

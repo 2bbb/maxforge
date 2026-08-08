@@ -1,4 +1,6 @@
 import { compile } from "../core/compiler.js";
+import { decompile } from "../core/decompiler.js";
+import { buildPatcherJSON } from "../core/patcher-json.js";
 import type {
   ASTNode,
   CompileError,
@@ -11,6 +13,7 @@ import {
   compiledPatcherToPatchGraph,
   isValidPatchScope,
   type PatchGraph,
+  type PatchGraphNode,
 } from "./patch-graph.js";
 
 export interface PatchGraphCompileResult {
@@ -62,6 +65,55 @@ export function compileDslToPatchGraph(
     warnings: result.warnings,
     graph: compiledPatcherToPatchGraph(result.output!, scope),
   };
+}
+
+/** Serialize a managed graph into explicit, round-trip-oriented DSL. */
+export function patchGraphToDsl(graph: PatchGraph): string {
+  return decompile(
+    { patcher: patchGraphNodeToPatcher(graph.patcher) },
+    [],
+    {
+      boxName: (box) => managedDslName(box.id),
+      includeBoxSize: true,
+    }
+  );
+}
+
+function patchGraphNodeToPatcher(
+  node: PatchGraphNode
+): ReturnType<typeof buildPatcherJSON>["patcher"] {
+  const empty = buildPatcherJSON(undefined, [], []).patcher;
+  return {
+    ...empty,
+    boxes: node.boxes.map((box) => ({
+      box: {
+        ...box.attributes,
+        id: box.id,
+        maxclass: box.maxclass,
+        numinlets: box.numinlets,
+        numoutlets: box.numoutlets,
+        outlettype: [...box.outlettype],
+        patching_rect: [...box.patchingRect],
+        ...(box.text !== undefined ? { text: box.text } : {}),
+        ...(box.comment !== undefined ? { comment: box.comment } : {}),
+        ...(box.patcher
+          ? { patcher: patchGraphNodeToPatcher(box.patcher) }
+          : {}),
+      },
+    })),
+    lines: node.connections.map((connection) => ({
+      patchline: {
+        source: [connection.source.id, connection.source.port],
+        destination: [connection.destination.id, connection.destination.port],
+      },
+    })),
+  };
+}
+
+function managedDslName(id: string): string {
+  const match = id.match(/^obj-(\w+)$/);
+  if (!match) throw new Error(`Cannot serialize invalid managed box id "${id}"`);
+  return match[1];
 }
 
 function findReservedVarName(ast: ASTNode): CompileError | null {

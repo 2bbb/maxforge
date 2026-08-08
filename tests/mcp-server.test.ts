@@ -172,7 +172,7 @@ describe("maxforge MCP protocol surface", () => {
             steps: expect.arrayContaining([
               expect.stringContaining("evidence of what changed"),
               expect.stringContaining("exact reviewed structure token"),
-              expect.stringContaining("update the working complete DSL"),
+              expect.stringContaining("workingDslRequiredAsCurrent"),
             ]),
             rules: expect.arrayContaining([
               expect.stringContaining("diff proves human intent"),
@@ -430,6 +430,8 @@ describe("maxforge MCP protocol surface", () => {
             baselineCaptured: false,
             baselineWarning: expect.stringContaining("Max applied the patch"),
             manualChangesMerged: 0,
+            workingDsl: expect.stringContaining("osc = cycle~ 440"),
+            workingDslRequiredAsCurrent: false,
             warnings: [],
           },
         },

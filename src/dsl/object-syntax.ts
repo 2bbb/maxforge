@@ -1,12 +1,58 @@
 import { AttrValue } from "../core/types.js";
 
-export function parsePositionSuffix(text: string): { text: string; pos?: [number, number] } {
-  const posMatch = text.match(/\s+at\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*$/);
-  if (!posMatch) return { text };
+export function parsePositionSuffix(text: string): {
+  text: string;
+  pos?: [number, number];
+  size?: [number, number];
+  errors: string[];
+} {
+  const number = "-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?";
+  const candidate = text.match(/\s+at\(([^()]*)\)\s*$/);
+  if (!candidate) {
+    const suffixLike = text.match(/\s+at\(.*$/);
+    if (!suffixLike) return { text, errors: [] };
+    return {
+      text: text.substring(0, suffixLike.index).trim(),
+      errors: ["Invalid position suffix: malformed at(...) expression"],
+    };
+  }
+
+  const cleanText = text.substring(0, text.length - candidate[0].length).trim();
+  const tokens = candidate[1].split(",").map((token) => token.trim());
+  if (tokens.length !== 2 && tokens.length !== 4) {
+    return {
+      text: cleanText,
+      errors: ["Invalid position suffix: expected 2 or 4 values"],
+    };
+  }
+  const numberPattern = new RegExp(`^${number}$`);
+  if (tokens.some((token) => !numberPattern.test(token))) {
+    return {
+      text: cleanText,
+      errors: ["Invalid position suffix: every value must be a finite number"],
+    };
+  }
+  const values = tokens.map(Number);
+  if (values.some((value) => !Number.isFinite(value))) {
+    return {
+      text: cleanText,
+      errors: ["Invalid position suffix: every value must be a finite number"],
+    };
+  }
+  if (values.length === 4 && (values[2] <= 0 || values[3] <= 0)) {
+    return {
+      text: cleanText,
+      errors: ["Invalid position suffix: width and height must be positive"],
+    };
+  }
 
   return {
-    text: text.substring(0, text.length - posMatch[0].length).trim(),
-    pos: [parseInt(posMatch[1]), parseInt(posMatch[2])],
+    text: cleanText,
+    pos: [values[0], values[1]],
+    ...(values.length === 4
+      ? { size: [values[2], values[3]] as [number, number] }
+      : {}),
+    errors: [],
   };
 }
 

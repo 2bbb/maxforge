@@ -7,6 +7,7 @@ import {
   diffPatchGraphs,
   parse,
   PatchGraph,
+  patchGraphToDsl,
   patcherToPatchGraph,
 } from "../src/index.js";
 import { ObjectDatabase } from "../src/core/types.js";
@@ -22,6 +23,44 @@ function compileGraph(source: string, scope = "voices"): PatchGraph {
 }
 
 describe("managed patch graphs", () => {
+  it("serializes nested managed graphs to lossless explicit working DSL", () => {
+    const graph = compileGraph(`
+source = cycle~ 440 @presentation 1 at(-12.5, 20.25, 123.5, 31)
+fx = p pass at(160, 20, 140, 28) {
+  input = inlet signal "audio input" at(20, 20, 35, 22)
+  output = outlet signal "audio output" at(100, 20, 35, 22)
+  input -> output
+}
+source -> fx
+`);
+
+    const workingDsl = patchGraphToDsl(graph);
+    expect(workingDsl).toContain(
+      "source = cycle~ 440 @presentation 1 at(-12.5, 20.25, 123.5, 31)"
+    );
+    expect(workingDsl).toContain("fx = p pass at(160, 20, 140, 28)");
+    expect(workingDsl).toContain(
+      'input = inlet signal "audio input" at(20, 20, 35, 22)'
+    );
+
+    const roundTrip = compileGraph(workingDsl);
+    expect(roundTrip).toEqual(graph);
+  });
+
+  it("preserves managed DSL names exactly when serializing a graph", () => {
+    const graph = compileGraph(`
+1osc = cycle~ 440 at(20, 20, 80, 22)
+gain_ = *~ 0.5 at(120, 20, 60, 22)
+1osc -> gain_
+`);
+
+    const workingDsl = patchGraphToDsl(graph);
+    expect(workingDsl).toContain("1osc = cycle~ 440");
+    expect(workingDsl).toContain("gain_ = *~ 0.5");
+    expect(workingDsl).toContain("1osc -> gain_");
+    expect(compileGraph(workingDsl)).toEqual(graph);
+  });
+
   it("assigns stable managed varnames to generated and nested objects", () => {
     const graph = compileGraph(`
 for i in 0..1 {
