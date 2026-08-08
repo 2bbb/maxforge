@@ -114,12 +114,14 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_save_patch",
         "maxforge_close_patch",
         "maxforge_inspect_patch",
+        "maxforge_review_live_changes",
+        "maxforge_adopt_live_changes",
         "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(13);
+      expect(definitions).toHaveLength(15);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -130,6 +132,14 @@ describe("maxforge MCP protocol surface", () => {
         definitions.find((tool) => tool.name === "maxforge_inspect_patch")
           ?.outputSchema
       )).toContain("connection_changed");
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_review_live_changes")
+          ?.description
+      ).toContain("never claims why");
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_adopt_live_changes")
+          ?.description
+      ).toContain("structure token");
 
       const help = await client.request(3, "tools/call", {
         name: "maxforge_help",
@@ -321,6 +331,29 @@ describe("maxforge MCP protocol surface", () => {
               type: "maxforge.snapshot",
               patcherId: "patch_a",
               scope: "voices",
+            },
+          },
+        },
+      });
+
+      const liveChangeReview = await client.request(51, "tools/call", {
+        name: "maxforge_review_live_changes",
+        arguments: { patcherId: "patch_a", scope: "voices" },
+      });
+      expect(liveChangeReview).toMatchObject({
+        result: {
+          structuredContent: {
+            patcherId: "patch_a",
+            scope: "voices",
+            comparisonAvailable: false,
+            canAdopt: false,
+            adoptionBlockedReason: expect.stringContaining(
+              "No acknowledged managed graph"
+            ),
+            review: {
+              affectedManagedIds: [],
+              affectedUnmanagedRuntimeIds: [],
+              signals: [],
             },
           },
         },

@@ -23,7 +23,7 @@ import {
   PatchStateStore,
 } from "../src/mcp/state-store.js";
 import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
-import { PatchPlan } from "../src/max/patch-graph.js";
+import { PatchGraph, PatchPlan, PatchSetValue } from "../src/max/patch-graph.js";
 
 const database = dbData as ObjectDatabase;
 
@@ -290,6 +290,239 @@ describe("MaxforgePatchService", () => {
         connection: expect.objectContaining({ attributes: { hidden: 1 } }),
       }),
     ]));
+  });
+
+  it("reviews human edits as intent evidence without claiming semantic certainty", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    const managed = transport.snapshot.boxes[0];
+    const manual = {
+      targetPath: [],
+      runtimeId: "manual-meter",
+      varName: "manual_meter",
+      maxclass: "meter~",
+      patchingRect: [220, 80, 12, 80] as const,
+      managed: false,
+      attributes: {},
+    };
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: [{
+        ...managed,
+        text: "cycle~ 880",
+        patchingRect: [120, 80, 80, 22],
+      }, manual],
+      connections: [{
+        targetPath: [],
+        source: {
+          runtimeId: managed.runtimeId,
+          varName: managed.varName,
+          port: 0,
+        },
+        destination: {
+          runtimeId: manual.runtimeId,
+          varName: manual.varName,
+          port: 0,
+        },
+        attributes: {},
+      }],
+    };
+
+    const result = await service.reviewLiveChanges("patch-a", "voices");
+
+    expect(result).toMatchObject({
+      comparisonAvailable: true,
+      managedChangeCount: 2,
+      unmanagedChangeCount: 1,
+      canAdopt: true,
+      conflicts: [],
+      review: {
+        affectedManagedIds: ["obj-osc"],
+        affectedUnmanagedRuntimeIds: ["manual-meter"],
+        signals: expect.arrayContaining([
+          expect.objectContaining({ kind: "layout", objectIds: ["obj-osc"] }),
+          expect.objectContaining({
+            kind: "object_configuration",
+            objectIds: ["obj-osc"],
+          }),
+          expect.objectContaining({
+            kind: "object_addition",
+            managed: false,
+            objectIds: ["manual-meter"],
+          }),
+          expect.objectContaining({ kind: "routing" }),
+        ]),
+      },
+    });
+    expect(result.observedManagedRevision).not.toBe(result.acknowledgedRevision);
+  });
+
+  it("adopts reviewed managed edits and uses them as the next agent baseline", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const service = createService(transport, store);
+    const initial = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        text: "cycle~ 880",
+        patchingRect: [120, 80, 80, 22],
+      })),
+    };
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+
+    const adopted = await service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    });
+
+    expect(adopted).toMatchObject({
+      previousRevision: initial.plan.targetRevision,
+      adoptedRevision: review.observedManagedRevision,
+      revisionAdvanced: true,
+      acknowledgement: {
+        revision: review.observedManagedRevision,
+        operations: 0,
+      },
+      statePersisted: true,
+    });
+    expect(transport.plans[1]).toMatchObject({
+      baseRevision: initial.plan.targetRevision,
+      targetRevision: review.observedManagedRevision,
+      baseStructureToken: review.structureToken,
+      operations: [],
+      rollbackOperations: [],
+    });
+    expect(store.state?.managedGraphs.get("patch-a:voices")?.revision).toBe(
+      review.observedManagedRevision
+    );
+    expect(store.state?.intentGraphs.get("patch-a:voices")?.revision).toBe(
+      review.observedManagedRevision
+    );
+
+    const next = service.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl:
+        "osc = cycle~ 880 at(120, 80)\ngain = *~ 0.5 at(120, 140)",
+    });
+    expect(next.plan.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        box: expect.objectContaining({ id: "obj-gain" }),
+      }),
+    ]);
+    const after = await service.reviewLiveChanges("patch-a", "voices");
+    expect(after.changes).toEqual([]);
+  });
+
+  it("rejects adoption when the patch changed after the agent reviewed it", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+
+    await expect(service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: "f".repeat(16),
+    })).rejects.toThrow("changed after review");
+    expect(transport.plans).toHaveLength(1);
+  });
+
+  it("reports a manually introduced reserved identity instead of adopting it", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: [...transport.snapshot.boxes, {
+        targetPath: [],
+        runtimeId: "manual-reserved",
+        varName: "maxforge_voices_obj_intruder",
+        maxclass: "button",
+        patchingRect: [150, 50, 24, 24],
+        managed: true,
+        attributes: {},
+      }],
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review).toMatchObject({
+      canAdopt: false,
+      conflicts: [{ kind: "managed_box_added", id: "obj-intruder" }],
+    });
+    await expect(service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    })).rejects.toThrow("was added directly in Max");
+    expect(transport.plans).toHaveLength(1);
+  });
+
+  it("adopts a human rewire without replaying patch-cord mutations", async () => {
+    const transport = new FakeTransport();
+    const initialDsl = [
+      "a = button at(50, 50)",
+      "b = button at(100, 100)",
+      "c = button at(150, 100)",
+      "a -> b",
+    ].join("\n");
+    transport.snapshot = snapshotForDsl(initialDsl, "voices");
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: initialDsl,
+    });
+    const boxes = new Map(transport.snapshot.boxes.map((box) => [box.varName, box]));
+    const a = boxes.get("maxforge_voices_obj_a")!;
+    const c = boxes.get("maxforge_voices_obj_c")!;
+    transport.snapshot = {
+      ...transport.snapshot,
+      connections: [snapshotConnection(a, c)],
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review.review.signals).toEqual([
+      expect.objectContaining({
+        kind: "routing",
+        objectIds: ["obj-a", "obj-b", "obj-c"],
+        changeIndexes: [0, 1],
+      }),
+    ]);
+    const adopted = await service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    });
+    expect(adopted.acknowledgement?.operations).toBe(0);
+    expect(transport.plans.at(-1)?.operations).toEqual([]);
+
+    const rewiredDsl = initialDsl.replace("a -> b", "a -> c");
+    expect(service.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: rewiredDsl,
+    }).plan.operations).toEqual([]);
   });
 
   it("distinguishes patch-cord attribute edits from topology changes", () => {
@@ -735,4 +968,76 @@ function patcherSnapshot(): MaxforgePatcherSnapshot {
     }],
     connections: [],
   };
+}
+
+function snapshotForDsl(dsl: string, scope: string): MaxforgePatcherSnapshot {
+  const graph = compileDslToPatchGraph(dsl, database, scope).graph!;
+  return snapshotForGraph(graph);
+}
+
+function snapshotForGraph(graph: PatchGraph): MaxforgePatcherSnapshot {
+  const boxes = graph.patcher.boxes.map((box) => ({
+    targetPath: [],
+    runtimeId: `runtime-${box.id}`,
+    varName: box.varName,
+    maxclass: box.maxclass,
+    patchingRect: box.patchingRect,
+    managed: true,
+    ...(box.text !== undefined ? { text: box.text } : {}),
+    ...(box.comment !== undefined ? { comment: box.comment } : {}),
+    attributes: Object.fromEntries(
+      Object.entries(box.attributes).filter(
+        (entry): entry is [string, PatchSetValue] => isSnapshotValue(entry[1])
+      )
+    ),
+  }));
+  const boxesById = new Map(
+    graph.patcher.boxes.map((box, index) => [box.id, boxes[index]])
+  );
+  return {
+    title: "service test",
+    filename: "service.maxpat",
+    filepath: "/tmp/service.maxpat",
+    dirty: true,
+    locked: false,
+    presentation: false,
+    boxes,
+    connections: graph.patcher.connections.map((connection) =>
+      snapshotConnection(
+        boxesById.get(connection.source.id)!,
+        boxesById.get(connection.destination.id)!,
+        connection.source.port,
+        connection.destination.port
+      )
+    ),
+  };
+}
+
+function snapshotConnection(
+  source: MaxforgePatcherSnapshot["boxes"][number],
+  destination: MaxforgePatcherSnapshot["boxes"][number],
+  sourcePort = 0,
+  destinationPort = 0
+): MaxforgePatcherSnapshot["connections"][number] {
+  return {
+    targetPath: [],
+    source: {
+      runtimeId: source.runtimeId,
+      varName: source.varName,
+      port: sourcePort,
+    },
+    destination: {
+      runtimeId: destination.runtimeId,
+      varName: destination.varName,
+      port: destinationPort,
+    },
+    attributes: {},
+  };
+}
+
+function isSnapshotValue(value: unknown): value is PatchSetValue {
+  return typeof value === "string" || typeof value === "number" ||
+    (Array.isArray(value) && value.every((item) =>
+      typeof item === "string" || typeof item === "number"
+    ));
 }

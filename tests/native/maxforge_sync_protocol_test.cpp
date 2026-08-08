@@ -293,6 +293,24 @@ void test_initial_revision_accepts_empty_scope() {
 	);
 }
 
+void test_empty_plan_can_acknowledge_live_topology() {
+
+	const auto plan = base_plan();
+	const sync_protocol::virtual_patch live_state{
+		{"", {"maxforge_default_obj_osc", "maxforge_default_obj_gain"}}
+	};
+	const auto validated_state = sync_protocol::validate_plan(
+		plan,
+		live_state,
+		"default",
+		revision('a')
+	);
+	require(
+		validated_state == live_state,
+		"empty acknowledgement plan changed live topology"
+	);
+}
+
 void test_scope_and_revision_guards() {
 	const auto plan = base_plan();
 	require_throws(
@@ -491,6 +509,7 @@ int main() {
 		{"revisions, paths, and subpatchers", test_revisions_paths_and_subpatchers},
 		{"valid state transition", test_valid_state_transition},
 		{"initial revision", test_initial_revision_accepts_empty_scope},
+		{"empty acknowledgement plan", test_empty_plan_can_acknowledge_live_topology},
 		{"scope and revision guards", test_scope_and_revision_guards},
 		{"operation order", test_operation_order_guard},
 		{"missing target and endpoint", test_missing_target_and_endpoint_guards},

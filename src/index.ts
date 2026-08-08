@@ -10,5 +10,6 @@ export * from "./max/patch-graph.js";
 export * from "./max/dsl-patch-graph.js";
 export * from "./max/patch-protocol.js";
 export * from "./max/patch-snapshot.js";
+export * from "./max/patch-edit-review.js";
 export * from "./max/patch-merge.js";
 export * from "./max/thispatcher.js";

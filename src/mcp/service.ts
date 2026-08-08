@@ -21,6 +21,10 @@ import {
   type PatchSnapshotChange,
 } from "../max/patch-snapshot.js";
 import {
+  reviewPatchEdits,
+  type PatchEditReview,
+} from "../max/patch-edit-review.js";
+import {
   PatchStateStore,
   PendingPatchApply,
 } from "./state-store.js";
@@ -72,6 +76,31 @@ export interface InspectPatchResult {
   readonly changes: readonly PatchSnapshotChange[];
   readonly managedChangeCount: number;
   readonly unmanagedChangeCount: number;
+}
+
+export interface ReviewLiveChangesResult extends InspectPatchResult {
+  readonly review: PatchEditReview;
+  readonly structureToken: string;
+  readonly acknowledgedRevision?: string;
+  readonly observedManagedRevision?: string;
+  readonly canAdopt: boolean;
+  readonly adoptionBlockedReason?: string;
+  readonly conflicts: readonly PatchReconciliationConflict[];
+}
+
+export interface AdoptLiveChangesRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly expectedStructureToken: string;
+}
+
+export interface AdoptLiveChangesResult extends ReviewLiveChangesResult {
+  readonly previousRevision: string;
+  readonly adoptedRevision: string;
+  readonly revisionAdvanced: boolean;
+  readonly acknowledgement?: MaxforgeAppliedEvent;
+  readonly statePersisted: boolean;
+  readonly stateWarning?: string;
 }
 
 export class MaxforgePatchService {
@@ -260,6 +289,158 @@ export class MaxforgePatchService {
       changes,
       managedChangeCount: changes.filter((change) => change.managed).length,
       unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+    };
+  }
+
+  async reviewLiveChanges(
+    patcherId: string,
+    scope: string
+  ): Promise<ReviewLiveChangesResult> {
+    const key = targetKey(patcherId, scope);
+    this.resolvePendingApply(key);
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    const baseline = this.baselineSnapshots.get(key);
+    const acknowledged = this.managedGraphs.get(key);
+    const changes = baseline
+      ? diffPatcherSnapshots(baseline, snapshot.patcher)
+      : [];
+    const base = {
+      snapshot,
+      comparisonAvailable: baseline !== undefined,
+      changes,
+      managedChangeCount: changes.filter((change) => change.managed).length,
+      unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+      review: reviewPatchEdits(changes, scope),
+      structureToken: snapshot.structureToken,
+    };
+
+    if (!acknowledged) {
+      return {
+        ...base,
+        canAdopt: false,
+        conflicts: [],
+        adoptionBlockedReason:
+          "No acknowledged managed graph exists for this patch and scope.",
+      };
+    }
+    this.assertInspectionRevision(patcherId, scope, acknowledged, snapshot);
+    if (!baseline) {
+      return {
+        ...base,
+        acknowledgedRevision: acknowledged.revision,
+        canAdopt: false,
+        conflicts: [],
+        adoptionBlockedReason:
+          "No comparison baseline exists. Apply or recover the managed state before adopting live edits.",
+      };
+    }
+
+    const observed = reconstructManagedGraph(
+      acknowledged,
+      snapshot.patcher,
+      baseline,
+      (box, baseBox, baselineBox) =>
+        this.patchAdapter.resolveLiveBox(box, baseBox, baselineBox)
+    );
+    return {
+      ...base,
+      acknowledgedRevision: acknowledged.revision,
+      observedManagedRevision: observed.graph.revision,
+      canAdopt: observed.conflicts.length === 0,
+      conflicts: observed.conflicts,
+      ...(observed.conflicts.length > 0
+        ? {
+            adoptionBlockedReason:
+              "Live edits cannot be reconstructed as a safe managed graph. Resolve every reported conflict before adoption.",
+          }
+        : {}),
+    };
+  }
+
+  async adoptLiveChanges(
+    request: AdoptLiveChangesRequest
+  ): Promise<AdoptLiveChangesResult> {
+    const { patcherId, scope, expectedStructureToken } = request;
+    const key = targetKey(patcherId, scope);
+    this.resolvePendingApply(key);
+    const acknowledged = this.managedGraphs.get(key);
+    if (!acknowledged) {
+      throw new Error(
+        `Max patch "${patcherId}" scope "${scope}" has no acknowledged managed graph to update`
+      );
+    }
+    const baseline = this.baselineSnapshots.get(key);
+    if (!baseline) {
+      throw new Error(
+        `Max patch "${patcherId}" scope "${scope}" has no comparison baseline; inspect and recover managed state before adopting live edits`
+      );
+    }
+
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    this.assertInspectionRevision(patcherId, scope, acknowledged, snapshot);
+    if (snapshot.structureToken !== expectedStructureToken) {
+      throw new Error(
+        `Max patch "${patcherId}" changed after review: expected structure token ` +
+        `${expectedStructureToken}, received ${snapshot.structureToken}. Review live changes again.`
+      );
+    }
+
+    const changes = diffPatcherSnapshots(baseline, snapshot.patcher);
+    const observed = reconstructManagedGraph(
+      acknowledged,
+      snapshot.patcher,
+      baseline,
+      (box, baseBox, baselineBox) =>
+        this.patchAdapter.resolveLiveBox(box, baseBox, baselineBox)
+    );
+    if (observed.conflicts.length > 0) {
+      throw new PatchReconciliationError(observed.conflicts);
+    }
+
+    const revisionAdvanced = acknowledged.revision !== observed.graph.revision;
+    let acknowledgement: MaxforgeAppliedEvent | undefined;
+    if (revisionAdvanced) {
+      const plan: PatchPlan = {
+        protocolVersion: 1,
+        scope,
+        baseRevision: acknowledged.revision,
+        targetRevision: observed.graph.revision,
+        baseStructureToken: snapshot.structureToken,
+        operations: [],
+        rollbackOperations: [],
+      };
+      this.pendingApplies.set(key, {
+        baseRevision: acknowledged.revision,
+        nextGraph: observed.graph,
+        intentGraph: observed.graph,
+      });
+      this.persistState();
+      acknowledgement = await this.transport.apply(patcherId, plan);
+    }
+
+    this.managedGraphs.set(key, observed.graph);
+    this.intentGraphs.set(key, observed.graph);
+    this.baselineSnapshots.set(key, snapshot.patcher);
+    this.pendingApplies.delete(key);
+    const persistence = this.tryPersistState();
+    return {
+      snapshot,
+      comparisonAvailable: true,
+      changes,
+      managedChangeCount: changes.filter((change) => change.managed).length,
+      unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+      review: reviewPatchEdits(changes, scope),
+      structureToken: snapshot.structureToken,
+      acknowledgedRevision: acknowledged.revision,
+      observedManagedRevision: observed.graph.revision,
+      canAdopt: true,
+      conflicts: [],
+      previousRevision: acknowledged.revision,
+      adoptedRevision: observed.graph.revision,
+      revisionAdvanced,
+      ...(acknowledgement ? { acknowledgement } : {}),
+      statePersisted: persistence.persisted,
+      ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
     };
   }
 

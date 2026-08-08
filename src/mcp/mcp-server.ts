@@ -208,6 +208,66 @@ const reconciliationConflictSchema = z.object({
   message: z.string(),
 }).passthrough();
 
+const snapshotChangeSchema = z.object({
+  kind: z.enum([
+    "box_added",
+    "box_removed",
+    "box_changed",
+    "connection_added",
+    "connection_changed",
+    "connection_removed",
+  ]),
+  managed: z.boolean(),
+}).passthrough();
+
+const editReviewSchema = z.object({
+  counts: z.object({
+    boxesAdded: z.number().int().nonnegative(),
+    boxesRemoved: z.number().int().nonnegative(),
+    boxesChanged: z.number().int().nonnegative(),
+    connectionsAdded: z.number().int().nonnegative(),
+    connectionsRemoved: z.number().int().nonnegative(),
+    connectionsChanged: z.number().int().nonnegative(),
+  }),
+  affectedManagedIds: z.array(z.string()),
+  affectedUnmanagedRuntimeIds: z.array(z.string()),
+  signals: z.array(z.object({
+    kind: z.enum([
+      "layout",
+      "object_configuration",
+      "annotation",
+      "box_attributes",
+      "ownership",
+      "object_addition",
+      "object_removal",
+      "routing",
+      "connection_attributes",
+    ]),
+    managed: z.boolean(),
+    targetPath: z.array(z.string()),
+    objectIds: z.array(z.string()),
+    changeIndexes: z.array(z.number().int().nonnegative()),
+    summary: z.string(),
+  })),
+});
+
+const liveChangeReviewSchema = z.object({
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  comparisonAvailable: z.boolean(),
+  managedChangeCount: z.number().int().nonnegative(),
+  unmanagedChangeCount: z.number().int().nonnegative(),
+  changes: z.array(snapshotChangeSchema),
+  review: editReviewSchema,
+  structureToken: structureTokenSchema,
+  acknowledgedRevision: revisionSchema.optional(),
+  observedManagedRevision: revisionSchema.optional(),
+  canAdopt: z.boolean(),
+  adoptionBlockedReason: z.string().optional(),
+  conflicts: z.array(reconciliationConflictSchema),
+  snapshot: snapshotEventSchema,
+});
+
 const HELP_CONTENT = {
   workflow: {
     summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
@@ -673,19 +733,7 @@ export function createMaxforgeMcpServer(
         comparisonAvailable: z.boolean(),
         managedChangeCount: z.number().int().nonnegative(),
         unmanagedChangeCount: z.number().int().nonnegative(),
-        changes: z.array(
-          z.object({
-            kind: z.enum([
-              "box_added",
-              "box_removed",
-              "box_changed",
-              "connection_added",
-              "connection_changed",
-              "connection_removed",
-            ]),
-            managed: z.boolean(),
-          }).passthrough()
-        ),
+        changes: z.array(snapshotChangeSchema),
         snapshot: snapshotEventSchema,
       }),
       annotations: {
@@ -705,6 +753,74 @@ export function createMaxforgeMcpServer(
           unmanagedChangeCount: result.unmanagedChangeCount,
           changes: result.changes,
           snapshot: result.snapshot,
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_review_live_changes",
+    {
+      title: "Review human edits in a live Max patch",
+      description:
+        "Turn live changes since the last acknowledged apply into neutral, structured evidence for agent intent inference. Reports exact before/after changes, affected managed identities, routing/layout/configuration signals, and whether the reviewed state can be safely adopted. This tool never claims why the human edited the patch and never mutates Max.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope of the target patch"),
+      }),
+      outputSchema: liveChangeReviewSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ patcherId, scope }) => {
+      try {
+        const result = await options.service.reviewLiveChanges(patcherId, scope);
+        return toolResult({ patcherId, scope, ...result });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_adopt_live_changes",
+    {
+      title: "Adopt reviewed human edits",
+      description:
+        "Accept the exact reviewed live structure as the next managed and agent-intent baseline without replaying the human's structural edits. Requires the structure token returned by maxforge_review_live_changes. Safe managed edits advance the native revision with a zero-operation, token-bound plan; conflicts are rejected. Update the working complete DSL to represent every adopted managed edit before the next desired-state apply.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope of the target patch"),
+        expectedStructureToken: structureTokenSchema.describe(
+          "Exact structureToken returned by the immediately preceding live-change review"
+        ),
+      }),
+      outputSchema: liveChangeReviewSchema.extend({
+        previousRevision: revisionSchema,
+        adoptedRevision: revisionSchema,
+        revisionAdvanced: z.boolean(),
+        acknowledgement: acknowledgementSchema.optional(),
+        statePersisted: z.boolean(),
+        stateWarning: z.string().optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await options.service.adoptLiveChanges(request);
+        return toolResult({
+          patcherId: request.patcherId,
+          scope: request.scope,
+          ...result,
         });
       } catch (error) {
         return toolError(error);
