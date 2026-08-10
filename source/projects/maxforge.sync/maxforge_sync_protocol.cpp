@@ -58,6 +58,29 @@ auto is_valid_scope(const std::string &scope) -> bool {
 	return true;
 }
 
+auto edit_observation_cause_from_registration(
+	const std::string &registration,
+	const std::string &notification
+) -> edit_observation_cause
+{
+	if(registration == "patchernotify") return edit_observation_cause::patcher;
+	if(registration == "boxnotify") return edit_observation_cause::box;
+	if(registration == "linenotify") return edit_observation_cause::line;
+	if(notification == "attr_modified") return edit_observation_cause::attribute;
+	return edit_observation_cause::unknown;
+}
+
+auto edit_observation_cause_name(edit_observation_cause cause) -> const char * {
+	switch(cause) {
+		case edit_observation_cause::patcher: return "patcher";
+		case edit_observation_cause::box: return "box";
+		case edit_observation_cause::line: return "line";
+		case edit_observation_cause::attribute: return "attribute";
+		case edit_observation_cause::unknown: return "unknown";
+	}
+	return "unknown";
+}
+
 auto is_valid_patcher_id(const std::string &patcher_id) -> bool {
 	if(patcher_id.empty()) return false;
 	const auto first = static_cast<unsigned char>(patcher_id.front());

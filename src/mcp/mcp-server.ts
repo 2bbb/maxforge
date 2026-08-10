@@ -82,7 +82,6 @@ const snapshotBoxSchema = z.object({
   maxclass: z.string(),
   patchingRect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   managed: z.boolean(),
-  selected: z.boolean().optional(),
   text: z.string().optional(),
   comment: z.string().optional(),
   attributes: z.record(z.string(), z.union([
@@ -326,12 +325,6 @@ const liveEditHistorySchema = z.object({
     ]),
     changes: z.array(snapshotChangeSchema),
     review: editReviewSchema,
-    selectedBoxes: z.array(z.object({
-      targetPath: z.array(z.string()),
-      runtimeId: z.string(),
-      varName: z.string(),
-      managed: z.boolean(),
-    })),
   })),
   limitations: z.array(z.string()),
 });
@@ -883,7 +876,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Get ordered live-edit evidence",
       description:
-        "Read bounded, ordered, debounced snapshot evidence captured by maxforge.sync while the patch was edited. Returns per-observation structural differences, neutral edit reviews, notification cause categories, and point-in-time selection context. It does not reconstruct Max undo actions or prove human intent. Check supported, droppedEvents, and comparisonBasis before relying on chronology.",
+        "Read bounded, ordered, debounced snapshot evidence captured by maxforge.sync while the patch was edited. Returns per-observation structural differences, neutral edit reviews, and notification cause categories. It does not reconstruct Max undo actions or prove human intent. Check supported, droppedEvents, and comparisonBasis before relying on chronology.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),

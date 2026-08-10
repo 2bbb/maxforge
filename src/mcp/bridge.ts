@@ -1439,7 +1439,6 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     typeof value.maxclass !== "string" ||
     !isRectangle(value.patchingRect) ||
     typeof value.managed !== "boolean" ||
-    (value.selected !== undefined && typeof value.selected !== "boolean") ||
     (value.text !== undefined && typeof value.text !== "string") ||
     (value.comment !== undefined && typeof value.comment !== "string")
   ) {
@@ -1454,7 +1453,6 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     maxclass: value.maxclass,
     patchingRect: value.patchingRect,
     managed: value.managed,
-    ...(value.selected === undefined ? {} : { selected: value.selected }),
     ...(value.text === undefined ? {} : { text: value.text }),
     ...(value.comment === undefined ? {} : { comment: value.comment }),
     attributes,

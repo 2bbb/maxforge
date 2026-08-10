@@ -95,12 +95,6 @@ export interface LiveEditHistoryEntry {
   readonly comparisonBasis: EditObservationComparisonBasis;
   readonly changes: readonly PatchSnapshotChange[];
   readonly review: PatchEditReview;
-  readonly selectedBoxes: readonly {
-    readonly targetPath: readonly string[];
-    readonly runtimeId: string;
-    readonly varName: string;
-    readonly managed: boolean;
-  }[];
 }
 
 export interface LiveEditHistoryResult {
@@ -362,14 +356,6 @@ export class MaxforgePatchService {
         comparisonBasis,
         changes,
         review: reviewPatchEdits(changes, scope),
-        selectedBoxes: observation.event.patcher.boxes
-          .filter((box) => box.selected)
-          .map((box) => ({
-            targetPath: box.targetPath,
-            runtimeId: box.runtimeId,
-            varName: box.varName,
-            managed: box.managed,
-          })),
       };
     });
     const latestSequence = observations.at(-1)?.sequence ?? null;
@@ -384,7 +370,6 @@ export class MaxforgePatchService {
       ),
       limitations: [
         "Observations are debounced structural snapshots, not Max undo actions or proof of human intent.",
-        "Selection is point-in-time context and is absent when Max exposes no patcher view.",
         "History is bounded, in memory, and resets when the MCP bridge or Max patch reconnects.",
       ],
     };

@@ -49,7 +49,6 @@ describe("MaxforgePatchService", () => {
       boxes: transport.snapshot.boxes.map((box) => ({
         ...box,
         patchingRect: [90, 50, 66, 22] as const,
-        selected: true,
       })),
     };
     const retuned = {
@@ -104,9 +103,6 @@ describe("MaxforgePatchService", () => {
         },
       }],
     });
-    expect(history.observations[0].selectedBoxes).toMatchObject([
-      { runtimeId: expect.any(String), managed: true },
-    ]);
     expect(history.limitations.join(" ")).toContain("not Max undo actions");
   });
 

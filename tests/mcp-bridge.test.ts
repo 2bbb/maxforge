@@ -436,7 +436,6 @@ describe("MaxforgeWebSocketBridge", () => {
 
     first.send(JSON.stringify(editObservation("patch-a", "voices", {
       causes: ["box"],
-      selected: true,
     })));
     second.send(JSON.stringify(editObservation("patch-b", "meters", {
       causes: ["line"],
@@ -453,10 +452,7 @@ describe("MaxforgeWebSocketBridge", () => {
         observations: [{
           sequence: expect.any(Number),
           observedAt: expect.any(String),
-          event: {
-            causes: ["box"],
-            patcher: { boxes: [{ selected: true }] },
-          },
+          event: { causes: ["box"] },
         }],
       });
     expect(bridge.getEditObservationHistory("patch-b", "meters"))
@@ -566,12 +562,10 @@ describe("parseBridgeEvent", () => {
   it("validates observed edit evidence", () => {
     const event = editObservation("patch-a", "voices", {
       causes: ["patcher", "box"],
-      selected: true,
     });
     expect(parseBridgeEvent(JSON.stringify(event))).toMatchObject({
       type: "maxforge.edit.observed",
       causes: ["patcher", "box"],
-      patcher: { boxes: [{ selected: true }] },
     });
     expect(parseBridgeEvent(JSON.stringify({
       ...event,
@@ -676,7 +670,6 @@ function editObservation(
   scope: string,
   options: {
     readonly causes?: readonly string[];
-    readonly selected?: boolean;
   }
 ) {
   const snapshot = snapshotEvent("unused");
@@ -689,12 +682,7 @@ function editObservation(
     causes: options.causes ?? ["unknown"],
     patcher: {
       ...snapshot.patcher,
-      boxes: snapshot.patcher.boxes.map((box) => ({
-        ...box,
-        ...(options.selected === undefined
-          ? {}
-          : { selected: options.selected }),
-      })),
+      boxes: snapshot.patcher.boxes,
     },
   };
 }

@@ -81,6 +81,43 @@ void test_identifiers() {
 	require(!sync_protocol::is_valid_box_id("obj-osc-1"), "hyphenated suffix accepted");
 }
 
+void test_edit_observation_causes() {
+	using cause = sync_protocol::edit_observation_cause;
+	require(
+		sync_protocol::edit_observation_cause_from_registration(
+			"patchernotify",
+			"dirty"
+		) == cause::patcher,
+		"patcher notification was misclassified"
+	);
+	require(
+		sync_protocol::edit_observation_cause_from_registration(
+			"boxnotify",
+			"patching_rect"
+		) == cause::box,
+		"box notification was misclassified"
+	);
+	require(
+		sync_protocol::edit_observation_cause_from_registration(
+			"linenotify",
+			"newobject"
+		) == cause::line,
+		"line notification was misclassified"
+	);
+	require(
+		sync_protocol::edit_observation_cause_from_registration(
+			"nobox",
+			"attr_modified"
+		) == cause::attribute,
+		"attribute notification was misclassified"
+	);
+	require(
+		std::string{sync_protocol::edit_observation_cause_name(cause::unknown)} ==
+			"unknown",
+		"unknown cause name changed"
+	);
+}
+
 void test_network_configuration() {
 	require(sync_protocol::is_loopback_host("127.0.0.1"), "IPv4 loopback rejected");
 	require(sync_protocol::is_loopback_host("::1"), "IPv6 loopback rejected");
@@ -503,6 +540,7 @@ void test_reverse_plan_restores_topology() {
 int main() {
 	const std::vector<test_case> test_cases{
 		{"identifiers", test_identifiers},
+		{"edit observation causes", test_edit_observation_causes},
 		{"network configuration", test_network_configuration},
 		{"safe set attributes", test_safe_set_attributes},
 		{"managed identity", test_managed_identity},

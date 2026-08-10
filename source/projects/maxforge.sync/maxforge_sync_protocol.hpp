@@ -17,6 +17,14 @@ enum class operation_kind {
 	connect
 };
 
+enum class edit_observation_cause {
+	patcher,
+	box,
+	line,
+	attribute,
+	unknown
+};
+
 struct validation_operation {
 	operation_kind kind{};
 	std::vector<std::string> target_path;
@@ -37,6 +45,11 @@ using virtual_patcher = std::unordered_set<std::string>;
 using virtual_patch = std::unordered_map<std::string, virtual_patcher>;
 
 auto is_valid_scope(const std::string &scope) -> bool;
+auto edit_observation_cause_from_registration(
+	const std::string &registration,
+	const std::string &notification
+) -> edit_observation_cause;
+auto edit_observation_cause_name(edit_observation_cause cause) -> const char *;
 auto is_valid_patcher_id(const std::string &patcher_id) -> bool;
 auto is_valid_box_id(const std::string &id) -> bool;
 auto is_loopback_host(const std::string &host) -> bool;

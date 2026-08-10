@@ -1802,6 +1802,22 @@ public:
 		}
 	};
 
+	c74::min::message<> notify_message{
+		this,
+		"notify",
+		MIN_FUNCTION {
+			const c74::min::notification notification{args};
+			const c74::min::symbol registration = notification.registration();
+			const c74::min::symbol name = notification.name();
+			record_edit_notification(
+				registration.c_str(),
+				name.c_str(),
+				notification.source()
+			);
+			return {c74::max::MAX_ERR_NONE};
+		}
+	};
+
 	maxforge_sync() {
 		websocket_client_.set_notifier([this]() {
 			transport_queue_.set();
@@ -1810,6 +1826,12 @@ public:
 	}
 
 	~maxforge_sync() {
+		observation_timer_.stop();
+		observation_release_timer_.stop();
+		for(auto *patcher : observed_patchers_) {
+			c74::max::object_detach_byptr(maxobj(), patcher);
+		}
+		observed_patchers_.clear();
 		websocket_client_.clear_notifier();
 		websocket_client_.disconnect();
 	}
@@ -1832,6 +1854,33 @@ private:
 		this,
 		MIN_FUNCTION {
 			connect_transport();
+			end_agent_mutation();
+			return {};
+		}
+	};
+
+	c74::min::timer<c74::min::timer_options::defer_delivery> observation_timer_{
+		this,
+		MIN_FUNCTION {
+			if(edit_observation_suppressed_) {
+				pending_edit_causes_.clear();
+				return {};
+			}
+			try {
+				refresh_observed_patchers();
+				send_edit_observation();
+			} catch(const std::exception &exception) {
+				send_error(exception.what(), "observe");
+			}
+			return {};
+		}
+	};
+
+	c74::min::timer<c74::min::timer_options::defer_delivery>
+	observation_release_timer_{
+		this,
+		MIN_FUNCTION {
+			edit_observation_suppressed_ = false;
 			return {};
 		}
 	};
@@ -1850,6 +1899,10 @@ private:
 
 	bool transport_open_{false};
 	bool registration_sent_{false};
+	bool edit_observation_suppressed_{true};
+	std::unordered_set<c74::max::t_object *> observed_patchers_;
+	std::unordered_set<sync_protocol::edit_observation_cause> pending_edit_causes_;
+	std::string last_observed_structure_token_;
 	std::string last_transport_error_;
 
 	auto transport_status_label() const -> const char * {
@@ -2012,6 +2065,152 @@ private:
 		return value;
 	}
 
+	void collect_observable_patchers(
+		c74::max::t_object *patcher,
+		std::size_t depth,
+		std::unordered_set<c74::max::t_object *> &patchers
+	) {
+		if(!patcher || patchers.count(patcher) != 0) return;
+		if(32 <= depth) {
+			throw std::runtime_error("subpatcher hierarchy exceeds observation depth");
+		}
+		patchers.insert(patcher);
+		for(
+			auto *box = c74::max::jpatcher_get_firstobject(patcher);
+			box;
+			box = c74::max::jbox_get_nextobject(box)
+		) {
+			auto *nested_patcher = child_patcher(box);
+			if(nested_patcher) {
+				collect_observable_patchers(
+					nested_patcher,
+					depth + 1,
+					patchers
+				);
+			}
+		}
+	}
+
+	void refresh_observed_patchers() {
+		std::unordered_set<c74::max::t_object *> patchers;
+		collect_observable_patchers(top_level_patcher(), 0, patchers);
+		for(auto *patcher : patchers) {
+			if(observed_patchers_.count(patcher) != 0) continue;
+			const auto error = c74::max::object_attach_byptr(maxobj(), patcher);
+			if(error != c74::max::MAX_ERR_NONE) {
+				throw std::runtime_error("could not observe a patcher");
+			}
+			observed_patchers_.insert(patcher);
+		}
+	}
+
+	void record_edit_notification(
+		const std::string &registration,
+		const std::string &notification,
+		c74::max::t_object *source
+	) {
+		if(notification == "free" && source) {
+			observed_patchers_.erase(source);
+		}
+		if(
+			edit_observation_suppressed_ ||
+			!transport_open_ ||
+			!registration_sent_
+		) {
+			return;
+		}
+		pending_edit_causes_.insert(
+			sync_protocol::edit_observation_cause_from_registration(
+				registration,
+				notification
+			)
+		);
+		observation_timer_.delay(75);
+	}
+
+	void begin_agent_mutation() {
+		edit_observation_suppressed_ = true;
+		observation_timer_.stop();
+		observation_release_timer_.stop();
+		pending_edit_causes_.clear();
+	}
+
+	void end_agent_mutation() {
+		observation_timer_.stop();
+		pending_edit_causes_.clear();
+		try {
+			refresh_observed_patchers();
+			last_observed_structure_token_ = patch_structure_token(
+				make_patch_snapshot(top_level_patcher(), configured_scope())
+			);
+		} catch(const std::exception &exception) {
+			last_observed_structure_token_.clear();
+			send_error(exception.what(), "observe");
+		} catch(...) {
+			last_observed_structure_token_.clear();
+			send_error("unknown edit observation error", "observe");
+		}
+		observation_release_timer_.delay(0);
+	}
+
+	void cancel_agent_mutation() {
+		observation_timer_.stop();
+		pending_edit_causes_.clear();
+		observation_release_timer_.delay(0);
+	}
+
+	void send_edit_observation() {
+		if(pending_edit_causes_.empty()) return;
+		auto *root_patcher = top_level_patcher();
+		const auto current_scope = configured_scope();
+		const auto current_patcher_id = configured_patcher_id();
+		const c74::min::symbol revision_symbol = revision_state;
+		const std::string revision{revision_symbol.c_str()};
+		const auto snapshot = make_patch_snapshot(root_patcher, current_scope);
+		const auto current_structure_token = patch_structure_token(snapshot);
+		if(current_structure_token == last_observed_structure_token_) {
+			pending_edit_causes_.clear();
+			return;
+		}
+
+		std::string causes{"["};
+		const std::array<sync_protocol::edit_observation_cause, 5> order{
+			sync_protocol::edit_observation_cause::patcher,
+			sync_protocol::edit_observation_cause::box,
+			sync_protocol::edit_observation_cause::line,
+			sync_protocol::edit_observation_cause::attribute,
+			sync_protocol::edit_observation_cause::unknown
+		};
+		bool first{true};
+		for(const auto cause : order) {
+			if(pending_edit_causes_.count(cause) == 0) continue;
+			if(!first) causes += ",";
+			first = false;
+			causes += json_string(
+				sync_protocol::edit_observation_cause_name(cause)
+			);
+		}
+		causes += "]";
+		pending_edit_causes_.clear();
+		last_observed_structure_token_ = current_structure_token;
+
+		send_event(
+			"{\"type\":\"maxforge.edit.observed\",\"patcherId\":" +
+			json_string(current_patcher_id) +
+			",\"scope\":" +
+			json_string(current_scope) +
+			",\"revision\":" +
+			(revision.empty() ? "null" : json_string(revision)) +
+			",\"structureToken\":" +
+			json_string(current_structure_token) +
+			",\"causes\":" +
+			causes +
+			",\"patcher\":" +
+			patch_snapshot_json(snapshot) +
+			"}"
+		);
+	}
+
 	auto top_level_patcher() -> c74::max::t_object * {
 		c74::max::t_object *containing_patcher{};
 		const auto patcher_error = c74::max::object_obex_lookup(
@@ -2061,6 +2260,7 @@ private:
 		std::string request_id{"local"};
 		std::string event_patcher_id;
 		std::string event_scope;
+		bool agent_mutation_started{};
 		try {
 			std::string message_type;
 			if(dictionary_optional_string(dictionary, "type", message_type)) {
@@ -2345,6 +2545,8 @@ private:
 				);
 				return;
 			}
+			begin_agent_mutation();
+			agent_mutation_started = true;
 
 			for(std::size_t index{}; index < plan.operations.size(); index++) {
 				if(!apply_operation(
@@ -2394,7 +2596,10 @@ private:
 				static_cast<long>(plan.operations.size())
 			);
 			send_applied_event(plan, request_id);
+			end_agent_mutation();
+			agent_mutation_started = false;
 		} catch(const std::exception &exception) {
+			if(agent_mutation_started) cancel_agent_mutation();
 			send_error(
 				exception.what(),
 				request_id,
@@ -2402,6 +2607,7 @@ private:
 				event_scope
 			);
 		} catch(...) {
+			if(agent_mutation_started) cancel_agent_mutation();
 			send_error(
 				"unknown plan processing error",
 				request_id,
@@ -2493,6 +2699,7 @@ private:
 				json_string(filename) +
 				",\"filepath\":" +
 				json_string(symbol_string(c74::max::jpatcher_get_filepath(root_patcher))) +
+				",\"capabilities\":[\"edit_observation_v1\"]" +
 				"}"
 			)) {
 				return registration_result::failed;

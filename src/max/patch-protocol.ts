@@ -80,7 +80,6 @@ export interface MaxforgeSnapshotBox {
   readonly maxclass: string;
   readonly patchingRect: readonly [number, number, number, number];
   readonly managed: boolean;
-  readonly selected?: boolean;
   readonly text?: string;
   readonly comment?: string;
   readonly attributes: Readonly<Record<string, PatchSetValue>>;
