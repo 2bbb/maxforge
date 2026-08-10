@@ -13,6 +13,17 @@ import {
 
 const CONFIG_FILENAME = "maxforge.config.json";
 
+const projectIdentitySchema = z.object({
+  id: z.string()
+    .min(1)
+    .max(128)
+    .regex(
+      /^[A-Za-z_][A-Za-z0-9_-]*$/,
+      "project id must start with a letter or underscore and contain only letters, numbers, underscores, or hyphens"
+    ),
+  name: z.string().trim().min(1).max(256).optional(),
+}).strict();
+
 const fixedPortsSchema = z.object({
   mode: z.literal("fixed"),
   inlets: z.number().int().nonnegative(),
@@ -124,6 +135,7 @@ const abstractionSchema = z.object({
 const catalogDocumentSchema = z.object({
   $schema: z.string().optional(),
   schemaVersion: z.literal(1),
+  project: projectIdentitySchema.optional(),
   catalogs: z.array(z.string().min(1)).optional(),
   objects: z.array(externalSchema).optional(),
   abstractions: z.array(abstractionSchema).optional(),
@@ -143,8 +155,14 @@ export interface CustomObjectInfo {
   readonly definition: ObjectDef;
 }
 
+export interface ProjectIdentity {
+  readonly id: string;
+  readonly name?: string;
+}
+
 export interface LoadedObjectCatalog {
   readonly database: ObjectDatabase;
+  readonly project?: ProjectIdentity;
   readonly configPath?: string;
   readonly sources: readonly string[];
   readonly digest: string;
@@ -242,6 +260,11 @@ export async function loadObjectCatalog(
   for (const relativeCatalog of config.catalogs ?? []) {
     const catalogPath = resolve(configDirectory, relativeCatalog);
     const catalog = await readCatalogDocument(catalogPath);
+    if (catalog.project !== undefined) {
+      throw new Error(
+        `Imported catalog cannot declare project identity: ${catalogPath}`
+      );
+    }
     if (catalog.catalogs !== undefined) {
       throw new Error(
         `Imported catalog cannot import other catalogs: ${catalogPath}`
@@ -278,6 +301,7 @@ export async function loadObjectCatalog(
 
   return {
     database,
+    project: config.project,
     configPath,
     sources,
     digest: databaseDigest(database),

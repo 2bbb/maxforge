@@ -19,6 +19,38 @@ afterEach(async () => {
 });
 
 describe("project object catalogs", () => {
+  it("loads stable project identity from the root config", async () => {
+    const root = await temporaryDirectory();
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      project: {
+        id: "studio_patchset",
+        name: "Studio Patchset",
+      },
+    });
+
+    const catalog = await loadObjectCatalog({ configPath });
+
+    expect(catalog.project).toEqual({
+      id: "studio_patchset",
+      name: "Studio Patchset",
+    });
+  });
+
+  it("rejects project identifiers that are unsafe as storage keys", async () => {
+    const root = await temporaryDirectory();
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      project: { id: "../shared" },
+    });
+
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "project.id"
+    );
+  });
+
   it("keeps the built-in catalog when no project config exists", async () => {
     const root = await temporaryDirectory();
     const catalog = await loadObjectCatalog({ cwd: root });
@@ -258,6 +290,24 @@ describe("project object catalogs", () => {
 
     await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
       "Imported catalog cannot import other catalogs"
+    );
+  });
+
+  it("rejects project identity in imported catalogs", async () => {
+    const root = await temporaryDirectory();
+    await writeJson(join(root, "shared.json"), {
+      schemaVersion: 1,
+      project: { id: "wrong_project" },
+    });
+    const configPath = join(root, "maxforge.config.json");
+    await writeJson(configPath, {
+      schemaVersion: 1,
+      project: { id: "actual_project" },
+      catalogs: ["./shared.json"],
+    });
+
+    await expect(loadObjectCatalog({ configPath })).rejects.toThrow(
+      "Imported catalog cannot declare project identity"
     );
   });
 
