@@ -477,6 +477,10 @@ node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 - 演算子オブジェクト（`*~`, `+~`等）は意味名に変換（`mul`, `add`等）
 - 通常のdecompileは`patching_rect`のx/yを`at(x, y)`として出力する。
 - human edit adoptionが返すworking DSLはresizeを失わないよう`at(x, y, width, height)`を使う。
+- 人間による編集の順序が判断に必要なら`maxforge_get_live_edit_history`を使う。
+  `supported`、`droppedEvents`、`comparisonBasis`を確認し、75ms内の複数編集は
+  1件に畳まれること、履歴は再接続で消えること、結果は意図やundo操作を証明
+  しないことを前提にする。現在状態の正本は常に`maxforge_inspect_patch`で読む。
 - DSL→maxpat→DSLのラウンドトリップで box数/line数が一致することを確認済み
 
 ## Best Practices

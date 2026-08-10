@@ -7,7 +7,7 @@
 <c74object name='maxforge.sync' category='patcher,  scripting,  agent,  websocket'>
 
 	<digest>Connect Max to maxforge MCP and synchronize a live patcher </digest>
-	<description>Connect Max to maxforge MCP and synchronize a live patcher </description>
+	<description>Connect Max to maxforge MCP, synchronize a live patcher, and report debounced structural edit observations while connected. Observations exclude maxforge-authored plan application and do not represent Max undo actions or human intent. </description>
 
 
 	<!--METADATA-->

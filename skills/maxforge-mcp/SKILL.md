@@ -22,6 +22,7 @@ Require these MCP tools:
 - `maxforge_save_patch`
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
+- `maxforge_get_live_edit_history`
 - `maxforge_review_live_changes`
 - `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
@@ -51,11 +52,17 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    Both operations require exactly one controller.
 6. Call `maxforge_inspect_patch` for the selected target. Read the snapshot;
    never infer patch state from the screen.
-7. Build the complete desired DSL. Omitted managed objects and cords are
+7. If the order of recent edits could change the interpretation, call
+   `maxforge_get_live_edit_history`. Check `supported`, `droppedEvents`, and
+   `comparisonBasis`; treat `latestSequence` only as an `afterSequence` polling
+   cursor. The 75 ms observations are structural evidence, not undo actions,
+   gestures, selection, causality, or proof of human intent. History is bounded
+   and resets on bridge or patch reconnection.
+8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
-8. If inspection reports live changes, call `maxforge_review_live_changes`.
+9. If inspection reports live changes, call `maxforge_review_live_changes`.
    Treat its layout, configuration, annotation, ownership, and routing signals
    as evidence, not as certainty about the human's intent. Read related changes
    together through `review.editClusters`, follow each cluster's `changeIndexes`
@@ -63,42 +70,42 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    prompts. `clarificationRecommendedFor` is not a command to ask automatically:
    ask the human only when competing interpretations would produce different
    next actions.
-9. Choose one drift path. If the accepted current managed graph should become
+10. Choose one drift path. If the accepted current managed graph should become
    the baseline, call `maxforge_adopt_live_changes` with the exact reviewed
    structure token. If a concrete next desired DSL is already ready, call
    `maxforge_reconcile_patch` and require `canApply: true`. Do not silently
    claim unmanaged additions, and never convert a conflict into an overwrite.
-10. After adoption, immediately replace the working complete source with the
+11. After adoption, immediately replace the working complete source with the
     returned `workingDsl`; it is round-trip checked and uses four-value `at()`
     when resize must survive. It is explicit managed state, so do not claim it
     preserves `for`/`if` authoring structure or patch-level metadata. Otherwise
     call `maxforge_compile_plan` with the
     target and complete `desiredDsl`. Review warnings and every `delete`,
     `disconnect`, and replacement operation.
-11. State the target, operation count, destructive operations, and stop
+12. State the target, operation count, destructive operations, and stop
    condition before mutation.
-12. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
+13. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
    Set `manualChanges: "merge"` only when reconciliation of that exact target
    and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
    Apply repeats inspection and binds its structure token; if the human edits
    the patch before native mutation, treat the resulting rejection as fresh
    drift and inspect again.
-13. Count success only when `acknowledgement.revision` equals `targetRevision`.
+14. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
-14. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
+15. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
-15. After every apply, retain returned `workingDsl` as the next complete source.
+16. After every apply, retain returned `workingDsl` as the next complete source.
     This is mandatory after a merge because it includes preserved human edits
     that may not exist in submitted `desiredDsl`. If
     `workingDslRequiredAsCurrent` is true, pass the exact returned source as
     `currentDsl` in every preview and apply until a successful apply clears the
     flag. A read-only preview does not persist this alignment.
-16. Apply does not persist the Max document. Call `maxforge_save_patch` only
+17. Apply does not persist the Max document. Call `maxforge_save_patch` only
     when persistence is intended. Omit `path` only for an already-saved patch;
     save-as requires an absolute Max-host path and explicit `overwrite: true`
     to replace a file.
-17. Use `maxforge_close_patch` only when closure is intended. Dirty state is
+18. Use `maxforge_close_patch` only when closure is intended. Dirty state is
     rejected unless `discard: true` is explicit; save first otherwise.
 
 ## Desired DSL rule

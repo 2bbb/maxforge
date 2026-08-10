@@ -83,7 +83,10 @@ for i in 0..7 {
    `maxforge_review_live_changes` to separate observed evidence from inferred
    intent. Interpret related changes through `review.editClusters`, inspect the
    raw entries named by `changeIndexes`, and treat `interpretationRisks` as
-   prompts rather than conclusions. Adopt an accepted current baseline with its exact structure token,
+   prompts rather than conclusions. Use `maxforge_get_live_edit_history` first
+   when recent edit order matters; check retention/drop metadata and never
+   describe the observations as Max undo actions or proven human intent. Adopt
+   an accepted current baseline with its exact structure token,
    or use `maxforge_reconcile_patch` and apply with `manualChanges: "merge"`
    only when it reports `canApply: true`. Update the complete working DSL after
    either path. Use `maxforge_create_patch` when isolation in a

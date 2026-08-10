@@ -166,18 +166,21 @@ The safe live sequence is fixed:
 5. create a blank target with `maxforge_create_patch`, or open an existing file
    with `maxforge_open_patch`, only when a separate target is required
 6. `maxforge_inspect_patch`
-7. if live changes exist, call `maxforge_review_live_changes`; interpret related
+7. when edit order matters, call `maxforge_get_live_edit_history` before
+   interpreting the current snapshot; check `supported`, `droppedEvents`, and
+   every entry's `comparisonBasis`
+8. if live changes exist, call `maxforge_review_live_changes`; interpret related
    changes together through `review.editClusters`, use `interpretationRisks` to
    locate ambiguity, and treat every result as evidence rather than a claim
    about the human's intent
-8. either adopt accepted managed edits with the exact returned structure token,
+9. either adopt accepted managed edits with the exact returned structure token,
    or reconcile them with the next complete desired DSL; never do both blindly
-9. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
+10. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
    and destructive operations
-10. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
-11. `maxforge_apply_dsl` with the same target and desired DSL; set
+11. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
+12. `maxforge_apply_dsl` with the same target and desired DSL; set
    `manualChanges: "merge"` only after successful reconciliation
-12. verify acknowledgement revision, inspect again, and call
+13. verify acknowledgement revision, inspect again, and call
     `maxforge_save_patch` only when persistence is intended
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
@@ -312,6 +315,43 @@ adoption. Inspection is read-only and does not advance that baseline. Before
 the first baseline, or when persistence was disabled/unavailable,
 `comparisonAvailable` is `false`: the full live snapshot remains available,
 but the server cannot honestly claim which prior action caused its state.
+
+### `maxforge_get_live_edit_history`
+
+Returns ordered structural evidence observed by a connected native
+`maxforge.sync`. This is the tool to call when the difference between “the human
+added A, then moved B” and one final combined snapshot matters.
+
+Arguments:
+
+- `patcherId` — registered target patch;
+- `scope` — exact advertised scope;
+- `afterSequence` — optional exclusive cursor for polling only newer entries.
+
+Each observation includes a bridge-assigned monotonic `sequence`, timestamp,
+native `structureToken`, notification cause categories, raw structural
+`changes`, and the same evidence-only `review` model used for live-change
+reasoning. `comparisonBasis` states whether changes were computed against the
+acknowledged baseline, the previous observation, or incomplete/missing evidence.
+
+Read the honesty fields before using chronology:
+
+- `supported: false` means the connected native external did not advertise the
+  observation capability;
+- `droppedEvents > 0` means retention limits removed older observations;
+- `comparisonBasis: incomplete_after_drop` means the first retained difference
+  cannot be treated as a complete transition;
+- `latestSequence` is a polling cursor, not a Max revision.
+
+The native external debounces notifications for 75 ms, snapshots the root and
+nested patchers, excludes agent-authored plan application, and drops events when
+the structure token did not change. The bridge retains at most 128 observations
+or 32 MiB globally in memory. History resets when the MCP bridge restarts or the
+Max patch reconnects. Multiple edits inside one debounce window collapse into
+one observation; notification categories can be `unknown`; Max undo steps,
+selection, gesture boundaries, causality, and human intent are not available.
+Use `maxforge_inspect_patch` as current truth and
+`maxforge_review_live_changes`/adoption/reconciliation for baseline ownership.
 
 ### `maxforge_review_live_changes`
 

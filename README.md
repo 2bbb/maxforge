@@ -251,11 +251,20 @@ human-readable status and local diagnostics. See
 - `maxforge_save_patch`
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
+- `maxforge_get_live_edit_history`
 - `maxforge_review_live_changes`
 - `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
+
+`maxforge_get_live_edit_history` returns bounded, ordered evidence captured by
+the native external while Max is being edited. Each entry is a 75 ms debounced
+structural snapshot with a monotonic sequence number and a difference against
+the acknowledged baseline or previous observation. It does not reconstruct Max
+undo actions or prove intent, and its in-memory history resets on bridge or
+patch reconnection. Agent-authored applies and notifications that leave the
+structure token unchanged are excluded.
 
 `maxforge_review_live_changes` turns live differences into neutral evidence such
 as layout, object-configuration, annotation, ownership, and routing signals. It

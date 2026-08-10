@@ -278,6 +278,14 @@ both root objects and objects inside `p generated_bank`.
   Token-bound adoption can accept managed edits without replaying them; it does
   not automatically claim unmanaged boxes. It returns a lossless explicit
   working DSL, but the agent must replace its own source with that result.
+- Native edit observation provides bounded ordering evidence only while both
+  `maxforge.sync` and the MCP bridge remain connected. Notifications are
+  debounced for 75 ms and emitted only when a full structural snapshot token
+  changes. Agent-authored plan application is suppressed. Multiple edits in a
+  debounce window collapse into one observation, notification causes may be
+  `unknown`, and the protocol does not expose Max undo boundaries, selection,
+  gestures, causality, or semantic intent. The bridge retains at most 128
+  observations or 32 MiB globally and reports dropped history explicitly.
 - Generated working DSL is an explicit managed-graph representation. It does
   not preserve authoring macros or patch-level metadata that PatchGraph does not
   own.
