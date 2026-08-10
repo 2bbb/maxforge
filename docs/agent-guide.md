@@ -233,7 +233,10 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
 6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。layout、object設定、
    annotation、ownership、routing等のsignalは「何が変わったか」の証拠であり、
-   人間の意図そのものと断定しない。複数の解釈が次の操作を変える場合だけ確認する。
+   人間の意図そのものと断定しない。`review.editClusters`単位で関連差分をまとめて読み、
+   `interpretationRisks`を曖昧性の手掛かりにする。
+   `clarificationRecommendedFor`に含まれていても機械的に質問せず、複数の解釈が
+   次の操作を変える場合だけ確認する。
 7. 現在のmanaged graphを次の基準にするなら、reviewが返した正確な
    structure tokenで`maxforge_adopt_live_changes`を呼ぶ。次の完全なdesired DSLが
    既にあるなら`maxforge_reconcile_patch`へ渡す。`canAdopt: true`または
@@ -259,6 +262,11 @@ MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の
 
 managed manual changeをinspectしただけではbaselineは更新されない。
 `maxforge_review_live_changes`は差分を中立的なsignalへ分類するが、意図を捏造しない。
+同一patcher pathで同じobject identityを共有する差分は`editClusters`へまとめられる。
+例えば、objectの設定変更、移動、meter追加、そこへの接続が同じidentityを介して
+いれば一つの編集クラスタとして読める。一方、同じ種類のlayout変更でも対象が独立
+していれば別クラスタのままである。各クラスタの`changeIndexes`からraw before/afterへ
+戻り、signal summaryだけで具体的変更を推測してはいけない。
 現在のlive managed graphを受け入れる場合は、同じstructure tokenが有効な間だけ
 `maxforge_adopt_live_changes`で採用できる。既にMax上にある編集は再実行せず、
 zero-operation planでnative revisionを進める。返された`workingDsl`は同一revisionへ

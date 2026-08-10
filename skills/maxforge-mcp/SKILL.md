@@ -57,9 +57,12 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
 8. If inspection reports live changes, call `maxforge_review_live_changes`.
    Treat its layout, configuration, annotation, ownership, and routing signals
-   as evidence, not as certainty about the human's intent. Infer intent from
-   the graph and conversation; ask the human only when competing interpretations
-   would produce different next actions.
+   as evidence, not as certainty about the human's intent. Read related changes
+   together through `review.editClusters`, follow each cluster's `changeIndexes`
+   to the raw before/after values, and use `interpretationRisks` as ambiguity
+   prompts. `clarificationRecommendedFor` is not a command to ask automatically:
+   ask the human only when competing interpretations would produce different
+   next actions.
 9. Choose one drift path. If the accepted current managed graph should become
    the baseline, call `maxforge_adopt_live_changes` with the exact reviewed
    structure token. If a concrete next desired DSL is already ready, call
@@ -134,6 +137,10 @@ and target revisions.
 Inspection alone does not accept or reset a baseline. First call
 `maxforge_review_live_changes`. Its signals describe structural evidence and
 must not be presented as a certain explanation of the human's intent.
+Interpret `review.editClusters` rather than isolated signal rows. A cluster
+correlates changes by patcher path and shared object identity, while independent
+edits remain separate. Inspect the raw changes referenced by `changeIndexes`;
+the cluster summary is not a substitute for before/after values.
 
 If the reviewed managed graph is the state that should survive, adopt it using
 the exact returned structure token. Adoption re-inspects, rejects stale review,

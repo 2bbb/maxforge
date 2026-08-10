@@ -166,8 +166,10 @@ The safe live sequence is fixed:
 5. create a blank target with `maxforge_create_patch`, or open an existing file
    with `maxforge_open_patch`, only when a separate target is required
 6. `maxforge_inspect_patch`
-7. if live changes exist, call `maxforge_review_live_changes`; treat its signals
-   as evidence to interpret, not as a claim about the human's intent
+7. if live changes exist, call `maxforge_review_live_changes`; interpret related
+   changes together through `review.editClusters`, use `interpretationRisks` to
+   locate ambiguity, and treat every result as evidence rather than a claim
+   about the human's intent
 8. either adopt accepted managed edits with the exact returned structure token,
    or reconcile them with the next complete desired DSL; never do both blindly
 9. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
@@ -319,6 +321,23 @@ annotation, box attributes, ownership, object addition/removal, routing, and
 connection attributes. The result also includes the raw changes, managed and
 unmanaged runtime IDs, `canAdopt`, conflicts, the exact `structureToken`, and
 `proposedWorkingDsl` when the reviewed managed graph round-trips losslessly.
+
+`review.editClusters` correlates raw changes when they occur in the same patcher
+path and share a managed object ID or unmanaged runtime ID. Each cluster carries:
+
+- the exact `changeIndexes` back into the raw change array;
+- separate managed and unmanaged identities;
+- combined `signalKinds` describing the observed effects;
+- `interpretationRisks` for mixed effects, unmanaged context, or an ownership
+  boundary change;
+- a neutral summary.
+
+`review.interpretationGuidance.mode` is always `evidence_only`.
+`clarificationRecommendedFor` lists cluster IDs where unmanaged or ownership
+context makes a human question more likely to matter. It is not a command to ask
+every time: ask only when competing interpretations would change the next patch
+mutation. Independent edits remain separate clusters even when they share the
+same signal kind and patcher path.
 
 This tool reports **what changed**, not **why it changed**. A moved box may be a
 cosmetic cleanup, a grouping hint, or an accidental drag. The agent should use

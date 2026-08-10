@@ -271,6 +271,10 @@ both root objects and objects inside `p generated_bank`.
   process restarts. A snapshot cannot reconstruct edit history predating the
   first stored baseline.
 - Human-edit review classifies observed differences but cannot prove intent.
+  Related differences are correlated into edit clusters by patcher path and
+  shared object identity; this is structural correlation, not edit-history or
+  semantic-intent reconstruction. Independent actions that happen to touch the
+  same object cannot be separated from one snapshot pair.
   Token-bound adoption can accept managed edits without replaying them; it does
   not automatically claim unmanaged boxes. It returns a lossless explicit
   working DSL, but the agent must replace its own source with that result.

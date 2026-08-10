@@ -483,7 +483,7 @@ source[1] -&gt; destination[2]</code></pre>
           <li><span>03</span><div>Before using a custom object, call <code>maxforge_catalog</code> and confirm the loaded definition.</div></li>
           <li><span>04</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
           <li><span>05</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
-          <li><span>06</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Its signals describe evidence, not proven human intent.</div></li>
+          <li><span>06</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Read related changes through <code>review.editClusters</code>, follow their <code>changeIndexes</code> to raw before/after values, and treat <code>interpretationRisks</code> as ambiguity prompts rather than proven human intent.</div></li>
           <li><span>07</span><div>Adopt an accepted current baseline with <code>maxforge_adopt_live_changes</code> and the exact reviewed token, or reconcile it with a concrete next complete DSL.</div></li>
           <li><span>08</span><div>After adoption, replace the working source with returned <code>workingDsl</code>. Otherwise call <code>maxforge_compile_plan</code> and review warnings, deletes, and structural recreation.</div></li>
           <li><span>09</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
@@ -512,7 +512,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_save_patch</code></td><td>Save or save-as explicitly; apply never saves automatically and overwrite is opt-in.</td></tr>
               <tr><td><code>maxforge_close_patch</code></td><td>Close a registered patch; dirty-state discard is explicit and opt-in.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
-              <tr><td><code>maxforge_review_live_changes</code></td><td>Classify layout, configuration, annotation, ownership, and routing evidence; provide proposed working DSL when lossless.</td></tr>
+              <tr><td><code>maxforge_review_live_changes</code></td><td>Classify structural evidence, correlate related changes into identity-bound edit clusters, expose interpretation risks and clarification candidates, and provide proposed working DSL when lossless.</td></tr>
               <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>
               <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>
@@ -520,6 +520,14 @@ source[1] -&gt; destination[2]</code></pre>
             </tbody>
           </table>
         </div>
+        <p>
+          Edit clusters are structural correlations, not recorded gestures or
+          semantic conclusions. Follow each cluster's <code>changeIndexes</code>
+          to the exact raw before/after changes. Use
+          <code>clarificationRecommendedFor</code> to focus reasoning, but ask a
+          human only when unresolved interpretations would change the next
+          mutation.
+        </p>
       </section>
 
       <section id="external" class="docs-section">

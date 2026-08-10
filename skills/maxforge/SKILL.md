@@ -81,7 +81,9 @@ for i in 0..7 {
    preview with `maxforge_compile_plan`, and apply the complete desired state
    with `maxforge_apply_dsl`. If managed manual edits exist, use
    `maxforge_review_live_changes` to separate observed evidence from inferred
-   intent. Adopt an accepted current baseline with its exact structure token,
+   intent. Interpret related changes through `review.editClusters`, inspect the
+   raw entries named by `changeIndexes`, and treat `interpretationRisks` as
+   prompts rather than conclusions. Adopt an accepted current baseline with its exact structure token,
    or use `maxforge_reconcile_patch` and apply with `manualChanges: "merge"`
    only when it reports `canApply: true`. Update the complete working DSL after
    either path. Use `maxforge_create_patch` when isolation in a
