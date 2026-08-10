@@ -3,4 +3,5 @@ export * from "./patch-adapter.js";
 export * from "./mcp-server.js";
 export * from "./service.js";
 export * from "./state-store.js";
+export * from "./edit-history-store.js";
 export * from "./reconcile.js";

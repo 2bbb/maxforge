@@ -123,7 +123,29 @@ export interface MaxforgeRetainedEditObservation {
 export interface MaxforgeEditObservationHistory {
   readonly supported: boolean;
   readonly droppedEvents: number;
+  readonly persistence: MaxforgeEditHistoryPersistence;
+  readonly patchMetadata: readonly MaxforgePatchMetadata[];
   readonly observations: readonly MaxforgeRetainedEditObservation[];
+}
+
+export interface MaxforgeEditHistoryPersistence {
+  readonly enabled: boolean;
+  readonly projectId: string | null;
+  readonly location: string | null;
+  readonly warnings: readonly string[];
+}
+
+export interface MaxforgePatchMetadata {
+  readonly projectId: string;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly instanceId: string;
+  readonly sessionId: string;
+  readonly observedAt: string;
+  readonly reason: "registered" | "saved";
+  readonly title: string;
+  readonly filename: string;
+  readonly filepath: string;
 }
 
 export interface MaxforgeSnapshotEndpoint {
@@ -178,6 +200,7 @@ export interface MaxforgeBridgeStatus {
   readonly connectedClients: number;
   readonly registeredPatches: readonly MaxforgePatchInfo[];
   readonly liveRevisions: Readonly<Record<string, string | null>>;
+  readonly editHistoryPersistence: MaxforgeEditHistoryPersistence;
 }
 
 export interface CreateMaxPatchRequest {

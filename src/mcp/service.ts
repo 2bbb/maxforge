@@ -13,6 +13,8 @@ import {
 import {
   MaxforgeAppliedEvent,
   MaxforgeEditObservationCause,
+  MaxforgeEditHistoryPersistence,
+  MaxforgePatchMetadata,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
@@ -106,6 +108,8 @@ export interface LiveEditHistoryResult {
   readonly scope: string;
   readonly supported: boolean;
   readonly droppedEvents: number;
+  readonly persistence: MaxforgeEditHistoryPersistence;
+  readonly patchMetadata: readonly MaxforgePatchMetadata[];
   readonly latestSequence: number | null;
   readonly observations: readonly LiveEditHistoryEntry[];
   readonly limitations: readonly string[];
@@ -373,6 +377,8 @@ export class MaxforgePatchService {
       scope,
       supported: history.supported,
       droppedEvents: history.droppedEvents,
+      persistence: history.persistence,
+      patchMetadata: history.patchMetadata,
       latestSequence,
       observations: observations.filter(
         (observation) => afterSequence < observation.sequence

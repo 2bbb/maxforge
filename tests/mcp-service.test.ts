@@ -58,6 +58,8 @@ describe("MaxforgePatchService", () => {
     transport.editHistory = {
       supported: true,
       droppedEvents: 0,
+      persistence: disabledHistoryPersistence(),
+      patchMetadata: [],
       observations: [
         {
           sequence: 10,
@@ -128,6 +130,8 @@ describe("MaxforgePatchService", () => {
     transport.editHistory = {
       supported: true,
       droppedEvents: 3,
+      persistence: disabledHistoryPersistence(),
+      patchMetadata: [],
       observations: [{
         sequence: 4,
         sessionSequence: 4,
@@ -169,6 +173,8 @@ describe("MaxforgePatchService", () => {
     transport.editHistory = {
       supported: true,
       droppedEvents: 0,
+      persistence: disabledHistoryPersistence(),
+      patchMetadata: [],
       observations: [
         retainedObservation(1, 1, "session-old", transport.snapshot, empty),
         retainedObservation(2, 1, "session-new", transport.snapshot, moved),
@@ -1157,6 +1163,15 @@ function retainedObservation(
   };
 }
 
+function disabledHistoryPersistence() {
+  return {
+    enabled: false,
+    projectId: null,
+    location: null,
+    warnings: [],
+  } as const;
+}
+
 class FakeTransport implements PatchPlanTransport {
   readonly plans: PatchPlan[] = [];
   readonly liveRevisions = new Map<string, string | null>();
@@ -1169,6 +1184,8 @@ class FakeTransport implements PatchPlanTransport {
   editHistory: MaxforgeEditObservationHistory = {
     supported: true,
     droppedEvents: 0,
+    persistence: disabledHistoryPersistence(),
+    patchMetadata: [],
     observations: [],
   };
 
@@ -1292,6 +1309,7 @@ class FakeTransport implements PatchPlanTransport {
       connectedClients: 1,
       registeredPatches: [],
       liveRevisions: Object.fromEntries(this.liveRevisions),
+      editHistoryPersistence: disabledHistoryPersistence(),
     };
   }
 }

@@ -691,6 +691,13 @@ class FakeTransport implements PatchPlanTransport {
     return {
       supported: true,
       droppedEvents: 0,
+      persistence: {
+        enabled: false,
+        projectId: null,
+        location: null,
+        warnings: [],
+      },
+      patchMetadata: [],
       observations: [],
     };
   }
@@ -700,6 +707,8 @@ class FakeTransport implements PatchPlanTransport {
   ): Promise<MaxforgePatchInfo> {
     return {
       ...request,
+      instanceId: "mcp-test-instance",
+      sessionId: "mcp-test-session",
       revision: null,
       controller: false,
       filename: "",
@@ -711,6 +720,8 @@ class FakeTransport implements PatchPlanTransport {
   async openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo> {
     return {
       ...request,
+      instanceId: "mcp-test-instance",
+      sessionId: "mcp-test-session",
       revision: null,
       controller: false,
       filename: request.path.split(/[\\/]/).at(-1) ?? "",
@@ -761,6 +772,12 @@ class FakeTransport implements PatchPlanTransport {
       connectedClients: 0,
       registeredPatches: [],
       liveRevisions: {},
+      editHistoryPersistence: {
+        enabled: false,
+        projectId: null,
+        location: null,
+        warnings: [],
+      },
     };
   }
 }

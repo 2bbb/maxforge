@@ -98,12 +98,21 @@ export class JsonFilePatchStateStore implements PatchStateStore {
 
 export function stateFileFromEnvironment(
   environment: NodeJS.ProcessEnv,
-  port: number
+  port: number,
+  projectId?: string
 ): string | undefined {
   const configured = environment.MAXFORGE_STATE_FILE;
   if (configured === "off") return undefined;
   if (configured !== undefined && configured.length > 0) return resolve(configured);
-  return join(homedir(), ".maxforge", `mcp-state-${port}-v1.json`);
+  return projectId
+    ? join(
+      homedir(),
+      ".maxforge",
+      "projects",
+      projectId,
+      "mcp-state-v1.json"
+    )
+    : join(homedir(), ".maxforge", `mcp-state-${port}-v1.json`);
 }
 
 function parseStateDocument(raw: unknown, path: string): PatchServiceState {

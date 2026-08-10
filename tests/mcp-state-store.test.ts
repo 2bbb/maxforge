@@ -102,8 +102,11 @@ describe("JsonFilePatchStateStore", () => {
     );
   });
 
-  it("uses a per-port default and supports explicit disable or override", () => {
+  it("uses project identity when available and supports disable or override", () => {
     expect(stateFileFromEnvironment({}, 8766)).toMatch(/mcp-state-8766-v1\.json$/);
+    expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
+      /projects\/studio_patchset\/mcp-state-v1\.json$/
+    );
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766)).toBeUndefined();
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "/tmp/custom.json" }, 8766))
       .toBe("/tmp/custom.json");

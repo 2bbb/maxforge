@@ -55,5 +55,8 @@ describe("maxforge MCP environment", () => {
     );
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766))
       .toBeUndefined();
+    expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
+      /\.maxforge\/projects\/studio_patchset\/mcp-state-v1\.json$/
+    );
   });
 });

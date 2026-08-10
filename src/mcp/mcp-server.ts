@@ -33,6 +33,8 @@ const structureTokenSchema = z
 const patchInfoSchema = z.object({
   patcherId: patcherIdSchema.describe("Stable transport ID; use this instead of a window title"),
   scope: scopeSchema.describe("Managed namespace advertised by this patch"),
+  instanceId: z.string().describe("Lifetime identity of this maxforge.sync object"),
+  sessionId: z.string().describe("MCP registration-session identity"),
   revision: revisionSchema.nullable().describe("Live managed revision, or null before the first apply"),
   controller: z.boolean().describe("Whether this patch may create new top-level patches"),
   title: z.string().describe("Display-only Max window title"),
@@ -144,6 +146,10 @@ const catalogObjectSchema = z.object({
 });
 
 const catalogStatusSchema = z.object({
+  project: z.object({
+    id: z.string(),
+    name: z.string().optional(),
+  }).nullable(),
   digest: z.string().regex(/^[a-f0-9]{64}$/),
   configPath: z.string().nullable(),
   sources: z.array(z.string()),
@@ -305,9 +311,31 @@ const liveEditHistorySchema = z.object({
   scope: scopeSchema,
   supported: z.boolean(),
   droppedEvents: z.number().int().nonnegative(),
+  persistence: z.object({
+    enabled: z.boolean(),
+    projectId: z.string().nullable(),
+    location: z.string().nullable(),
+    warnings: z.array(z.string()),
+  }),
+  patchMetadata: z.array(z.object({
+    projectId: z.string(),
+    patcherId: patcherIdSchema,
+    scope: scopeSchema,
+    instanceId: z.string(),
+    sessionId: z.string(),
+    observedAt: z.string(),
+    reason: z.enum(["registered", "saved"]),
+    title: z.string(),
+    filename: z.string(),
+    filepath: z.string(),
+  })),
   latestSequence: z.number().int().positive().nullable(),
   observations: z.array(z.object({
     sequence: z.number().int().positive(),
+    sessionSequence: z.number().int().positive(),
+    sessionId: z.string(),
+    instanceId: z.string(),
+    sessionStartedAt: z.string(),
     observedAt: z.string(),
     causes: z.array(z.enum([
       "patcher",
@@ -318,7 +346,7 @@ const liveEditHistorySchema = z.object({
     ])),
     structureToken: structureTokenSchema,
     comparisonBasis: z.enum([
-      "acknowledged_baseline",
+      "session_baseline",
       "previous_observation",
       "incomplete_after_drop",
       "unavailable",
@@ -535,6 +563,12 @@ export function createMaxforgeMcpServer(
           connectedClients: z.number().int().nonnegative(),
           registeredPatches: z.array(patchInfoSchema),
           liveRevisions: z.record(z.string(), revisionSchema.nullable()),
+          editHistoryPersistence: z.object({
+            enabled: z.boolean(),
+            projectId: z.string().nullable(),
+            location: z.string().nullable(),
+            warnings: z.array(z.string()),
+          }),
         }),
         managedRevisions: z.record(z.string(), revisionSchema),
         inspectionBaselineScopes: z.array(z.string()),
@@ -1089,6 +1123,7 @@ export function createMaxforgeMcpServer(
 function catalogStatus(catalog: LoadedObjectCatalog) {
   const customNames = new Set(catalog.customObjects.map(({ name }) => name));
   return {
+    project: catalog.project ?? null,
     digest: catalog.digest,
     configPath: catalog.configPath ?? null,
     sources: [...catalog.sources],

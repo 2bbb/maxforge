@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import type { PatchPlan, PatchSetValue } from "../max/patch-graph.js";
+import type { EditHistoryStore } from "./edit-history-store.js";
 import type {
   CloseMaxPatchRequest,
   CreateMaxPatchRequest,
@@ -38,7 +39,6 @@ interface RegisteredClient {
 }
 
 interface StoredEditObservation {
-  readonly client: WebSocket;
   readonly patcherId: string;
   readonly scope: string;
   readonly byteSize: number;
@@ -142,8 +142,12 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private listeningPort: number | undefined;
   private nextEditSequence = 1;
   private editObservationBytes = 0;
+  private readonly persistenceWarnings: string[] = [];
 
-  constructor(options: MaxforgeBridgeOptions = {}) {
+  constructor(
+    options: MaxforgeBridgeOptions = {},
+    private readonly editHistoryStore?: EditHistoryStore
+  ) {
     this.host = options.host ?? "127.0.0.1";
     this.requestedPort = options.port ?? 8766;
     this.token = options.token;
@@ -174,6 +178,26 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   async start(): Promise<MaxforgeBridgeStatus> {
     if (this.server) {
       throw new Error("WebSocket bridge is already started");
+    }
+
+    if (this.editHistoryStore) {
+      try {
+        const restored = this.editHistoryStore.load();
+        for (const observation of restored.observations) {
+          const byteSize = Buffer.byteLength(JSON.stringify(observation.event));
+          this.editObservations.push({
+            ...observation,
+            patcherId: observation.event.patcherId,
+            scope: observation.event.scope,
+            byteSize,
+          });
+          this.editObservationBytes += byteSize;
+        }
+        this.nextEditSequence = restored.nextSequence;
+        this.trimEditObservations();
+      } catch (error) {
+        this.recordPersistenceWarning(error);
+      }
     }
 
     const server = new WebSocketServer({
@@ -329,6 +353,9 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     return {
       supported,
       droppedEvents: this.droppedEditEvents.get(key) ?? 0,
+      persistence: this.editHistoryPersistenceStatus(),
+      patchMetadata: this.editHistoryStore
+        ?.patchMetadata(patcherId, scope) ?? [],
       observations: this.editObservations
         .filter((entry) =>
           entry.patcherId === patcherId &&
@@ -560,6 +587,23 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
           patch.revision,
         ])
       ),
+      editHistoryPersistence: this.editHistoryPersistenceStatus(),
+    };
+  }
+
+  private editHistoryPersistenceStatus() {
+    if (!this.editHistoryStore) {
+      return {
+        enabled: false,
+        projectId: null,
+        location: null,
+        warnings: [...this.persistenceWarnings],
+      } as const;
+    }
+    const status = this.editHistoryStore.status();
+    return {
+      ...status,
+      warnings: [...status.warnings, ...this.persistenceWarnings],
     };
   }
 
@@ -664,6 +708,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       sessionStartedAt,
       nextObservationSequence: 1,
     });
+    if (this.editHistoryStore) {
+      try {
+        this.editHistoryStore.startSession(
+          info,
+          event.observationBaseline,
+          sessionStartedAt
+        );
+      } catch (error) {
+        this.recordPersistenceWarning(error);
+      }
+    }
 
     for (const pending of this.pendingCreates.values()) {
       if (
@@ -700,8 +755,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       return;
     }
 
-    this.editObservations.push({
-      client,
+    const observation = {
       patcherId: event.patcherId,
       scope: event.scope,
       byteSize,
@@ -713,8 +767,20 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       sessionBaseline: registration.observationBaseline,
       observedAt: new Date().toISOString(),
       event,
-    });
+    };
+    this.editObservations.push(observation);
     this.editObservationBytes += byteSize;
+    this.trimEditObservations();
+    if (this.editHistoryStore) {
+      try {
+        this.editHistoryStore.appendObservation(observation);
+      } catch (error) {
+        this.recordPersistenceWarning(error);
+      }
+    }
+  }
+
+  private trimEditObservations(): void {
     while (
       MAX_EDIT_OBSERVATIONS < this.editObservations.length ||
       MAX_EDIT_OBSERVATION_BYTES < this.editObservationBytes
@@ -727,6 +793,13 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         key,
         (this.droppedEditEvents.get(key) ?? 0) + 1
       );
+    }
+  }
+
+  private recordPersistenceWarning(error: unknown): void {
+    const warning = error instanceof Error ? error.message : String(error);
+    if (!this.persistenceWarnings.includes(warning)) {
+      this.persistenceWarnings.push(warning);
     }
   }
 
@@ -861,6 +934,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         filename: event.filename,
         filepath: event.filepath,
       };
+      if (this.editHistoryStore) {
+        try {
+          this.editHistoryStore.recordPatchMetadata(
+            registration.info,
+            new Date().toISOString(),
+            "saved"
+          );
+        } catch (error) {
+          this.recordPersistenceWarning(error);
+        }
+      }
     }
     pending.resolve(event);
   }

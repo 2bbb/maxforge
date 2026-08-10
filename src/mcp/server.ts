@@ -13,6 +13,11 @@ import {
   JsonFilePatchStateStore,
   stateFileFromEnvironment,
 } from "./state-store.js";
+import {
+  editHistoryDirectoryFromEnvironment,
+  editHistoryOptionsFromEnvironment,
+  JsonLinesEditHistoryStore,
+} from "./edit-history-store.js";
 
 export function bridgeOptionsFromEnvironment(
   environment: NodeJS.ProcessEnv
@@ -46,9 +51,24 @@ export async function main(): Promise<void> {
     packageVersion(),
   ]);
   const bridgeOptions = bridgeOptionsFromEnvironment(process.env);
-  const bridge = new MaxforgeWebSocketBridge(bridgeOptions);
+  const editHistoryDirectory = editHistoryDirectoryFromEnvironment(
+    process.env,
+    catalog.project
+  );
+  const editHistoryStore = editHistoryDirectory && catalog.project
+    ? new JsonLinesEditHistoryStore(editHistoryOptionsFromEnvironment(
+      process.env,
+      catalog.project,
+      editHistoryDirectory
+    ))
+    : undefined;
+  const bridge = new MaxforgeWebSocketBridge(bridgeOptions, editHistoryStore);
   const status = await bridge.start();
-  const stateFile = stateFileFromEnvironment(process.env, status.port);
+  const stateFile = stateFileFromEnvironment(
+    process.env,
+    status.port,
+    catalog.project?.id
+  );
   const stateStore = stateFile
     ? new JsonFilePatchStateStore(stateFile)
     : undefined;
@@ -74,6 +94,13 @@ export async function main(): Promise<void> {
 
   console.error(
     `maxforge MCP listening for Max on ws://${status.host}:${status.port}`
+  );
+  console.error(
+    editHistoryStore
+      ? `maxforge persists edit history in ${editHistoryStore.directory}`
+      : catalog.project
+        ? "maxforge edit-history persistence is disabled"
+        : "maxforge edit-history persistence requires project.id in MAXFORGE_CONFIG"
   );
   if (catalog.configPath) {
     console.error(

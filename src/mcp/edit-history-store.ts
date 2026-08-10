@@ -317,6 +317,12 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       this.warn(`${path}: ${errorMessage(error)}`);
       return;
     }
+    if (header.project.id !== this.project.id) {
+      this.warn(
+        `${path}: ignored history for project ${header.project.id}; expected ${this.project.id}`
+      );
+      return;
+    }
     this.addMetadata(metadataFromPatch(
       this.project.id,
       header.patch,

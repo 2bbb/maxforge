@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import {
@@ -9,13 +12,21 @@ import {
   createEmptyPatchGraph,
   diffPatchGraphs,
 } from "../src/max/patch-graph.js";
+import {
+  EditHistoryStore,
+  JsonLinesEditHistoryStore,
+} from "../src/mcp/edit-history-store.js";
 
 const bridges: MaxforgeWebSocketBridge[] = [];
 const clients: WebSocket[] = [];
+const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   for (const client of clients.splice(0)) client.terminate();
   await Promise.allSettled(bridges.splice(0).map((bridge) => bridge.close()));
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 describe("MaxforgeWebSocketBridge", () => {
@@ -463,6 +474,63 @@ describe("MaxforgeWebSocketBridge", () => {
       .toMatchObject({ observations: [{ event: { causes: ["line"] } }] });
   });
 
+  it("restores project-scoped edit observations after bridge restart", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-bridge-history-"));
+    temporaryDirectories.push(directory);
+    const firstStore = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    const firstBridge = createBridge(firstStore);
+    const firstStatus = await firstBridge.start();
+    const firstClient = await connect(firstStatus.port);
+    await register(
+      firstBridge,
+      firstClient,
+      registration("patch-a", "voices", false)
+    );
+    firstClient.send(JSON.stringify(editObservation("patch-a", "voices", {
+      causes: ["box"],
+    })));
+    await waitFor(() =>
+      firstBridge.getEditObservationHistory("patch-a", "voices")
+        .observations.length === 1
+    );
+    const original = firstBridge.getEditObservationHistory("patch-a", "voices")
+      .observations[0];
+    firstClient.terminate();
+    await waitFor(() => firstBridge.listPatches().length === 0);
+    await firstBridge.close();
+
+    const secondStore = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    const secondBridge = createBridge(secondStore);
+    const secondStatus = await secondBridge.start();
+    const secondClient = await connect(secondStatus.port);
+    await register(
+      secondBridge,
+      secondClient,
+      registration("patch-a", "voices", false)
+    );
+
+    expect(secondBridge.getEditObservationHistory("patch-a", "voices"))
+      .toMatchObject({
+        persistence: {
+          enabled: true,
+          projectId: "studio_patchset",
+          location: directory,
+          warnings: [],
+        },
+        observations: [{
+          sequence: original.sequence,
+          sessionId: original.sessionId,
+          event: { causes: ["box"] },
+        }],
+      });
+  });
+
   it("ignores edit observations from mismatched or incapable clients", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
@@ -483,7 +551,13 @@ describe("MaxforgeWebSocketBridge", () => {
     incapable.send(JSON.stringify(editObservation("patch-b", "meters", {})));
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(bridge.getEditObservationHistory("patch-b", "meters"))
-      .toEqual({ supported: false, droppedEvents: 0, observations: [] });
+      .toMatchObject({
+        supported: false,
+        droppedEvents: 0,
+        persistence: { enabled: false },
+        patchMetadata: [],
+        observations: [],
+      });
   });
 });
 
@@ -609,11 +683,13 @@ describe("parseBridgeEvent", () => {
   });
 });
 
-function createBridge(): MaxforgeWebSocketBridge {
+function createBridge(
+  editHistoryStore?: EditHistoryStore
+): MaxforgeWebSocketBridge {
   const bridge = new MaxforgeWebSocketBridge({
     port: 0,
     applyTimeoutMs: 1000,
-  });
+  }, editHistoryStore);
   bridges.push(bridge);
   return bridge;
 }
