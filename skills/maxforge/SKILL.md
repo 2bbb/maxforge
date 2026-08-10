@@ -126,6 +126,8 @@ for i in 0..7 {
 - For project externals or reusable `.maxpat` abstractions, create a strict
   `maxforge.config.json` using `schema/config-v1.json`. CLI compile, validate,
   plan, and bundle discover it upward from the input; `--config` selects one explicitly.
+  Add a unique stable `project.id` when MCP state and edit evidence must survive
+  restarts; do not use a saved path, filename, or title as project/patch identity.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use bounded `ports.mode: "arguments"` when integer initialization arguments
   deterministically control counts; it is not an arbitrary expression hook.

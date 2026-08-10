@@ -68,8 +68,12 @@ Environment variables:
 | `MAXFORGE_WS_HOST` | conditional | `127.0.0.1` without a token, `0.0.0.0` with a token |
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
-| `MAXFORGE_CONFIG` | unset | Explicit project object catalog; no MCP working-directory discovery |
-| `MAXFORGE_STATE_FILE` | `~/.maxforge/mcp-state-<port>-v1.json` | Atomic graph/baseline state file; set to `off` only to disable restart recovery |
+| `MAXFORGE_CONFIG` | unset | Explicit project config; no MCP working-directory discovery |
+| `MAXFORGE_STATE_FILE` | project-scoped with `project.id`, otherwise `~/.maxforge/mcp-state-<port>-v1.json` | Atomic graph/baseline state file; `off` disables restart recovery |
+| `MAXFORGE_EDIT_HISTORY` | enabled only with `project.id` | Set to `off` to disable persistent edit evidence |
+| `MAXFORGE_EDIT_HISTORY_DIR` | `~/.maxforge/projects/<project.id>/edit-history-v1` | Override the project edit-history directory |
+| `MAXFORGE_EDIT_HISTORY_MAX_BYTES` | `268435456` | Maximum retained NDJSON bytes |
+| `MAXFORGE_EDIT_HISTORY_MAX_AGE_DAYS` | `7` | Maximum retained chunk age in days |
 
 When custom externals or reusable abstractions appear in desired DSL, set
 `MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
@@ -95,6 +99,14 @@ call `maxforge_reload_catalog` and verify the replacement digest with
 not a runtime availability check: the Max machine still needs the corresponding
 external binary or abstraction search path. See
 [`object-catalog.md`](object-catalog.md#project-object-catalogs).
+Hot reload may change object declarations or the display name, but it rejects a
+different `project.id`; switching persistence namespace requires an MCP restart.
+
+Add a stable `project.id` even when the project has no custom objects if edit
+history must survive MCP restarts. Without it, managed state still uses the
+per-port fallback, but edit-history persistence is intentionally disabled;
+maxforge does not invent a collision-prone `default` project. `maxforge_status`
+reports the loaded project and edit-history persistence health.
 
 With no token, non-loopback bind addresses are rejected and existing local
 setups remain unauthenticated on `127.0.0.1`. Set a human-chosen token to bind
@@ -332,26 +344,35 @@ Each observation includes a bridge-assigned monotonic `sequence`, timestamp,
 native `structureToken`, notification cause categories, raw structural
 `changes`, and the same evidence-only `review` model used for live-change
 reasoning. `comparisonBasis` states whether changes were computed against the
-acknowledged baseline, the previous observation, or incomplete/missing evidence.
+exact registration-session baseline, the previous observation in that same
+session, or incomplete/missing evidence. `instanceId` identifies one native
+`maxforge.sync` object lifetime; server-assigned `sessionId` changes on every
+accepted registration or reconnect.
 
 Read the honesty fields before using chronology:
 
 - `supported: false` means the connected native external did not advertise the
   observation capability;
-- `droppedEvents > 0` means retention limits removed older observations;
+- `droppedEvents > 0` means in-memory retention removed older observations;
 - `comparisonBasis: incomplete_after_drop` means the first retained difference
   cannot be treated as a complete transition;
 - `latestSequence` is a polling cursor, not a Max revision;
 - `observedAt` is snapshot-arrival time, not the timestamp of an individual Max
-  edit. A first comparison against an older acknowledged baseline can include
-  drift that predates the current observation session.
+  edit;
+- `persistence` reports whether project-scoped disk history is active, its
+  location, and read/write warnings;
+- `patchMetadata` retains registration and save-path observations. A saved
+  `filepath` is a locator for reopening and move/Save As detection, not a stable
+  identity.
 
 The native external debounces notifications for 75 ms, snapshots the root and
 nested patchers, excludes agent-authored plan application, and drops events when
 the structure token did not change. The bridge retains at most 128 observations
-or 32 MiB globally in memory. History resets when the MCP bridge restarts or the
-Max patch reconnects. Multiple edits inside one debounce window collapse into
-one observation; notification categories can be `unknown`; Max undo steps,
+or 32 MiB globally in memory. With `project.id`, append-only NDJSON chunks
+restore retained evidence after an MCP restart; reconnect starts a new session
+with a fresh baseline rather than comparing across that boundary. Disk
+retention defaults to seven days and 256 MiB. Multiple edits inside one debounce
+window collapse into one observation; notification categories can be `unknown`; Max undo steps,
 selection, gesture boundaries, causality, and human intent are not available.
 Use `maxforge_inspect_patch` as current truth and
 `maxforge_review_live_changes`/adoption/reconciliation for baseline ownership.
@@ -651,8 +672,16 @@ the controller.
 
 Maxforge atomically persists acknowledged managed graphs, agent-intent graphs,
 inspection baselines, and in-flight apply records. The default file is scoped by
-WebSocket port under `~/.maxforge`; set an absolute `MAXFORGE_STATE_FILE` when an
+`project.id` under `~/.maxforge/projects/` when configured, and otherwise by
+WebSocket port under `~/.maxforge`. Set an absolute `MAXFORGE_STATE_FILE` when an
 MCP client needs an explicit location.
+
+Live-edit evidence uses a separate append-only NDJSON journal because the
+atomic state document is not an event log. Each session header stores project,
+patcher/scope, native instance, MCP session, title/filename/filepath, and the
+exact registration baseline. Save events append updated path metadata. Path is
+useful for locating a saved patch, but `project.id + patcherId + scope` remains
+the durable logical identity; `instanceId + sessionId` bounds runtime evidence.
 
 Before sending a plan, Maxforge writes an in-flight record containing both base
 and target revisions. If acknowledgement is lost, the next process waits for the

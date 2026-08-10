@@ -45,7 +45,7 @@ The rules are:
 | DSL frontend | `src/dsl/*`, `src/core/compiler.ts` | Parse and compile `.maxdsl` into Max patch JSON |
 | DSL graph adapter | `src/max/dsl-patch-graph.ts` | Convert DSL compiler output into a managed `PatchGraph` |
 | Patch domain | `src/max/patch-graph.ts`, `patch-merge.ts`, `patch-protocol.ts`, `patch-snapshot.ts` | Managed graph identity, revisions, plans, snapshots, and pure comparisons |
-| Live-control application | `src/mcp/service.ts`, `reconcile.ts`, `state-store.ts` | Coordinate desired state with acknowledged and manually edited live state |
+| Live-control application | `src/mcp/service.ts`, `reconcile.ts`, `state-store.ts`, `edit-history-store.ts` | Coordinate desired state, atomic recovery state, and append-only edit evidence |
 | Adapters | `src/mcp/dsl-patch-adapter.ts`, `bridge.ts`, `mcp-server.ts` | Catalog resolution, WebSocket transport, and agent-facing MCP tools |
 | Max host | `source/projects/maxforge.sync/` | Validate and apply protocol operations through the Max SDK |
 

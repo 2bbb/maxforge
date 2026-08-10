@@ -29,6 +29,10 @@ audited built-in database. Declare project-specific metadata in
 {
   "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
   "schemaVersion": 1,
+  "project": {
+    "id": "studio_patchset",
+    "name": "Studio Patchset"
+  },
   "catalogs": ["./catalogs/vendor.json"],
   "objects": [
     {
@@ -59,6 +63,13 @@ catalogs use
 contain a `catalogs` property, and are loaded before declarations in the root
 configuration. The format is strict: unknown keys fail validation instead of
 being silently ignored.
+
+`project.id` is the stable namespace used by MCP persistence. It must start
+with a letter or underscore and contain only letters, digits, `_`, or `-`;
+`project.name` is display-only. Shared imported catalogs cannot declare a
+project identity. Reusing one ID for unrelated projects merges their state and
+history namespaces. Renaming an ID starts a new namespace; it is not a cache
+migration.
 
 `compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for the exact
 filename `maxforge.config.json`. `--config path` bypasses discovery. Use

@@ -49,7 +49,7 @@ describe("maxforge MCP environment", () => {
     });
   });
 
-  it("uses a persistent per-port state file unless explicitly disabled", () => {
+  it("uses project-scoped state when identified and per-port fallback otherwise", () => {
     expect(stateFileFromEnvironment({}, 8766)).toMatch(
       /\.maxforge\/mcp-state-8766-v1\.json$/
     );

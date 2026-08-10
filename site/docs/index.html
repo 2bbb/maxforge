@@ -321,6 +321,10 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
         <pre><code>{
   "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
   "schemaVersion": 1,
+  "project": {
+    "id": "studio_patchset",
+    "name": "Studio Patchset"
+  },
   "objects": [{
     "name": "vendor.filter~",
     "kind": "external",
@@ -344,6 +348,7 @@ filter = lores~ 1000 0.5 at(240, 180)</code></pre>
           <li><code>ports: "derive"</code> counts root <code>inlet</code>/<code>outlet</code> boxes and infers signal outlets from incoming source metadata.</li>
           <li>An abstraction name must match its existing <code>.maxpat</code> filename. Normal compilation validates but does not embed it, so Max still needs its directory on the search path. <code>bundle</code> copies referenced declared dependencies instead.</li>
           <li>Imported catalogs cannot recursively import more catalogs. Accidental name collisions fail unless <code>override: true</code> is explicit.</li>
+          <li><code>project.id</code> is the stable MCP persistence namespace. Imported catalogs cannot declare it, and unrelated projects must not share it.</li>
         </ul>
         <p>
           Use the public <a href="../schema/config-v1.json">project config schema</a>
@@ -471,6 +476,14 @@ source[1] -&gt; destination[2]</code></pre>
           MCP is unnecessary. MCP intentionally does not discover configuration
           from its working directory.
         </p>
+        <p>
+          Put a stable <code>project.id</code> in that config when managed state
+          and ordered edit evidence must survive MCP restarts. Maxforge stores
+          atomic state and a separate append-only NDJSON journal under
+          <code>~/.maxforge/projects/&lt;project.id&gt;/</code>. Without a project ID,
+          persistent edit history is disabled rather than merged into a shared
+          default cache.
+        </p>
       </section>
 
       <section id="mcp-workflow" class="docs-section">
@@ -483,7 +496,7 @@ source[1] -&gt; destination[2]</code></pre>
           <li><span>03</span><div>Before using a custom object, call <code>maxforge_catalog</code> and confirm the loaded definition.</div></li>
           <li><span>04</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
           <li><span>05</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
-          <li><span>06</span><div>When recent order matters, call <code>maxforge_get_live_edit_history</code>. Check <code>supported</code>, <code>droppedEvents</code>, and <code>comparisonBasis</code>; this is volatile structural evidence, not undo history.</div></li>
+          <li><span>06</span><div>When recent order matters, call <code>maxforge_get_live_edit_history</code>. Check <code>supported</code>, <code>persistence</code>, <code>droppedEvents</code>, session identity, and <code>comparisonBasis</code>; this is structural evidence, not undo history.</div></li>
           <li><span>07</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Read related changes through <code>review.editClusters</code>, follow their <code>changeIndexes</code> to raw before/after values, and treat <code>interpretationRisks</code> as ambiguity prompts rather than proven human intent.</div></li>
           <li><span>08</span><div>Adopt an accepted current baseline with <code>maxforge_adopt_live_changes</code> and the exact reviewed token, or reconcile it with a concrete next complete DSL.</div></li>
           <li><span>09</span><div>After adoption, replace the working source with returned <code>workingDsl</code>. Otherwise call <code>maxforge_compile_plan</code> and review warnings, deletes, and structural recreation.</div></li>
@@ -522,9 +535,11 @@ source[1] -&gt; destination[2]</code></pre>
           </table>
         </div>
         <p>
-          Live edit history is volatile: it resets on reconnect, collapses
-          edits inside one debounce window, and omits selection and gesture
-          boundaries. Edit clusters are structural correlations, not recorded gestures or
+          Live edit history is bounded and collapses edits inside one debounce
+          window. Project-scoped NDJSON survives MCP restart; reconnect creates
+          a new session baseline instead of comparing across sessions. Saved
+          paths are locators, not patch identities. Selection and gesture
+          boundaries remain unavailable. Edit clusters are structural correlations, not recorded gestures or
           semantic conclusions. Follow each cluster's <code>changeIndexes</code>
           to the exact raw before/after changes. Use
           <code>clarificationRecommendedFor</code> to focus reasoning, but ask a

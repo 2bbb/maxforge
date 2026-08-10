@@ -130,6 +130,30 @@ describe("JsonLinesEditHistoryStore", () => {
     });
   });
 
+  it("surfaces one saved path associated with multiple patch identities", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+    store.startSession({
+      ...patchInfo(),
+      patcherId: "patch-b",
+      instanceId: "instance-b",
+      sessionId: "session-b",
+    }, observationBaseline(), "2026-08-11T00:00:01.000Z");
+
+    expect(store.status().warnings.join(" ")).toContain(
+      "associated with multiple patch identities"
+    );
+  });
+
   it("does not invent a shared project cache without project identity", () => {
     expect(editHistoryDirectoryFromEnvironment({}, undefined)).toBeUndefined();
     expect(editHistoryDirectoryFromEnvironment(

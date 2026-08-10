@@ -405,7 +405,8 @@ const HELP_CONTENT = {
       "Run maxforge-mcp as an MCP stdio server with Node.js 20 or newer.",
       "Install the native maxforge.sync external separately; the npm package does not install the Max external.",
       "Set MAXFORGE_CONFIG before starting MCP when the project uses third-party externals or reusable abstractions.",
-      "Keep the default ~/.maxforge per-port state file, or set MAXFORGE_STATE_FILE explicitly. Use the value off only when restart recovery is intentionally disabled.",
+      "Declare a stable project.id in MAXFORGE_CONFIG to scope managed state and persistent edit history. Do not reuse one id for unrelated projects.",
+      "Keep the default project-scoped state/history paths, or set MAXFORGE_STATE_FILE and MAXFORGE_EDIT_HISTORY_DIR explicitly. Use off only when persistence is intentionally disabled.",
       "Open one controller patch containing maxforge.sync with controller enabled.",
       "Call maxforge_status and maxforge_catalog, then maxforge_list_patches to verify catalog and patch registration before creating or changing patches.",
     ],
@@ -414,6 +415,7 @@ const HELP_CONTENT = {
       "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
       "New patch creation requires exactly one registered controller.",
       "maxforge_open_patch loads a .maxpat on the Max host and injects maxforge.sync; use it only for patches that do not already contain maxforge.sync.",
+      "Saved file paths are locators and metadata, not patch identities; always route by listed patcherId and scope.",
     ],
     relatedTools: [
       "maxforge_status",
@@ -663,6 +665,11 @@ export function createMaxforgeMcpServer(
       try {
         const previous = currentCatalog;
         const replacement = await options.reloadCatalog();
+        if (previous.project?.id !== replacement.project?.id) {
+          throw new Error(
+            "project.id cannot change during catalog reload; restart maxforge-mcp to switch persistence namespace"
+          );
+        }
         options.replaceObjectDatabase(replacement.database);
         currentCatalog = replacement;
         return toolResult({
@@ -910,7 +917,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Get ordered live-edit evidence",
       description:
-        "Read bounded, ordered, debounced snapshot evidence captured by maxforge.sync while the patch was edited. Returns per-observation structural differences, neutral edit reviews, and notification cause categories. It does not reconstruct Max undo actions or prove human intent. Check supported, droppedEvents, and comparisonBasis before relying on chronology.",
+        "Read bounded, ordered, debounced snapshot evidence captured by maxforge.sync while the patch was edited. Returns session-scoped structural differences, neutral edit reviews, persistence health, and saved-path locator metadata. It does not reconstruct Max undo actions or prove human intent. Check supported, persistence, droppedEvents, and comparisonBasis before relying on chronology.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),

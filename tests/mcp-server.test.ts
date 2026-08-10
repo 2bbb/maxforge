@@ -40,6 +40,7 @@ const configuredDatabase: ObjectDatabase = {
 };
 const catalog: LoadedObjectCatalog = {
   database: configuredDatabase,
+  project: { id: "studio_patchset", name: "Studio Patchset" },
   configPath: "/project/maxforge.config.json",
   sources: ["/project/maxforge.config.json"],
   digest: "c".repeat(64),
@@ -87,6 +88,7 @@ describe("maxforge MCP protocol surface", () => {
     const patchAdapter = new DslPatchAdapter(configuredDatabase);
     const service = new MaxforgePatchService(patchAdapter, transport);
     let reloadShouldFail = false;
+    let reloadProjectId = "studio_patchset";
     const server = createMaxforgeMcpServer({
       service,
       transport,
@@ -96,7 +98,10 @@ describe("maxforge MCP protocol surface", () => {
         patchAdapter.replaceDatabase(database),
       reloadCatalog: async () => {
         if (reloadShouldFail) throw new Error("invalid replacement catalog");
-        return reloadedCatalog;
+        return {
+          ...reloadedCatalog,
+          project: { id: reloadProjectId },
+        };
       },
     });
     const client = new InMemoryMcpClient(server);
@@ -305,6 +310,22 @@ describe("maxforge MCP protocol surface", () => {
         },
       });
 
+      reloadProjectId = "another_project";
+      const rejectedProjectSwitch = await client.request(371, "tools/call", {
+        name: "maxforge_reload_catalog",
+        arguments: {},
+      });
+      expect(rejectedProjectSwitch).toMatchObject({
+        result: {
+          isError: true,
+          content: [{
+            type: "text",
+            text: expect.stringContaining("project.id cannot change"),
+          }],
+        },
+      });
+
+      reloadProjectId = "studio_patchset";
       reloadShouldFail = true;
       const rejectedReload = await client.request(38, "tools/call", {
         name: "maxforge_reload_catalog",

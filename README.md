@@ -261,9 +261,11 @@ human-readable status and local diagnostics. See
 `maxforge_get_live_edit_history` returns bounded, ordered evidence captured by
 the native external while Max is being edited. Each entry is a 75 ms debounced
 structural snapshot with a monotonic sequence number and a difference against
-the acknowledged baseline or previous observation. It does not reconstruct Max
-undo actions or prove intent, and its in-memory history resets on bridge or
-patch reconnection. Agent-authored applies and notifications that leave the
+the exact registration-session baseline or previous observation in that
+session. It does not reconstruct Max undo actions or prove intent. With a
+stable `project.id`, append-only local history survives MCP restart; reconnect
+starts a new session boundary instead of comparing unrelated snapshots.
+Agent-authored applies and notifications that leave the
 structure token unchanged are excluded.
 
 `maxforge_review_live_changes` turns live differences into neutral evidence such
@@ -296,9 +298,12 @@ token is rejected. This is plaintext trusted-LAN authentication, not a public
 Internet service. See [`docs/mcp.md`](docs/mcp.md) for configuration.
 
 Acknowledged graphs, human-edit baselines, and unresolved applies are persisted
-atomically in `~/.maxforge/mcp-state-<port>-v1.json`, so a normal MCP restart
-does not require reconstructing the previous DSL. Set `MAXFORGE_STATE_FILE` to
-an explicit path when needed; `off` deliberately disables recovery.
+atomically. A configured `project.id` scopes state under
+`~/.maxforge/projects/<project.id>/`; otherwise state uses the per-port fallback.
+Ordered edit evidence is a separate bounded NDJSON journal and is disabled
+without stable project identity. Saved paths are retained as locators, not used
+as patch IDs. Set `MAXFORGE_STATE_FILE` or `MAXFORGE_EDIT_HISTORY_DIR`
+explicitly when needed.
 
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without
@@ -412,6 +417,7 @@ reusable `.maxpat` abstraction that is not in the bundled catalog:
 {
   "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
   "schemaVersion": 1,
+  "project": { "id": "studio_patchset", "name": "Studio Patchset" },
   "catalogs": ["./catalogs/studio.json"],
   "objects": [
     {

@@ -377,6 +377,7 @@ abstractionを`--allow-unknown`で誤魔化さない。project rootの
 {
   "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
   "schemaVersion": 1,
+  "project": { "id": "studio_patchset", "name": "Studio Patchset" },
   "objects": [
     {
       "name": "vendor.filter~",
@@ -403,6 +404,8 @@ CLIの`compile`、`validate`、`plan`、`bundle`は入力DSLから上方向へ�
 MCPはcwd探索を行わないため、server起動設定で`MAXFORGE_CONFIG`に絶対pathを
 渡す。catalog変更後は`maxforge_reload_catalog`を呼び、`maxforge_catalog`で
 新しいdigestを確認する。server再起動は不要で、reload失敗時は旧catalogが残る。
+MCPのstate/edit historyを再起動後もproject単位で保持する場合は、一意で安定した
+`project.id`をroot configへ設定する。保存pathはlocatorでありpatch identityではない。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

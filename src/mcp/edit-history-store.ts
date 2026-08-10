@@ -407,6 +407,27 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   private addMetadata(metadata: PersistedPatchMetadata): void {
     const key = targetKey(metadata.patcherId, metadata.scope);
     const entries = this.metadata.get(key) ?? [];
+    if (metadata.filepath.length > 0) {
+      for (const [otherKey, otherEntries] of this.metadata) {
+        if (
+          otherKey !== key &&
+          otherEntries.some((entry) => entry.filepath === metadata.filepath)
+        ) {
+          this.warn(
+            `saved path ${metadata.filepath} is associated with multiple patch identities`
+          );
+        }
+      }
+      if (entries.some((entry) =>
+        entry.instanceId !== metadata.instanceId &&
+        entry.filepath.length > 0 &&
+        entry.filepath !== metadata.filepath
+      )) {
+        this.warn(
+          `patch ${metadata.patcherId}:${metadata.scope} changed saved path across native instances; verify move, Save As, or duplicate identity`
+        );
+      }
+    }
     const duplicate = entries.some((entry) =>
       entry.sessionId === metadata.sessionId &&
       entry.observedAt === metadata.observedAt &&
@@ -522,6 +543,7 @@ function isMetadataRecord(
     raw.record === "metadata" &&
     raw.reason === "saved" &&
     typeof raw.observedAt === "string" &&
+    Number.isFinite(Date.parse(raw.observedAt)) &&
     isPatchInfo(raw.patch) &&
     raw.patch.patcherId === header.patch.patcherId &&
     raw.patch.scope === header.patch.scope &&
@@ -532,6 +554,7 @@ function isMetadataRecord(
 function isProjectIdentity(value: unknown): value is ProjectIdentity {
   return isRecord(value) &&
     typeof value.id === "string" &&
+    value.id.length <= 128 &&
     IDENTIFIER_PATTERN.test(value.id) &&
     (value.name === undefined || typeof value.name === "string");
 }
@@ -559,6 +582,7 @@ function isBaseline(value: unknown): value is MaxforgeObservationBaseline {
 }
 
 function isEditObservedEvent(value: unknown): value is MaxforgeEditObservedEvent {
+  const allowedCauses = new Set(["patcher", "box", "line", "attribute", "unknown"]);
   return isRecord(value) &&
     value.type === "maxforge.edit.observed" &&
     typeof value.patcherId === "string" &&
@@ -566,6 +590,12 @@ function isEditObservedEvent(value: unknown): value is MaxforgeEditObservedEvent
     typeof value.structureToken === "string" &&
     STRUCTURE_TOKEN_PATTERN.test(value.structureToken) &&
     Array.isArray(value.causes) &&
+    0 < value.causes.length &&
+    value.causes.length <= allowedCauses.size &&
+    value.causes.every((cause) =>
+      typeof cause === "string" && allowedCauses.has(cause)
+    ) &&
+    new Set(value.causes).size === value.causes.length &&
     isSnapshot(value.patcher);
 }
 
@@ -578,7 +608,67 @@ function isSnapshot(value: unknown): boolean {
     typeof value.locked === "boolean" &&
     typeof value.presentation === "boolean" &&
     Array.isArray(value.boxes) &&
-    Array.isArray(value.connections);
+    value.boxes.every(isSnapshotBox) &&
+    Array.isArray(value.connections) &&
+    value.connections.every(isSnapshotConnection);
+}
+
+function isSnapshotBox(value: unknown): boolean {
+  return isRecord(value) &&
+    isStringArray(value.targetPath) &&
+    typeof value.runtimeId === "string" && value.runtimeId.length > 0 &&
+    typeof value.varName === "string" &&
+    typeof value.maxclass === "string" &&
+    isRectangle(value.patchingRect) &&
+    typeof value.managed === "boolean" &&
+    (value.text === undefined || typeof value.text === "string") &&
+    (value.comment === undefined || typeof value.comment === "string") &&
+    isSnapshotAttributes(value.attributes);
+}
+
+function isSnapshotConnection(value: unknown): boolean {
+  return isRecord(value) &&
+    isStringArray(value.targetPath) &&
+    isSnapshotEndpoint(value.source) &&
+    isSnapshotEndpoint(value.destination) &&
+    isSnapshotAttributes(value.attributes);
+}
+
+function isSnapshotEndpoint(value: unknown): boolean {
+  return isRecord(value) &&
+    typeof value.runtimeId === "string" && value.runtimeId.length > 0 &&
+    typeof value.varName === "string" &&
+    typeof value.port === "number" &&
+    Number.isSafeInteger(value.port) &&
+    0 <= value.port;
+}
+
+function isSnapshotAttributes(value: unknown): boolean {
+  return isRecord(value) && Object.entries(value).every(([name, attribute]) =>
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && isPatchSetValue(attribute)
+  );
+}
+
+function isPatchSetValue(value: unknown): boolean {
+  return typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    (Array.isArray(value) &&
+      0 < value.length &&
+      value.length <= 256 &&
+      value.every((entry) =>
+      typeof entry === "string" ||
+      (typeof entry === "number" && Number.isFinite(entry))
+      ));
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isRectangle(value: unknown): boolean {
+  return Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry));
 }
 
 function validatePatchInfo(patch: MaxforgePatchInfo): void {

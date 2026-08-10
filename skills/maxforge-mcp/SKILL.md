@@ -43,6 +43,8 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    to set `MAXFORGE_CONFIG`. If configured files changed after startup, call
    `maxforge_reload_catalog` and verify the new digest. A rejected reload leaves
    the old catalog active. Do not substitute `--allow-unknown` in a live mutation.
+   Confirm `catalog.project.id` when edit history must survive MCP restart;
+   without it, persistent edit evidence is deliberately disabled.
 4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
    and filenames are display metadata, not target identities.
 5. If a separate window is required, call `maxforge_create_patch` with a unique
@@ -55,10 +57,12 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 7. If the order of recent edits could change the interpretation, call
    `maxforge_get_live_edit_history`. Check `supported`, `droppedEvents`, and
    `comparisonBasis`; treat `latestSequence` only as an `afterSequence` polling
-   cursor. The 75 ms observations are structural evidence, not undo actions,
-   gestures, selection, causality, or proof of human intent. History is bounded
-   and resets on bridge or patch reconnection. `observedAt` is snapshot-arrival
-   time; a first acknowledged-baseline comparison can include older drift.
+   cursor. Inspect `persistence`, `sessionId`, `instanceId`, and
+   `sessionSequence`. The 75 ms observations are structural evidence, not undo
+   actions, gestures, selection, causality, or proof of human intent. History
+   is bounded; project-scoped NDJSON may survive bridge restart, while reconnect
+   starts a new session baseline. `observedAt` is snapshot-arrival time. Treat
+   `patchMetadata.filepath` as a locator only, never as target identity.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
