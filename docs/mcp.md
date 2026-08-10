@@ -327,17 +327,18 @@ path and share a managed object ID or unmanaged runtime ID. Each cluster carries
 
 - the exact `changeIndexes` back into the raw change array;
 - separate managed and unmanaged identities;
+- all observed runtime IDs, kept separate from stable managed identities;
 - combined `signalKinds` describing the observed effects;
 - `interpretationRisks` for mixed effects, unmanaged context, or an ownership
   boundary change;
 - a neutral summary.
 
 `review.interpretationGuidance.mode` is always `evidence_only`.
-`clarificationRecommendedFor` lists cluster IDs where unmanaged or ownership
-context makes a human question more likely to matter. It is not a command to ask
-every time: ask only when competing interpretations would change the next patch
-mutation. Independent edits remain separate clusters even when they share the
-same signal kind and patcher path.
+`clarificationRecommendedFor` lists every cluster with an interpretation risk,
+including mixed effects, unmanaged context, and ownership changes. It is not a
+command to ask every time: ask only when competing interpretations would change
+the next patch mutation. Independent edits remain separate clusters even when
+they share the same signal kind and patcher path.
 
 This tool reports **what changed**, not **why it changed**. A moved box may be a
 cosmetic cleanup, a grouping hint, or an accidental drag. The agent should use

@@ -45,6 +45,7 @@ export interface PatchEditCluster {
   readonly changeIndexes: readonly number[];
   readonly managedObjectIds: readonly string[];
   readonly unmanagedRuntimeIds: readonly string[];
+  readonly observedRuntimeIds: readonly string[];
   readonly signalKinds: readonly PatchEditSignalKind[];
   readonly interpretationRisks: readonly PatchEditInterpretationRisk[];
   readonly summary: string;
@@ -78,6 +79,7 @@ interface ChangeEvidence {
   readonly targetPath: readonly string[];
   readonly managedObjectIds: readonly string[];
   readonly unmanagedRuntimeIds: readonly string[];
+  readonly observedRuntimeIds: readonly string[];
   readonly signalKinds: readonly PatchEditSignalKind[];
 }
 
@@ -134,6 +136,17 @@ export function reviewPatchEdits(
         counts.boxesChanged++;
         const box = change.after.managed ? change.after : change.before;
         for (const kind of signalKindsForChange(change)) {
+          if (kind === "ownership") {
+            addOwnershipSignal(
+              signals,
+              change,
+              scope,
+              changeIndex,
+              managedIds,
+              unmanagedRuntimeIds
+            );
+            continue;
+          }
           addBoxSignal(
             signals,
             kind,
@@ -212,13 +225,10 @@ export function reviewPatchEdits(
     interpretationGuidance: {
       mode: "evidence_only",
       clarificationRecommendedFor: editClusters
-        .filter((cluster) => cluster.interpretationRisks.some((risk) =>
-          risk === "touches_unmanaged_state" ||
-          risk === "ownership_boundary_changed"
-        ))
+        .filter((cluster) => cluster.interpretationRisks.length > 0)
         .map((cluster) => cluster.id),
       instruction:
-        "Infer intent from each edit cluster and conversation context; ask only when unresolved interpretations would change the next patch mutation.",
+        "Use each edit cluster with conversation context as evidence; do not assert human intent. Ask only when unresolved interpretations would change the next patch mutation.",
     },
   };
 }
@@ -236,7 +246,13 @@ function addBoxSignal(
   unmanagedRuntimeIds: Set<string>
 ): void {
   const id = objectIdentity(box, managed, scope);
-  recordIdentity(id, managed, managedIds, unmanagedRuntimeIds);
+  recordBoxIdentity(
+    box,
+    managed,
+    scope,
+    managedIds,
+    unmanagedRuntimeIds
+  );
   addSignal(signals, kind, managed, box.targetPath, [id], changeIndex);
 }
 
@@ -263,6 +279,36 @@ function addConnectionSignal(
     managed,
     connection.targetPath,
     ids,
+    changeIndex
+  );
+}
+
+function addOwnershipSignal(
+  signals: Map<string, MutableSignal>,
+  change: Extract<PatchSnapshotChange, { readonly kind: "box_changed" }>,
+  scope: string,
+  changeIndex: number,
+  managedIds: Set<string>,
+  unmanagedRuntimeIds: Set<string>
+): void {
+  const identities = [change.before, change.after].map((box) =>
+    snapshotBoxIdentity(box, scope)
+  );
+  for (const identity of identities) {
+    recordBoxIdentity(
+      identity.box,
+      identity.managed,
+      scope,
+      managedIds,
+      unmanagedRuntimeIds
+    );
+  }
+  addSignal(
+    signals,
+    "ownership",
+    change.managed,
+    change.before.targetPath,
+    identities.map((identity) => identity.id),
     changeIndex
   );
 }
@@ -295,6 +341,39 @@ function objectIdentity(
 ): string {
   if (managed) return managedIdFromVarName(scope, box.varName) ?? box.runtimeId;
   return box.runtimeId;
+}
+
+function snapshotBoxIdentity(
+  box: MaxforgeSnapshotBox,
+  scope: string
+): {
+  readonly box: MaxforgeSnapshotBox;
+  readonly id: string;
+  readonly managed: boolean;
+} {
+  if (box.managed) {
+    return {
+      box,
+      id: managedIdFromVarName(scope, box.varName) ?? box.runtimeId,
+      managed: true,
+    };
+  }
+  return { box, id: box.runtimeId, managed: false };
+}
+
+function recordBoxIdentity(
+  box: MaxforgeSnapshotBox,
+  managed: boolean,
+  scope: string,
+  managedIds: Set<string>,
+  unmanagedRuntimeIds: Set<string>
+): void {
+  if (managed) {
+    const managedId = managedIdFromVarName(scope, box.varName);
+    if (managedId !== null) managedIds.add(managedId);
+    return;
+  }
+  unmanagedRuntimeIds.add(box.runtimeId);
 }
 
 function recordIdentity(
@@ -356,12 +435,28 @@ function describeChange(
     const box = change.kind === "box_changed"
       ? (change.after.managed ? change.after : change.before)
       : change.box;
-    const id = objectIdentity(box, change.managed, scope);
+    const ownershipChanged = change.kind === "box_changed" &&
+      change.fields.some((field) => field === "varName" || field === "managed");
+    const boxes = ownershipChanged
+      ? [change.before, change.after]
+      : [box];
     return {
       changeIndex,
       targetPath: box.targetPath,
-      managedObjectIds: change.managed ? [id] : [],
-      unmanagedRuntimeIds: change.managed ? [] : [id],
+      managedObjectIds: uniqueSorted(
+        boxes.flatMap((item) => {
+          if (!item.managed) return [];
+          const managedId = managedIdFromVarName(scope, item.varName);
+          return managedId === null ? [] : [managedId];
+        })
+      ),
+      unmanagedRuntimeIds: uniqueSorted(
+        boxes.filter((item) => !item.managed)
+          .map((item) => item.runtimeId)
+      ),
+      observedRuntimeIds: uniqueSorted(
+        boxes.map((item) => item.runtimeId)
+      ),
       signalKinds: signalKindsForChange(change),
     };
   }
@@ -381,6 +476,10 @@ function describeChange(
     targetPath: connection.targetPath,
     managedObjectIds: [...new Set(managedObjectIds)].sort(),
     unmanagedRuntimeIds: [...new Set(unmanagedRuntimeIds)].sort(),
+    observedRuntimeIds: uniqueSorted([
+      connection.source.runtimeId,
+      connection.destination.runtimeId,
+    ]),
     signalKinds: signalKindsForChange(change),
   };
 }
@@ -431,16 +530,16 @@ function buildEditClusters(
     if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
   };
 
-  for (let left = 0; left < evidence.length; left++) {
-    for (let right = left + 1; right < evidence.length; right++) {
-      if (
-        samePath(evidence[left].targetPath, evidence[right].targetPath) &&
-        sharesIdentity(evidence[left], evidence[right])
-      ) {
-        union(left, right);
-      }
+  const firstChangeByIdentity = new Map<string, number>();
+  evidence.forEach((item, index) => {
+    const path = JSON.stringify(item.targetPath);
+    for (const identity of evidenceIdentityKeys(item)) {
+      const key = `${path}\u0000${identity}`;
+      const previous = firstChangeByIdentity.get(key);
+      if (previous !== undefined) union(previous, index);
+      else firstChangeByIdentity.set(key, index);
     }
-  }
+  });
 
   const grouped = new Map<number, ChangeEvidence[]>();
   evidence.forEach((item, index) => {
@@ -455,23 +554,12 @@ function buildEditClusters(
     .map((group, index) => createEditCluster(group, index + 1));
 }
 
-function samePath(
-  left: readonly string[],
-  right: readonly string[]
-): boolean {
-  return left.length === right.length &&
-    left.every((part, index) => part === right[index]);
-}
-
-function sharesIdentity(left: ChangeEvidence, right: ChangeEvidence): boolean {
-  const leftKeys = new Set([
-    ...left.managedObjectIds.map((id) => `managed:${id}`),
-    ...left.unmanagedRuntimeIds.map((id) => `unmanaged:${id}`),
-  ]);
-  return right.managedObjectIds.some((id) => leftKeys.has(`managed:${id}`)) ||
-    right.unmanagedRuntimeIds.some((id) =>
-      leftKeys.has(`unmanaged:${id}`)
-    );
+function evidenceIdentityKeys(evidence: ChangeEvidence): readonly string[] {
+  return [
+    ...evidence.observedRuntimeIds.map((id) => `runtime:${id}`),
+    ...evidence.managedObjectIds.map((id) => `managed:${id}`),
+    ...evidence.unmanagedRuntimeIds.map((id) => `unmanaged:${id}`),
+  ];
 }
 
 function createEditCluster(
@@ -487,6 +575,9 @@ function createEditCluster(
   const signalKinds = uniqueInOrder(
     evidence.flatMap((item) => item.signalKinds)
   );
+  const observedRuntimeIds = uniqueSorted(
+    evidence.flatMap((item) => item.observedRuntimeIds)
+  );
   const interpretationRisks: PatchEditInterpretationRisk[] = [];
   if (signalKinds.length > 1) interpretationRisks.push("mixed_effects");
   if (unmanagedRuntimeIds.length > 0) {
@@ -499,13 +590,14 @@ function createEditCluster(
   const location = targetPath.length === 0
     ? "the root patcher"
     : `subpatcher ${targetPath.join("/")}`;
-  const affectedCount = managedObjectIds.length + unmanagedRuntimeIds.length;
+  const affectedCount = observedRuntimeIds.length;
   return {
     id: `edit-${sequence}`,
     targetPath,
     changeIndexes: evidence.map((item) => item.changeIndex).sort((a, b) => a - b),
     managedObjectIds,
     unmanagedRuntimeIds,
+    observedRuntimeIds,
     signalKinds,
     interpretationRisks,
     summary:

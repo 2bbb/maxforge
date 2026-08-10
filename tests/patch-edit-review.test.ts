@@ -85,6 +85,7 @@ describe("reviewPatchEdits", () => {
       changeIndexes: [0, 1, 2],
       managedObjectIds: ["obj-osc"],
       unmanagedRuntimeIds: ["runtime-manual"],
+      observedRuntimeIds: ["runtime-manual", "runtime-osc"],
       signalKinds: [
         "layout",
         "object_configuration",
@@ -100,7 +101,7 @@ describe("reviewPatchEdits", () => {
       mode: "evidence_only",
       clarificationRecommendedFor: ["edit-1"],
       instruction:
-        "Infer intent from each edit cluster and conversation context; ask only when unresolved interpretations would change the next patch mutation.",
+        "Use each edit cluster with conversation context as evidence; do not assert human intent. Ask only when unresolved interpretations would change the next patch mutation.",
     });
   });
 
@@ -175,17 +176,116 @@ describe("reviewPatchEdits", () => {
     }], "voices");
 
     expect(review.affectedManagedIds).toEqual(["obj-osc"]);
+    expect(review.affectedUnmanagedRuntimeIds).toEqual(["runtime-osc"]);
     expect(review.signals).toEqual([expect.objectContaining({
       kind: "ownership",
       managed: true,
-      objectIds: ["obj-osc"],
+      objectIds: ["obj-osc", "runtime-osc"],
     })]);
     expect(review.editClusters).toEqual([expect.objectContaining({
-      interpretationRisks: ["ownership_boundary_changed"],
+      interpretationRisks: [
+        "touches_unmanaged_state",
+        "ownership_boundary_changed",
+      ],
     })]);
     expect(review.interpretationGuidance.clarificationRecommendedFor).toEqual([
       "edit-1",
     ]);
+  });
+
+  it("preserves both managed identities across an ownership rename", () => {
+    const before = box({
+      runtimeId: "runtime-osc",
+      varName: "maxforge_voices_obj_osc",
+      managed: true,
+    });
+    const after = {
+      ...before,
+      varName: "maxforge_voices_obj_filter",
+    };
+
+    const review = reviewPatchEdits([{
+      kind: "box_changed",
+      managed: true,
+      fields: ["varName"],
+      before,
+      after,
+    }], "voices");
+
+    expect(review.affectedManagedIds).toEqual(["obj-filter", "obj-osc"]);
+    expect(review.signals).toEqual([expect.objectContaining({
+      kind: "ownership",
+      objectIds: ["obj-filter", "obj-osc"],
+    })]);
+    expect(review.editClusters).toEqual([expect.objectContaining({
+      managedObjectIds: ["obj-filter", "obj-osc"],
+      observedRuntimeIds: ["runtime-osc"],
+      summary: "1 related change affects 1 object in the root patcher across ownership.",
+    })]);
+  });
+
+  it("flags mixed managed effects as a clarification candidate", () => {
+    const before = box({
+      runtimeId: "runtime-osc",
+      varName: "maxforge_voices_obj_osc",
+      managed: true,
+      text: "cycle~ 440",
+    });
+    const review = reviewPatchEdits([{
+      kind: "box_changed",
+      managed: true,
+      fields: ["patchingRect", "text"],
+      before,
+      after: {
+        ...before,
+        text: "cycle~ 880",
+        patchingRect: [100, 100, 80, 22],
+      },
+    }], "voices");
+
+    expect(review.editClusters[0]).toMatchObject({
+      interpretationRisks: ["mixed_effects"],
+    });
+    expect(review.interpretationGuidance.clarificationRecommendedFor).toEqual([
+      "edit-1",
+    ]);
+  });
+
+  it("keeps many independent changes as deterministic separate clusters", () => {
+    const changes: PatchSnapshotChange[] = Array.from(
+      { length: 1_000 },
+      (_, index) => {
+        const before = box({
+          runtimeId: `runtime-${index}`,
+          varName: `maxforge_voices_obj_${index}`,
+          managed: true,
+        });
+        return {
+          kind: "box_changed" as const,
+          managed: true,
+          fields: ["patchingRect"] as const,
+          before,
+          after: {
+            ...before,
+            patchingRect: [index, 100, 24, 24] as const,
+          },
+        };
+      }
+    );
+
+    const review = reviewPatchEdits(changes, "voices");
+
+    expect(review.editClusters).toHaveLength(1_000);
+    expect(review.editClusters[0]).toMatchObject({
+      id: "edit-1",
+      changeIndexes: [0],
+      managedObjectIds: ["obj-0"],
+    });
+    expect(review.editClusters[999]).toMatchObject({
+      id: "edit-1000",
+      changeIndexes: [999],
+      managedObjectIds: ["obj-999"],
+    });
   });
 });
 

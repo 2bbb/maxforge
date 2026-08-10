@@ -255,6 +255,7 @@ const editReviewSchema = z.object({
     changeIndexes: z.array(z.number().int().nonnegative()),
     managedObjectIds: z.array(z.string()),
     unmanagedRuntimeIds: z.array(z.string()),
+    observedRuntimeIds: z.array(z.string()),
     signalKinds: z.array(z.enum([
       "layout",
       "object_configuration",

@@ -363,6 +363,7 @@ describe("MaxforgePatchService", () => {
           changeIndexes: [0, 1, 2],
           managedObjectIds: ["obj-osc"],
           unmanagedRuntimeIds: ["manual-meter"],
+          observedRuntimeIds: ["manual-meter", "obj-1"],
           interpretationRisks: [
             "mixed_effects",
             "touches_unmanaged_state",
