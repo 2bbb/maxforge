@@ -57,7 +57,8 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `comparisonBasis`; treat `latestSequence` only as an `afterSequence` polling
    cursor. The 75 ms observations are structural evidence, not undo actions,
    gestures, selection, causality, or proof of human intent. History is bounded
-   and resets on bridge or patch reconnection.
+   and resets on bridge or patch reconnection. `observedAt` is snapshot-arrival
+   time; a first acknowledged-baseline comparison can include older drift.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and

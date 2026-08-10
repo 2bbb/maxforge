@@ -104,6 +104,7 @@ describe("MaxforgePatchService", () => {
       }],
     });
     expect(history.limitations.join(" ")).toContain("not Max undo actions");
+    expect(history.limitations.join(" ")).toContain("predates this observation session");
   });
 
   it("marks the first retained comparison incomplete after history overflow", () => {

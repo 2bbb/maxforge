@@ -2705,6 +2705,8 @@ private:
 				return registration_result::failed;
 			}
 			registration_sent_ = true;
+			begin_agent_mutation();
+			end_agent_mutation();
 			return registration_result::sent;
 		} catch(const std::exception &exception) {
 			send_error(exception.what(), "register");

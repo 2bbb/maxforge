@@ -512,7 +512,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_save_patch</code></td><td>Save or save-as explicitly; apply never saves automatically and overwrite is opt-in.</td></tr>
               <tr><td><code>maxforge_close_patch</code></td><td>Close a registered patch; dirty-state discard is explicit and opt-in.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
-              <tr><td><code>maxforge_get_live_edit_history</code></td><td>Read bounded, ordered 75 ms structural observations. Check drop and comparison metadata; this is not Max undo history or proof of intent.</td></tr>
+              <tr><td><code>maxforge_get_live_edit_history</code></td><td>Read bounded, ordered 75 ms structural observations. Arrival time is not an edit timestamp; check drop and comparison metadata. This is not Max undo history or proof of intent.</td></tr>
               <tr><td><code>maxforge_review_live_changes</code></td><td>Classify structural evidence, correlate related changes into identity-bound edit clusters, expose interpretation risks and clarification candidates, and provide proposed working DSL when lossless.</td></tr>
               <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>

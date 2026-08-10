@@ -370,6 +370,7 @@ export class MaxforgePatchService {
       ),
       limitations: [
         "Observations are debounced structural snapshots, not Max undo actions or proof of human intent.",
+        "The first comparison may use an older acknowledged baseline and include drift that predates this observation session; observedAt is snapshot arrival time, not an edit-action timestamp.",
         "History is bounded, in memory, and resets when the MCP bridge or Max patch reconnects.",
       ],
     };

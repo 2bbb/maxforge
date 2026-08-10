@@ -341,7 +341,10 @@ Read the honesty fields before using chronology:
 - `droppedEvents > 0` means retention limits removed older observations;
 - `comparisonBasis: incomplete_after_drop` means the first retained difference
   cannot be treated as a complete transition;
-- `latestSequence` is a polling cursor, not a Max revision.
+- `latestSequence` is a polling cursor, not a Max revision;
+- `observedAt` is snapshot-arrival time, not the timestamp of an individual Max
+  edit. A first comparison against an older acknowledged baseline can include
+  drift that predates the current observation session.
 
 The native external debounces notifications for 75 ms, snapshots the root and
 nested patchers, excludes agent-authored plan application, and drops events when
