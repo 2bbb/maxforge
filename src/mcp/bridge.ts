@@ -11,6 +11,7 @@ import type {
   MaxforgeEditObservationHistory,
   MaxforgeEditObservedEvent,
   MaxforgeErrorEvent,
+  MaxforgeObservationBaseline,
   MaxforgePatchClosingEvent,
   MaxforgePatchCreatedEvent,
   MaxforgePatchInfo,
@@ -31,6 +32,9 @@ import type {
 interface RegisteredClient {
   readonly client: WebSocket;
   info: MaxforgePatchInfo;
+  readonly observationBaseline: MaxforgeObservationBaseline;
+  readonly sessionStartedAt: string;
+  nextObservationSequence: number;
 }
 
 interface StoredEditObservation {
@@ -39,6 +43,11 @@ interface StoredEditObservation {
   readonly scope: string;
   readonly byteSize: number;
   readonly sequence: number;
+  readonly sessionSequence: number;
+  readonly sessionId: string;
+  readonly instanceId: string;
+  readonly sessionStartedAt: string;
+  readonly sessionBaseline: MaxforgeObservationBaseline;
   readonly observedAt: string;
   readonly event: MaxforgeEditObservedEvent;
 }
@@ -322,12 +331,25 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       droppedEvents: this.droppedEditEvents.get(key) ?? 0,
       observations: this.editObservations
         .filter((entry) =>
-          entry.client === registration.client &&
           entry.patcherId === patcherId &&
           entry.scope === scope
         )
-        .map(({ sequence, observedAt, event }) => ({
+        .map(({
           sequence,
+          sessionSequence,
+          sessionId,
+          instanceId,
+          sessionStartedAt,
+          sessionBaseline,
+          observedAt,
+          event,
+        }) => ({
+          sequence,
+          sessionSequence,
+          sessionId,
+          instanceId,
+          sessionStartedAt,
+          sessionBaseline,
           observedAt,
           event,
         })),
@@ -631,10 +653,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     if (previousPatcherId && previousPatcherId !== event.patcherId) {
       this.registrations.delete(previousPatcherId);
     }
-    const info = patchInfo(event);
-    this.clearEditObservations(event.patcherId);
+    const sessionId = randomUUID();
+    const sessionStartedAt = new Date().toISOString();
+    const info = patchInfo(event, sessionId);
     this.clientPatcherIds.set(client, event.patcherId);
-    this.registrations.set(event.patcherId, { client, info });
+    this.registrations.set(event.patcherId, {
+      client,
+      info,
+      observationBaseline: event.observationBaseline,
+      sessionStartedAt,
+      nextObservationSequence: 1,
+    });
 
     for (const pending of this.pendingCreates.values()) {
       if (
@@ -677,6 +706,11 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       scope: event.scope,
       byteSize,
       sequence: this.nextEditSequence++,
+      sessionSequence: registration.nextObservationSequence++,
+      sessionId: registration.info.sessionId,
+      instanceId: registration.info.instanceId,
+      sessionStartedAt: registration.sessionStartedAt,
+      sessionBaseline: registration.observationBaseline,
       observedAt: new Date().toISOString(),
       event,
     });
@@ -693,20 +727,6 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         key,
         (this.droppedEditEvents.get(key) ?? 0) + 1
       );
-    }
-  }
-
-  private clearEditObservations(patcherId: string): void {
-    for (let index = this.editObservations.length - 1; 0 <= index; index--) {
-      const entry = this.editObservations[index];
-      if (entry.patcherId !== patcherId) continue;
-      this.editObservationBytes -= entry.byteSize;
-      this.editObservations.splice(index, 1);
-    }
-    for (const key of this.droppedEditEvents.keys()) {
-      if (key.startsWith(`${patcherId}\u0000`)) {
-        this.droppedEditEvents.delete(key);
-      }
     }
   }
 
@@ -1166,18 +1186,25 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
     typeof value.title === "string" &&
     typeof value.filename === "string" &&
     typeof value.filepath === "string" &&
+    isIdentifier(value.instanceId) &&
     isPatchCapabilities(value.capabilities)
   ) {
+    const observationBaseline = parseObservationBaseline(
+      value.observationBaseline
+    );
+    if (!observationBaseline) return undefined;
     return {
       type: value.type,
       patcherId: value.patcherId,
       scope: value.scope,
+      instanceId: value.instanceId,
       revision: value.revision,
       controller: value.controller,
       title: value.title,
       filename: value.filename,
       filepath: value.filepath,
       capabilities: value.capabilities,
+      observationBaseline,
     };
   }
 
@@ -1375,10 +1402,15 @@ function isAbsoluteHostPath(path: string): boolean {
     /^[A-Za-z]:[\\/]/.test(path);
 }
 
-function patchInfo(event: MaxforgePatchRegistration): MaxforgePatchInfo {
+function patchInfo(
+  event: MaxforgePatchRegistration,
+  sessionId: string
+): MaxforgePatchInfo {
   return {
     patcherId: event.patcherId,
     scope: event.scope,
+    instanceId: event.instanceId,
+    sessionId,
     revision: event.revision,
     controller: event.controller,
     title: event.title,
@@ -1386,6 +1418,21 @@ function patchInfo(event: MaxforgePatchRegistration): MaxforgePatchInfo {
     filepath: event.filepath,
     capabilities: event.capabilities,
   };
+}
+
+function parseObservationBaseline(
+  value: unknown
+): MaxforgeObservationBaseline | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.structureToken !== "string" ||
+    !STRUCTURE_TOKEN_PATTERN.test(value.structureToken)
+  ) {
+    return undefined;
+  }
+  const patcher = parsePatcherSnapshot(value.patcher);
+  if (!patcher) return undefined;
+  return { structureToken: value.structureToken, patcher };
 }
 
 function parsePatcherSnapshot(

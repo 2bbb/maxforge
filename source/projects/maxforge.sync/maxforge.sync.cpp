@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cmath>
 #include <iomanip>
@@ -105,6 +107,22 @@ struct resolved_patch_path {
 	short path_id{};
 	std::array<char, c74::max::MAX_FILENAME_CHARS> filename{};
 };
+
+auto make_instance_id(const void *address) -> std::string {
+	static std::atomic<std::uint64_t> sequence{};
+	const auto timestamp = std::chrono::high_resolution_clock::now()
+		.time_since_epoch().count();
+	std::ostringstream result;
+	result
+		<< "instance_"
+		<< std::hex
+		<< timestamp
+		<< "_"
+		<< reinterpret_cast<std::uintptr_t>(address)
+		<< "_"
+		<< sequence.fetch_add(1);
+	return result.str();
+}
 
 auto json_string(const std::string &value) -> std::string {
 	constexpr char hexadecimal[]{"0123456789abcdef"};
@@ -1819,6 +1837,7 @@ public:
 	};
 
 	maxforge_sync() {
+		instance_id_ = make_instance_id(this);
 		websocket_client_.set_notifier([this]() {
 			transport_queue_.set();
 		});
@@ -1904,6 +1923,7 @@ private:
 	std::unordered_set<sync_protocol::edit_observation_cause> pending_edit_causes_;
 	std::string last_observed_structure_token_;
 	std::string last_transport_error_;
+	std::string instance_id_;
 
 	auto transport_status_label() const -> const char * {
 		switch(websocket_client_.state()) {
@@ -2677,6 +2697,13 @@ private:
 			const c74::min::symbol revision_symbol = revision_state;
 			const std::string revision{revision_symbol.c_str()};
 			const long is_controller = controller;
+			const auto observation_baseline = make_patch_snapshot(
+				root_patcher,
+				current_scope
+			);
+			const auto observation_baseline_token = patch_structure_token(
+				observation_baseline
+			);
 			const auto filename = symbol_string(
 				c74::max::jpatcher_get_filename(root_patcher)
 			);
@@ -2689,6 +2716,8 @@ private:
 				json_string(current_patcher_id) +
 				",\"scope\":" +
 				json_string(current_scope) +
+				",\"instanceId\":" +
+				json_string(instance_id_) +
 				",\"revision\":" +
 				(revision.empty() ? "null" : json_string(revision)) +
 				",\"controller\":" +
@@ -2699,14 +2728,21 @@ private:
 				json_string(filename) +
 				",\"filepath\":" +
 				json_string(symbol_string(c74::max::jpatcher_get_filepath(root_patcher))) +
-				",\"capabilities\":[\"edit_observation_v1\"]" +
+				",\"capabilities\":[\"edit_observation_v1\",\"session_baseline_v1\"]" +
+				",\"observationBaseline\":{\"structureToken\":" +
+				json_string(observation_baseline_token) +
+				",\"patcher\":" +
+				patch_snapshot_json(observation_baseline) +
+				"}" +
 				"}"
 			)) {
 				return registration_result::failed;
 			}
 			registration_sent_ = true;
 			begin_agent_mutation();
-			end_agent_mutation();
+			refresh_observed_patchers();
+			last_observed_structure_token_ = observation_baseline_token;
+			observation_release_timer_.delay(0);
 			return registration_result::sent;
 		} catch(const std::exception &exception) {
 			send_error(exception.what(), "register");

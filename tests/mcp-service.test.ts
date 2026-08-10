@@ -61,6 +61,14 @@ describe("MaxforgePatchService", () => {
       observations: [
         {
           sequence: 10,
+          sessionSequence: 1,
+          sessionId: "session-a",
+          instanceId: "instance-a",
+          sessionStartedAt: "2026-08-11T00:00:00.000Z",
+          sessionBaseline: {
+            structureToken: "0".repeat(16),
+            patcher: transport.snapshot,
+          },
           observedAt: "2026-08-11T00:00:00.000Z",
           event: {
             type: "maxforge.edit.observed",
@@ -74,6 +82,14 @@ describe("MaxforgePatchService", () => {
         },
         {
           sequence: 11,
+          sessionSequence: 2,
+          sessionId: "session-a",
+          instanceId: "instance-a",
+          sessionStartedAt: "2026-08-11T00:00:00.000Z",
+          sessionBaseline: {
+            structureToken: "0".repeat(16),
+            patcher: transport.snapshot,
+          },
           observedAt: "2026-08-11T00:00:01.000Z",
           event: {
             type: "maxforge.edit.observed",
@@ -104,7 +120,7 @@ describe("MaxforgePatchService", () => {
       }],
     });
     expect(history.limitations.join(" ")).toContain("not Max undo actions");
-    expect(history.limitations.join(" ")).toContain("predates this observation session");
+    expect(history.limitations.join(" ")).toContain("snapshot sent during registration");
   });
 
   it("marks the first retained comparison incomplete after history overflow", () => {
@@ -114,6 +130,14 @@ describe("MaxforgePatchService", () => {
       droppedEvents: 3,
       observations: [{
         sequence: 4,
+        sessionSequence: 4,
+        sessionId: "session-a",
+        instanceId: "instance-a",
+        sessionStartedAt: "2026-08-11T00:00:00.000Z",
+        sessionBaseline: {
+          structureToken: "0".repeat(16),
+          patcher: transport.snapshot,
+        },
         observedAt: "2026-08-11T00:00:00.000Z",
         event: {
           type: "maxforge.edit.observed",
@@ -130,6 +154,34 @@ describe("MaxforgePatchService", () => {
       .getLiveEditHistory("patch-a", "voices");
     expect(history.observations[0].comparisonBasis)
       .toBe("incomplete_after_drop");
+  });
+
+  it("never compares observations across registration sessions", () => {
+    const transport = new FakeTransport();
+    const empty = { ...transport.snapshot, boxes: [] };
+    const moved = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        patchingRect: [100, 20, 60, 22] as const,
+      })),
+    };
+    transport.editHistory = {
+      supported: true,
+      droppedEvents: 0,
+      observations: [
+        retainedObservation(1, 1, "session-old", transport.snapshot, empty),
+        retainedObservation(2, 1, "session-new", transport.snapshot, moved),
+      ],
+    };
+
+    const history = createService(transport)
+      .getLiveEditHistory("patch-a", "voices");
+
+    expect(history.observations[1]).toMatchObject({
+      comparisonBasis: "session_baseline",
+      changes: [{ kind: "box_changed", fields: ["patchingRect"] }],
+    });
   });
 
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
@@ -1075,6 +1127,36 @@ describe("MaxforgePatchService", () => {
   });
 });
 
+function retainedObservation(
+  sequence: number,
+  sessionSequence: number,
+  sessionId: string,
+  baseline: MaxforgePatcherSnapshot,
+  patcher: MaxforgePatcherSnapshot
+): MaxforgeEditObservationHistory["observations"][number] {
+  return {
+    sequence,
+    sessionSequence,
+    sessionId,
+    instanceId: `instance-${sessionId}`,
+    sessionStartedAt: "2026-08-11T00:00:00.000Z",
+    sessionBaseline: {
+      structureToken: "0".repeat(16),
+      patcher: baseline,
+    },
+    observedAt: "2026-08-11T00:00:01.000Z",
+    event: {
+      type: "maxforge.edit.observed",
+      patcherId: "patch-a",
+      scope: "voices",
+      revision: null,
+      structureToken: "1".repeat(16),
+      causes: ["box"],
+      patcher,
+    },
+  };
+}
+
 class FakeTransport implements PatchPlanTransport {
   readonly plans: PatchPlan[] = [];
   readonly liveRevisions = new Map<string, string | null>();
@@ -1143,6 +1225,8 @@ class FakeTransport implements PatchPlanTransport {
   ): Promise<MaxforgePatchInfo> {
     return {
       ...request,
+      instanceId: "fake-instance",
+      sessionId: "fake-session",
       revision: null,
       controller: false,
       filename: "",
@@ -1154,6 +1238,8 @@ class FakeTransport implements PatchPlanTransport {
   async openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo> {
     return {
       ...request,
+      instanceId: "fake-instance",
+      sessionId: "fake-session",
       revision: null,
       controller: false,
       filename: "opened.maxpat",

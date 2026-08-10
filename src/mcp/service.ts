@@ -82,13 +82,17 @@ export interface InspectPatchResult {
 }
 
 export type EditObservationComparisonBasis =
-  | "acknowledged_baseline"
+  | "session_baseline"
   | "previous_observation"
   | "incomplete_after_drop"
   | "unavailable";
 
 export interface LiveEditHistoryEntry {
   readonly sequence: number;
+  readonly sessionSequence: number;
+  readonly sessionId: string;
+  readonly instanceId: string;
+  readonly sessionStartedAt: string;
   readonly observedAt: string;
   readonly causes: readonly MaxforgeEditObservationCause[];
   readonly structureToken: string;
@@ -334,22 +338,27 @@ export class MaxforgePatchService {
     afterSequence = 0
   ): LiveEditHistoryResult {
     const history = this.transport.getEditObservationHistory(patcherId, scope);
-    const baseline = this.baselineSnapshots.get(targetKey(patcherId, scope));
-    let previous = baseline;
-    const observations = history.observations.map((observation, index) => {
+    let previous: MaxforgePatcherSnapshot | undefined;
+    let previousSessionId: string | undefined;
+    const observations = history.observations.map((observation) => {
+      const startsSession = observation.sessionId !== previousSessionId;
+      if (startsSession) previous = observation.sessionBaseline.patcher;
       const changes = previous
         ? diffPatcherSnapshots(previous, observation.event.patcher)
         : [];
-      const comparisonBasis: EditObservationComparisonBasis = index === 0
-        ? history.droppedEvents > 0
+      const comparisonBasis: EditObservationComparisonBasis = startsSession
+        ? 1 < observation.sessionSequence
           ? "incomplete_after_drop"
-          : baseline
-            ? "acknowledged_baseline"
-            : "unavailable"
+          : "session_baseline"
         : "previous_observation";
       previous = observation.event.patcher;
+      previousSessionId = observation.sessionId;
       return {
         sequence: observation.sequence,
+        sessionSequence: observation.sessionSequence,
+        sessionId: observation.sessionId,
+        instanceId: observation.instanceId,
+        sessionStartedAt: observation.sessionStartedAt,
         observedAt: observation.observedAt,
         causes: observation.event.causes,
         structureToken: observation.event.structureToken,
@@ -370,8 +379,8 @@ export class MaxforgePatchService {
       ),
       limitations: [
         "Observations are debounced structural snapshots, not Max undo actions or proof of human intent.",
-        "The first comparison may use an older acknowledged baseline and include drift that predates this observation session; observedAt is snapshot arrival time, not an edit-action timestamp.",
-        "History is bounded, in memory, and resets when the MCP bridge or Max patch reconnects.",
+        "Each session starts from the snapshot sent during registration; observedAt is snapshot arrival time, not an edit-action timestamp.",
+        "History is bounded; incomplete_after_drop means one or more earlier observations from that session are unavailable.",
       ],
     };
   }

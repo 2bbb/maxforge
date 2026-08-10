@@ -3,6 +3,8 @@ import type { PatchPlan, PatchSetValue } from "./patch-graph.js";
 export interface MaxforgePatchInfo {
   readonly patcherId: string;
   readonly scope: string;
+  readonly instanceId: string;
+  readonly sessionId: string;
   readonly revision: string | null;
   readonly controller: boolean;
   readonly title: string;
@@ -11,8 +13,15 @@ export interface MaxforgePatchInfo {
   readonly capabilities: readonly string[];
 }
 
-export interface MaxforgePatchRegistration extends MaxforgePatchInfo {
+export interface MaxforgePatchRegistration
+  extends Omit<MaxforgePatchInfo, "sessionId"> {
   readonly type: "maxforge.registered";
+  readonly observationBaseline: MaxforgeObservationBaseline;
+}
+
+export interface MaxforgeObservationBaseline {
+  readonly structureToken: string;
+  readonly patcher: MaxforgePatcherSnapshot;
 }
 
 export interface MaxforgeAppliedEvent {
@@ -102,6 +111,11 @@ export interface MaxforgeEditObservedEvent {
 
 export interface MaxforgeRetainedEditObservation {
   readonly sequence: number;
+  readonly sessionSequence: number;
+  readonly sessionId: string;
+  readonly instanceId: string;
+  readonly sessionStartedAt: string;
+  readonly sessionBaseline: MaxforgeObservationBaseline;
   readonly observedAt: string;
   readonly event: MaxforgeEditObservedEvent;
 }

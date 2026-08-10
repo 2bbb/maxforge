@@ -451,6 +451,10 @@ describe("MaxforgeWebSocketBridge", () => {
         droppedEvents: 0,
         observations: [{
           sequence: expect.any(Number),
+          sessionSequence: 1,
+          sessionId: expect.any(String),
+          instanceId: "instance_patch-a",
+          sessionStartedAt: expect.any(String),
           observedAt: expect.any(String),
           event: { causes: ["box"] },
         }],
@@ -586,6 +590,23 @@ describe("parseBridgeEvent", () => {
       capabilities: ["edit_observation_v1", "future_observation_v2"],
     });
   });
+
+  it("assigns a new session while preserving the native instance identity", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const first = await connect(status.port);
+    await register(bridge, first, registration("patch-a", "voices", false));
+    const firstInfo = bridge.listPatches()[0];
+    first.terminate();
+    await waitFor(() => bridge.listPatches().length === 0);
+
+    const second = await connect(status.port);
+    await register(bridge, second, registration("patch-a", "voices", false));
+    const secondInfo = bridge.listPatches()[0];
+
+    expect(secondInfo.instanceId).toBe(firstInfo.instanceId);
+    expect(secondInfo.sessionId).not.toBe(firstInfo.sessionId);
+  });
 });
 
 function createBridge(): MaxforgeWebSocketBridge {
@@ -636,12 +657,17 @@ function registration(
     type: "maxforge.registered",
     patcherId,
     scope,
+    instanceId: `instance_${patcherId}`,
     revision: null,
     controller,
     title,
     filename: "",
     filepath: "",
     capabilities: ["edit_observation_v1"],
+    observationBaseline: {
+      structureToken: "0".repeat(16),
+      patcher: snapshotEvent("registration").patcher,
+    },
   };
 }
 
