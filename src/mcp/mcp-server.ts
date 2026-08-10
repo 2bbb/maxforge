@@ -38,6 +38,7 @@ const patchInfoSchema = z.object({
   title: z.string().describe("Display-only Max window title"),
   filename: z.string().describe("Display-only Max document filename"),
   filepath: z.string().describe("Saved document path, or an empty string for an unsaved patch"),
+  capabilities: z.array(z.literal("edit_observation_v1")),
 });
 
 const warningSchema = z.object({
@@ -81,6 +82,7 @@ const snapshotBoxSchema = z.object({
   maxclass: z.string(),
   patchingRect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   managed: z.boolean(),
+  selected: z.boolean().optional(),
   text: z.string().optional(),
   comment: z.string().optional(),
   attributes: z.record(z.string(), z.union([
@@ -299,6 +301,41 @@ const liveChangeReviewSchema = z.object({
   snapshot: snapshotEventSchema,
 });
 
+const liveEditHistorySchema = z.object({
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  supported: z.boolean(),
+  droppedEvents: z.number().int().nonnegative(),
+  latestSequence: z.number().int().positive().nullable(),
+  observations: z.array(z.object({
+    sequence: z.number().int().positive(),
+    observedAt: z.string(),
+    causes: z.array(z.enum([
+      "patcher",
+      "box",
+      "line",
+      "attribute",
+      "unknown",
+    ])),
+    structureToken: structureTokenSchema,
+    comparisonBasis: z.enum([
+      "acknowledged_baseline",
+      "previous_observation",
+      "incomplete_after_drop",
+      "unavailable",
+    ]),
+    changes: z.array(snapshotChangeSchema),
+    review: editReviewSchema,
+    selectedBoxes: z.array(z.object({
+      targetPath: z.array(z.string()),
+      runtimeId: z.string(),
+      varName: z.string(),
+      managed: z.boolean(),
+    })),
+  })),
+  limitations: z.array(z.string()),
+});
+
 const HELP_CONTENT = {
   workflow: {
     summary: "Safe desired-state workflow for inspecting and changing one live Max patch.",
@@ -307,6 +344,7 @@ const HELP_CONTENT = {
       "After editing configured catalog files, call maxforge_reload_catalog and verify the replacement digest before compiling.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
+      "When edit observation is supported, call maxforge_get_live_edit_history to inspect ordered snapshot evidence before interpreting the current aggregate diff.",
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
       "Interpret related changes together using review.editClusters. Treat interpretationRisks as prompts for reasoning, and use interpretationGuidance.clarificationRecommendedFor to identify clusters that may require a human question.",
       "To accept the current managed graph as the baseline, call maxforge_adopt_live_changes with the exact reviewed structure token. If a concrete next DSL is already ready, use maxforge_reconcile_patch instead and require canApply=true.",
@@ -331,6 +369,7 @@ const HELP_CONTENT = {
       "maxforge_reload_catalog",
       "maxforge_list_patches",
       "maxforge_inspect_patch",
+      "maxforge_get_live_edit_history",
       "maxforge_review_live_changes",
       "maxforge_adopt_live_changes",
       "maxforge_reconcile_patch",
@@ -370,6 +409,7 @@ const HELP_CONTENT = {
       "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
       "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
       "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
+      "Use maxforge_get_live_edit_history when operation order or intermediate states could change the interpretation; account for droppedEvents and comparisonBasis.",
       "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then replace the working source with its returned workingDsl.",
       "If a concrete next desired DSL is ready, call maxforge_reconcile_patch instead.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
@@ -386,6 +426,7 @@ const HELP_CONTENT = {
     relatedTools: [
       "maxforge_status",
       "maxforge_inspect_patch",
+      "maxforge_get_live_edit_history",
       "maxforge_review_live_changes",
       "maxforge_adopt_live_changes",
       "maxforge_reconcile_patch",
@@ -831,6 +872,40 @@ export function createMaxforgeMcpServer(
       try {
         const result = await options.service.reviewLiveChanges(patcherId, scope);
         return toolResult({ patcherId, scope, ...result });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_get_live_edit_history",
+    {
+      title: "Get ordered live-edit evidence",
+      description:
+        "Read bounded, ordered, debounced snapshot evidence captured by maxforge.sync while the patch was edited. Returns per-observation structural differences, neutral edit reviews, notification cause categories, and point-in-time selection context. It does not reconstruct Max undo actions or prove human intent. Check supported, droppedEvents, and comparisonBasis before relying on chronology.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope of the target patch"),
+        afterSequence: z.number().int().nonnegative().optional().describe(
+          "Return only observations after this previously seen sequence"
+        ),
+      }),
+      outputSchema: liveEditHistorySchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ patcherId, scope, afterSequence }) => {
+      try {
+        const history = options.service.getLiveEditHistory(
+          patcherId,
+          scope,
+          afterSequence
+        );
+        return toolResult({ ...history });
       } catch (error) {
         return toolError(error);
       }

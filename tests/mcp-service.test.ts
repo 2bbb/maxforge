@@ -6,6 +6,7 @@ import {
   CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgeEditObservationHistory,
   MaxforgePatchClosingEvent,
   MaxforgePatchInfo,
   MaxforgePatchSavedEvent,
@@ -35,6 +36,105 @@ function createService(
 }
 
 describe("MaxforgePatchService", () => {
+  it("turns retained observations into ordered evidence without claiming intent", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    const moved = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        patchingRect: [90, 50, 66, 22] as const,
+        selected: true,
+      })),
+    };
+    const retuned = {
+      ...moved,
+      boxes: moved.boxes.map((box) => ({ ...box, text: "cycle~ 660" })),
+    };
+    transport.editHistory = {
+      supported: true,
+      droppedEvents: 0,
+      observations: [
+        {
+          sequence: 10,
+          observedAt: "2026-08-11T00:00:00.000Z",
+          event: {
+            type: "maxforge.edit.observed",
+            patcherId: "patch-a",
+            scope: "voices",
+            revision: transport.getLiveRevision("patch-a", "voices") ?? null,
+            structureToken: "1".repeat(16),
+            causes: ["box"],
+            patcher: moved,
+          },
+        },
+        {
+          sequence: 11,
+          observedAt: "2026-08-11T00:00:01.000Z",
+          event: {
+            type: "maxforge.edit.observed",
+            patcherId: "patch-a",
+            scope: "voices",
+            revision: transport.getLiveRevision("patch-a", "voices") ?? null,
+            structureToken: "2".repeat(16),
+            causes: ["box", "attribute"],
+            patcher: retuned,
+          },
+        },
+      ],
+    };
+
+    const history = service.getLiveEditHistory("patch-a", "voices", 10);
+    expect(history).toMatchObject({
+      supported: true,
+      droppedEvents: 0,
+      latestSequence: 11,
+      observations: [{
+        sequence: 11,
+        comparisonBasis: "previous_observation",
+        causes: ["box", "attribute"],
+        review: {
+          signals: [expect.objectContaining({ kind: "object_configuration" })],
+          interpretationGuidance: { mode: "evidence_only" },
+        },
+      }],
+    });
+    expect(history.observations[0].selectedBoxes).toMatchObject([
+      { runtimeId: expect.any(String), managed: true },
+    ]);
+    expect(history.limitations.join(" ")).toContain("not Max undo actions");
+  });
+
+  it("marks the first retained comparison incomplete after history overflow", () => {
+    const transport = new FakeTransport();
+    transport.editHistory = {
+      supported: true,
+      droppedEvents: 3,
+      observations: [{
+        sequence: 4,
+        observedAt: "2026-08-11T00:00:00.000Z",
+        event: {
+          type: "maxforge.edit.observed",
+          patcherId: "patch-a",
+          scope: "voices",
+          revision: null,
+          structureToken: "4".repeat(16),
+          causes: ["unknown"],
+          patcher: transport.snapshot,
+        },
+      }],
+    };
+    const history = createService(transport)
+      .getLiveEditHistory("patch-a", "voices");
+    expect(history.observations[0].comparisonBasis)
+      .toBe("incomplete_after_drop");
+  });
+
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);
@@ -987,6 +1087,11 @@ class FakeTransport implements PatchPlanTransport {
   postApplyInspectionFailure: Error | undefined;
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
+  editHistory: MaxforgeEditObservationHistory = {
+    supported: true,
+    droppedEvents: 0,
+    observations: [],
+  };
 
   async apply(
     patcherId: string,
@@ -1032,6 +1137,10 @@ class FakeTransport implements PatchPlanTransport {
     };
   }
 
+  getEditObservationHistory(): MaxforgeEditObservationHistory {
+    return this.editHistory;
+  }
+
   async createPatch(
     request: CreateMaxPatchRequest
   ): Promise<MaxforgePatchInfo> {
@@ -1041,6 +1150,7 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+      capabilities: ["edit_observation_v1"],
     };
   }
 
@@ -1051,6 +1161,7 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "opened.maxpat",
       filepath: request.path,
+      capabilities: ["edit_observation_v1"],
     };
   }
 

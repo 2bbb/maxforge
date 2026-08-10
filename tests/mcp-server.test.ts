@@ -12,6 +12,7 @@ import {
   CreateMaxPatchRequest,
   MaxforgeAppliedEvent,
   MaxforgeBridgeStatus,
+  MaxforgeEditObservationHistory,
   MaxforgePatchClosingEvent,
   MaxforgePatchInfo,
   MaxforgePatchSavedEvent,
@@ -115,13 +116,14 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_close_patch",
         "maxforge_inspect_patch",
         "maxforge_review_live_changes",
+        "maxforge_get_live_edit_history",
         "maxforge_adopt_live_changes",
         "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(15);
+      expect(definitions).toHaveLength(16);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -388,6 +390,30 @@ describe("maxforge MCP protocol surface", () => {
                 clarificationRecommendedFor: [],
               },
             },
+          },
+        },
+      });
+
+      const liveEditHistory = await client.request(52, "tools/call", {
+        name: "maxforge_get_live_edit_history",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "voices",
+          afterSequence: 0,
+        },
+      });
+      expect(liveEditHistory).toMatchObject({
+        result: {
+          structuredContent: {
+            patcherId: "patch_a",
+            scope: "voices",
+            supported: true,
+            droppedEvents: 0,
+            latestSequence: null,
+            observations: [],
+            limitations: expect.arrayContaining([
+              expect.stringContaining("not Max undo actions"),
+            ]),
           },
         },
       });
@@ -661,6 +687,14 @@ class FakeTransport implements PatchPlanTransport {
     };
   }
 
+  getEditObservationHistory(): MaxforgeEditObservationHistory {
+    return {
+      supported: true,
+      droppedEvents: 0,
+      observations: [],
+    };
+  }
+
   async createPatch(
     request: CreateMaxPatchRequest
   ): Promise<MaxforgePatchInfo> {
@@ -670,6 +704,7 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+      capabilities: ["edit_observation_v1"],
     };
   }
 
@@ -680,6 +715,7 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: request.path.split(/[\\/]/).at(-1) ?? "",
       filepath: request.path,
+      capabilities: ["edit_observation_v1"],
     };
   }
 

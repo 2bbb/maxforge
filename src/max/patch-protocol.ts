@@ -8,7 +8,10 @@ export interface MaxforgePatchInfo {
   readonly title: string;
   readonly filename: string;
   readonly filepath: string;
+  readonly capabilities: readonly MaxforgePatchCapability[];
 }
+
+export type MaxforgePatchCapability = "edit_observation_v1";
 
 export interface MaxforgePatchRegistration extends MaxforgePatchInfo {
   readonly type: "maxforge.registered";
@@ -77,9 +80,39 @@ export interface MaxforgeSnapshotBox {
   readonly maxclass: string;
   readonly patchingRect: readonly [number, number, number, number];
   readonly managed: boolean;
+  readonly selected?: boolean;
   readonly text?: string;
   readonly comment?: string;
   readonly attributes: Readonly<Record<string, PatchSetValue>>;
+}
+
+export type MaxforgeEditObservationCause =
+  | "patcher"
+  | "box"
+  | "line"
+  | "attribute"
+  | "unknown";
+
+export interface MaxforgeEditObservedEvent {
+  readonly type: "maxforge.edit.observed";
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly revision: string | null;
+  readonly structureToken: string;
+  readonly causes: readonly MaxforgeEditObservationCause[];
+  readonly patcher: MaxforgePatcherSnapshot;
+}
+
+export interface MaxforgeRetainedEditObservation {
+  readonly sequence: number;
+  readonly observedAt: string;
+  readonly event: MaxforgeEditObservedEvent;
+}
+
+export interface MaxforgeEditObservationHistory {
+  readonly supported: boolean;
+  readonly droppedEvents: number;
+  readonly observations: readonly MaxforgeRetainedEditObservation[];
 }
 
 export interface MaxforgeSnapshotEndpoint {
@@ -125,7 +158,8 @@ export type MaxforgeBridgeEvent =
   | MaxforgePatchOpenedEvent
   | MaxforgePatchSavedEvent
   | MaxforgePatchClosingEvent
-  | MaxforgeSnapshotEvent;
+  | MaxforgeSnapshotEvent
+  | MaxforgeEditObservedEvent;
 
 export interface MaxforgeBridgeStatus {
   readonly host: string;
@@ -167,6 +201,10 @@ export interface PatchPlanTransport {
     patcherId: string,
     scope: string
   ): Promise<MaxforgeSnapshotEvent>;
+  getEditObservationHistory(
+    patcherId: string,
+    scope: string
+  ): MaxforgeEditObservationHistory;
   createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo>;
   openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo>;
   savePatch(request: SaveMaxPatchRequest): Promise<MaxforgePatchSavedEvent>;

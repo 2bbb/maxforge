@@ -425,6 +425,66 @@ describe("MaxforgeWebSocketBridge", () => {
       () => new MaxforgeWebSocketBridge({ token: "contains spaces" })
     ).toThrow("WebSocket token must contain 1 to 256 URL-safe characters");
   });
+
+  it("retains bounded edit observations only for their registered patch", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const first = await connect(status.port);
+    const second = await connect(status.port);
+    await register(bridge, first, registration("patch-a", "voices", false));
+    await register(bridge, second, registration("patch-b", "meters", false));
+
+    first.send(JSON.stringify(editObservation("patch-a", "voices", {
+      causes: ["box"],
+      selected: true,
+    })));
+    second.send(JSON.stringify(editObservation("patch-b", "meters", {
+      causes: ["line"],
+    })));
+    await waitFor(() =>
+      bridge.getEditObservationHistory("patch-a", "voices")
+        .observations.length === 1
+    );
+
+    expect(bridge.getEditObservationHistory("patch-a", "voices"))
+      .toMatchObject({
+        supported: true,
+        droppedEvents: 0,
+        observations: [{
+          sequence: expect.any(Number),
+          observedAt: expect.any(String),
+          event: {
+            causes: ["box"],
+            patcher: { boxes: [{ selected: true }] },
+          },
+        }],
+      });
+    expect(bridge.getEditObservationHistory("patch-b", "meters"))
+      .toMatchObject({ observations: [{ event: { causes: ["line"] } }] });
+  });
+
+  it("ignores edit observations from mismatched or incapable clients", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const capable = await connect(status.port);
+    await register(bridge, capable, registration("patch-a", "voices", false));
+
+    capable.send(JSON.stringify(editObservation("patch-a", "wrong", {})));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(bridge.getEditObservationHistory("patch-a", "voices").observations)
+      .toEqual([]);
+
+    const incapable = await connect(status.port);
+    await register(
+      bridge,
+      incapable,
+      { ...registration("patch-b", "meters", false), capabilities: [] }
+    );
+    incapable.send(JSON.stringify(editObservation("patch-b", "meters", {})));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(bridge.getEditObservationHistory("patch-b", "meters"))
+      .toEqual({ supported: false, droppedEvents: 0, observations: [] });
+  });
 });
 
 describe("parseBridgeEvent", () => {
@@ -502,6 +562,26 @@ describe("parseBridgeEvent", () => {
       patcher: { ...current.patcher, boxes: [withoutAttributes] },
     }))).toBeUndefined();
   });
+
+  it("validates observed edit evidence", () => {
+    const event = editObservation("patch-a", "voices", {
+      causes: ["patcher", "box"],
+      selected: true,
+    });
+    expect(parseBridgeEvent(JSON.stringify(event))).toMatchObject({
+      type: "maxforge.edit.observed",
+      causes: ["patcher", "box"],
+      patcher: { boxes: [{ selected: true }] },
+    });
+    expect(parseBridgeEvent(JSON.stringify({
+      ...event,
+      causes: ["box", "box"],
+    }))).toBeUndefined();
+    expect(parseBridgeEvent(JSON.stringify({
+      ...event,
+      causes: ["invented"],
+    }))).toBeUndefined();
+  });
 });
 
 function createBridge(): MaxforgeWebSocketBridge {
@@ -557,6 +637,7 @@ function registration(
     title,
     filename: "",
     filepath: "",
+    capabilities: ["edit_observation_v1"],
   };
 }
 
@@ -586,6 +667,34 @@ function snapshotEvent(requestId: string) {
         attributes: {},
       }],
       connections: [],
+    },
+  };
+}
+
+function editObservation(
+  patcherId: string,
+  scope: string,
+  options: {
+    readonly causes?: readonly string[];
+    readonly selected?: boolean;
+  }
+) {
+  const snapshot = snapshotEvent("unused");
+  return {
+    type: "maxforge.edit.observed",
+    patcherId,
+    scope,
+    revision: null,
+    structureToken: "1".repeat(16),
+    causes: options.causes ?? ["unknown"],
+    patcher: {
+      ...snapshot.patcher,
+      boxes: snapshot.patcher.boxes.map((box) => ({
+        ...box,
+        ...(options.selected === undefined
+          ? {}
+          : { selected: options.selected }),
+      })),
     },
   };
 }

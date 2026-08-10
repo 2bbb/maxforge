@@ -8,6 +8,8 @@ import type {
   MaxforgeBridgeEvent,
   MaxforgeBridgeOptions,
   MaxforgeBridgeStatus,
+  MaxforgeEditObservationHistory,
+  MaxforgeEditObservedEvent,
   MaxforgeErrorEvent,
   MaxforgePatchClosingEvent,
   MaxforgePatchCreatedEvent,
@@ -29,6 +31,16 @@ import type {
 interface RegisteredClient {
   readonly client: WebSocket;
   info: MaxforgePatchInfo;
+}
+
+interface StoredEditObservation {
+  readonly client: WebSocket;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly byteSize: number;
+  readonly sequence: number;
+  readonly observedAt: string;
+  readonly event: MaxforgeEditObservedEvent;
 }
 
 interface PendingApply {
@@ -96,6 +108,8 @@ const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{1,256}$/;
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 const MAX_PATCH_PATH_LENGTH = 2047;
+const MAX_EDIT_OBSERVATIONS = 128;
+const MAX_EDIT_OBSERVATION_BYTES = 32 * 1024 * 1024;
 
 export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly host: string;
@@ -113,8 +127,12 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly pendingSaves = new Map<string, PendingSave>();
   private readonly pendingCloses = new Map<string, PendingClose>();
   private readonly pendingOperations = new Map<string, string>();
+  private readonly editObservations: StoredEditObservation[] = [];
+  private readonly droppedEditEvents = new Map<string, number>();
   private server: WebSocketServer | undefined;
   private listeningPort: number | undefined;
+  private nextEditSequence = 1;
+  private editObservationBytes = 0;
 
   constructor(options: MaxforgeBridgeOptions = {}) {
     this.host = options.host ?? "127.0.0.1";
@@ -192,6 +210,9 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     this.authenticatedClients.clear();
     this.registrations.clear();
     this.clientPatcherIds.clear();
+    this.editObservations.splice(0);
+    this.droppedEditEvents.clear();
+    this.editObservationBytes = 0;
 
     if (!server) return;
     await new Promise<void>((resolve, reject) => {
@@ -285,6 +306,32 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
         if (error) this.rejectInspection(requestId, error);
       });
     });
+  }
+
+  getEditObservationHistory(
+    patcherId: string,
+    scope: string
+  ): MaxforgeEditObservationHistory {
+    const registration = this.getRegisteredClient(patcherId, scope);
+    const supported = registration.info.capabilities.includes(
+      "edit_observation_v1"
+    );
+    const key = targetKey(patcherId, scope);
+    return {
+      supported,
+      droppedEvents: this.droppedEditEvents.get(key) ?? 0,
+      observations: this.editObservations
+        .filter((entry) =>
+          entry.client === registration.client &&
+          entry.patcherId === patcherId &&
+          entry.scope === scope
+        )
+        .map(({ sequence, observedAt, event }) => ({
+          sequence,
+          observedAt,
+          event,
+        })),
+    };
   }
 
   async createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo> {
@@ -542,6 +589,9 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       case "maxforge.snapshot":
         this.handleSnapshot(client, event);
         return;
+      case "maxforge.edit.observed":
+        this.handleEditObserved(client, event, Buffer.byteLength(raw));
+        return;
       case "maxforge.applied":
         this.handleApplied(client, event);
         return;
@@ -582,6 +632,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       this.registrations.delete(previousPatcherId);
     }
     const info = patchInfo(event);
+    this.clearEditObservations(event.patcherId);
     this.clientPatcherIds.set(client, event.patcherId);
     this.registrations.set(event.patcherId, { client, info });
 
@@ -601,6 +652,60 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       ) {
         pending.registration = info;
         this.resolveOpenIfReady(pending);
+      }
+    }
+  }
+
+  private handleEditObserved(
+    client: WebSocket,
+    event: MaxforgeEditObservedEvent,
+    byteSize: number
+  ): void {
+    const registration = this.registrations.get(event.patcherId);
+    if (
+      !registration ||
+      registration.client !== client ||
+      registration.info.scope !== event.scope ||
+      !registration.info.capabilities.includes("edit_observation_v1")
+    ) {
+      return;
+    }
+
+    this.editObservations.push({
+      client,
+      patcherId: event.patcherId,
+      scope: event.scope,
+      byteSize,
+      sequence: this.nextEditSequence++,
+      observedAt: new Date().toISOString(),
+      event,
+    });
+    this.editObservationBytes += byteSize;
+    while (
+      MAX_EDIT_OBSERVATIONS < this.editObservations.length ||
+      MAX_EDIT_OBSERVATION_BYTES < this.editObservationBytes
+    ) {
+      const removed = this.editObservations.shift();
+      if (!removed) break;
+      this.editObservationBytes -= removed.byteSize;
+      const key = targetKey(removed.patcherId, removed.scope);
+      this.droppedEditEvents.set(
+        key,
+        (this.droppedEditEvents.get(key) ?? 0) + 1
+      );
+    }
+  }
+
+  private clearEditObservations(patcherId: string): void {
+    for (let index = this.editObservations.length - 1; 0 <= index; index--) {
+      const entry = this.editObservations[index];
+      if (entry.patcherId !== patcherId) continue;
+      this.editObservationBytes -= entry.byteSize;
+      this.editObservations.splice(index, 1);
+    }
+    for (const key of this.droppedEditEvents.keys()) {
+      if (key.startsWith(`${patcherId}\u0000`)) {
+        this.droppedEditEvents.delete(key);
       }
     }
   }
@@ -1060,7 +1165,8 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
     typeof value.controller === "boolean" &&
     typeof value.title === "string" &&
     typeof value.filename === "string" &&
-    typeof value.filepath === "string"
+    typeof value.filepath === "string" &&
+    isPatchCapabilities(value.capabilities)
   ) {
     return {
       type: value.type,
@@ -1071,6 +1177,7 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
       title: value.title,
       filename: value.filename,
       filepath: value.filepath,
+      capabilities: value.capabilities,
     };
   }
 
@@ -1178,6 +1285,26 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
   }
 
   if (
+    value.type === "maxforge.edit.observed" &&
+    isRevisionOrNull(value.revision) &&
+    typeof value.structureToken === "string" &&
+    STRUCTURE_TOKEN_PATTERN.test(value.structureToken) &&
+    isEditObservationCauses(value.causes)
+  ) {
+    const patcher = parsePatcherSnapshot(value.patcher);
+    if (!patcher) return undefined;
+    return {
+      type: value.type,
+      patcherId: value.patcherId,
+      scope: value.scope,
+      revision: value.revision,
+      structureToken: value.structureToken,
+      causes: value.causes,
+      patcher,
+    };
+  }
+
+  if (
     value.type === "maxforge.snapshot" &&
     isRequestId(value.requestId) &&
     isRevisionOrNull(value.revision) &&
@@ -1257,6 +1384,7 @@ function patchInfo(event: MaxforgePatchRegistration): MaxforgePatchInfo {
     title: event.title,
     filename: event.filename,
     filepath: event.filepath,
+    capabilities: event.capabilities,
   };
 }
 
@@ -1311,6 +1439,7 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     typeof value.maxclass !== "string" ||
     !isRectangle(value.patchingRect) ||
     typeof value.managed !== "boolean" ||
+    (value.selected !== undefined && typeof value.selected !== "boolean") ||
     (value.text !== undefined && typeof value.text !== "string") ||
     (value.comment !== undefined && typeof value.comment !== "string")
   ) {
@@ -1325,10 +1454,35 @@ function parseSnapshotBox(value: unknown): MaxforgeSnapshotBox | undefined {
     maxclass: value.maxclass,
     patchingRect: value.patchingRect,
     managed: value.managed,
+    ...(value.selected === undefined ? {} : { selected: value.selected }),
     ...(value.text === undefined ? {} : { text: value.text }),
     ...(value.comment === undefined ? {} : { comment: value.comment }),
     attributes,
   };
+}
+
+function isPatchCapabilities(
+  value: unknown
+): value is MaxforgePatchRegistration["capabilities"] {
+  return Array.isArray(value) &&
+    value.length <= 1 &&
+    value.every((capability) => capability === "edit_observation_v1") &&
+    new Set(value).size === value.length;
+}
+
+function isEditObservationCauses(
+  value: unknown
+): value is MaxforgeEditObservedEvent["causes"] {
+  const allowed = new Set(["patcher", "box", "line", "attribute", "unknown"]);
+  return Array.isArray(value) &&
+    0 < value.length &&
+    value.length <= allowed.size &&
+    value.every((cause) => typeof cause === "string" && allowed.has(cause)) &&
+    new Set(value).size === value.length;
+}
+
+function targetKey(patcherId: string, scope: string): string {
+  return `${patcherId}\u0000${scope}`;
 }
 
 function parseSnapshotConnection(

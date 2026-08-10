@@ -12,6 +12,7 @@ import {
 } from "./reconcile.js";
 import {
   MaxforgeAppliedEvent,
+  MaxforgeEditObservationCause,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
@@ -78,6 +79,38 @@ export interface InspectPatchResult {
   readonly changes: readonly PatchSnapshotChange[];
   readonly managedChangeCount: number;
   readonly unmanagedChangeCount: number;
+}
+
+export type EditObservationComparisonBasis =
+  | "acknowledged_baseline"
+  | "previous_observation"
+  | "incomplete_after_drop"
+  | "unavailable";
+
+export interface LiveEditHistoryEntry {
+  readonly sequence: number;
+  readonly observedAt: string;
+  readonly causes: readonly MaxforgeEditObservationCause[];
+  readonly structureToken: string;
+  readonly comparisonBasis: EditObservationComparisonBasis;
+  readonly changes: readonly PatchSnapshotChange[];
+  readonly review: PatchEditReview;
+  readonly selectedBoxes: readonly {
+    readonly targetPath: readonly string[];
+    readonly runtimeId: string;
+    readonly varName: string;
+    readonly managed: boolean;
+  }[];
+}
+
+export interface LiveEditHistoryResult {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly supported: boolean;
+  readonly droppedEvents: number;
+  readonly latestSequence: number | null;
+  readonly observations: readonly LiveEditHistoryEntry[];
+  readonly limitations: readonly string[];
 }
 
 export interface ReviewLiveChangesResult extends InspectPatchResult {
@@ -298,6 +331,62 @@ export class MaxforgePatchService {
       changes,
       managedChangeCount: changes.filter((change) => change.managed).length,
       unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+    };
+  }
+
+  getLiveEditHistory(
+    patcherId: string,
+    scope: string,
+    afterSequence = 0
+  ): LiveEditHistoryResult {
+    const history = this.transport.getEditObservationHistory(patcherId, scope);
+    const baseline = this.baselineSnapshots.get(targetKey(patcherId, scope));
+    let previous = baseline;
+    const observations = history.observations.map((observation, index) => {
+      const changes = previous
+        ? diffPatcherSnapshots(previous, observation.event.patcher)
+        : [];
+      const comparisonBasis: EditObservationComparisonBasis = index === 0
+        ? history.droppedEvents > 0
+          ? "incomplete_after_drop"
+          : baseline
+            ? "acknowledged_baseline"
+            : "unavailable"
+        : "previous_observation";
+      previous = observation.event.patcher;
+      return {
+        sequence: observation.sequence,
+        observedAt: observation.observedAt,
+        causes: observation.event.causes,
+        structureToken: observation.event.structureToken,
+        comparisonBasis,
+        changes,
+        review: reviewPatchEdits(changes, scope),
+        selectedBoxes: observation.event.patcher.boxes
+          .filter((box) => box.selected)
+          .map((box) => ({
+            targetPath: box.targetPath,
+            runtimeId: box.runtimeId,
+            varName: box.varName,
+            managed: box.managed,
+          })),
+      };
+    });
+    const latestSequence = observations.at(-1)?.sequence ?? null;
+    return {
+      patcherId,
+      scope,
+      supported: history.supported,
+      droppedEvents: history.droppedEvents,
+      latestSequence,
+      observations: observations.filter(
+        (observation) => afterSequence < observation.sequence
+      ),
+      limitations: [
+        "Observations are debounced structural snapshots, not Max undo actions or proof of human intent.",
+        "Selection is point-in-time context and is absent when Max exposes no patcher view.",
+        "History is bounded, in memory, and resets when the MCP bridge or Max patch reconnects.",
+      ],
     };
   }
 
