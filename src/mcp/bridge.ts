@@ -1463,8 +1463,12 @@ function isPatchCapabilities(
   value: unknown
 ): value is MaxforgePatchRegistration["capabilities"] {
   return Array.isArray(value) &&
-    value.length <= 1 &&
-    value.every((capability) => capability === "edit_observation_v1") &&
+    value.length <= 16 &&
+    value.every((capability) =>
+      typeof capability === "string" &&
+      capability.length <= 64 &&
+      IDENTIFIER_PATTERN.test(capability)
+    ) &&
     new Set(value).size === value.length;
 }
 

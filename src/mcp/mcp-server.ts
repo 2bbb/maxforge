@@ -38,7 +38,7 @@ const patchInfoSchema = z.object({
   title: z.string().describe("Display-only Max window title"),
   filename: z.string().describe("Display-only Max document filename"),
   filepath: z.string().describe("Saved document path, or an empty string for an unsaved patch"),
-  capabilities: z.array(z.literal("edit_observation_v1")),
+  capabilities: z.array(z.string()),
 });
 
 const warningSchema = z.object({

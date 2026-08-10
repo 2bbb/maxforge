@@ -8,10 +8,8 @@ export interface MaxforgePatchInfo {
   readonly title: string;
   readonly filename: string;
   readonly filepath: string;
-  readonly capabilities: readonly MaxforgePatchCapability[];
+  readonly capabilities: readonly string[];
 }
-
-export type MaxforgePatchCapability = "edit_observation_v1";
 
 export interface MaxforgePatchRegistration extends MaxforgePatchInfo {
   readonly type: "maxforge.registered";

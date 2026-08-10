@@ -576,6 +576,16 @@ describe("parseBridgeEvent", () => {
       causes: ["invented"],
     }))).toBeUndefined();
   });
+
+  it("accepts registration capabilities it does not yet implement", () => {
+    expect(parseBridgeEvent(JSON.stringify({
+      ...registration("patch-a", "voices", false),
+      capabilities: ["edit_observation_v1", "future_observation_v2"],
+    }))).toMatchObject({
+      type: "maxforge.registered",
+      capabilities: ["edit_observation_v1", "future_observation_v2"],
+    });
+  });
 });
 
 function createBridge(): MaxforgeWebSocketBridge {
