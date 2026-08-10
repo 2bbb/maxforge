@@ -34,11 +34,35 @@ export interface PatchEditCounts {
   readonly connectionsChanged: number;
 }
 
+export type PatchEditInterpretationRisk =
+  | "mixed_effects"
+  | "touches_unmanaged_state"
+  | "ownership_boundary_changed";
+
+export interface PatchEditCluster {
+  readonly id: string;
+  readonly targetPath: readonly string[];
+  readonly changeIndexes: readonly number[];
+  readonly managedObjectIds: readonly string[];
+  readonly unmanagedRuntimeIds: readonly string[];
+  readonly signalKinds: readonly PatchEditSignalKind[];
+  readonly interpretationRisks: readonly PatchEditInterpretationRisk[];
+  readonly summary: string;
+}
+
+export interface PatchEditInterpretationGuidance {
+  readonly mode: "evidence_only";
+  readonly clarificationRecommendedFor: readonly string[];
+  readonly instruction: string;
+}
+
 export interface PatchEditReview {
   readonly counts: PatchEditCounts;
   readonly affectedManagedIds: readonly string[];
   readonly affectedUnmanagedRuntimeIds: readonly string[];
   readonly signals: readonly PatchEditSignal[];
+  readonly editClusters: readonly PatchEditCluster[];
+  readonly interpretationGuidance: PatchEditInterpretationGuidance;
 }
 
 interface MutableSignal {
@@ -47,6 +71,14 @@ interface MutableSignal {
   readonly targetPath: readonly string[];
   readonly objectIds: Set<string>;
   readonly changeIndexes: number[];
+}
+
+interface ChangeEvidence {
+  readonly changeIndex: number;
+  readonly targetPath: readonly string[];
+  readonly managedObjectIds: readonly string[];
+  readonly unmanagedRuntimeIds: readonly string[];
+  readonly signalKinds: readonly PatchEditSignalKind[];
 }
 
 /**
@@ -101,18 +133,7 @@ export function reviewPatchEdits(
       case "box_changed": {
         counts.boxesChanged++;
         const box = change.after.managed ? change.after : change.before;
-        const kinds = new Set<PatchEditSignalKind>();
-        for (const field of change.fields) {
-          if (field === "patchingRect") kinds.add("layout");
-          else if (field === "text" || field === "maxclass") {
-            kinds.add("object_configuration");
-          } else if (field === "comment") kinds.add("annotation");
-          else if (field === "attributes") kinds.add("box_attributes");
-          else if (field === "varName" || field === "managed") {
-            kinds.add("ownership");
-          }
-        }
-        for (const kind of kinds) {
+        for (const kind of signalKindsForChange(change)) {
           addBoxSignal(
             signals,
             kind,
@@ -167,6 +188,12 @@ export function reviewPatchEdits(
     }
   });
 
+  const editClusters = buildEditClusters(
+    changes.map((change, changeIndex) =>
+      describeChange(change, changeIndex, scope)
+    )
+  );
+
   return {
     counts,
     affectedManagedIds: [...managedIds].sort(),
@@ -181,6 +208,18 @@ export function reviewPatchEdits(
         changeIndexes: [...new Set(signal.changeIndexes)].sort((a, b) => a - b),
         summary: signalSummary(signal),
       })),
+    editClusters,
+    interpretationGuidance: {
+      mode: "evidence_only",
+      clarificationRecommendedFor: editClusters
+        .filter((cluster) => cluster.interpretationRisks.some((risk) =>
+          risk === "touches_unmanaged_state" ||
+          risk === "ownership_boundary_changed"
+        ))
+        .map((cluster) => cluster.id),
+      instruction:
+        "Infer intent from each edit cluster and conversation context; ask only when unresolved interpretations would change the next patch mutation.",
+    },
   };
 }
 
@@ -302,4 +341,185 @@ function signalSummary(signal: MutableSignal): string {
         ? `Patch-cord attributes touching managed state changed across ${count} ${subject} in ${location}.`
         : `Patch-cord attributes outside managed state changed across ${count} ${subject} in ${location}.`;
   }
+}
+
+function describeChange(
+  change: PatchSnapshotChange,
+  changeIndex: number,
+  scope: string
+): ChangeEvidence {
+  if (
+    change.kind === "box_added" ||
+    change.kind === "box_removed" ||
+    change.kind === "box_changed"
+  ) {
+    const box = change.kind === "box_changed"
+      ? (change.after.managed ? change.after : change.before)
+      : change.box;
+    const id = objectIdentity(box, change.managed, scope);
+    return {
+      changeIndex,
+      targetPath: box.targetPath,
+      managedObjectIds: change.managed ? [id] : [],
+      unmanagedRuntimeIds: change.managed ? [] : [id],
+      signalKinds: signalKindsForChange(change),
+    };
+  }
+
+  const connection = change.kind === "connection_changed"
+    ? change.after
+    : change.connection;
+  const managedObjectIds: string[] = [];
+  const unmanagedRuntimeIds: string[] = [];
+  for (const endpoint of [connection.source, connection.destination]) {
+    const managedId = managedIdFromVarName(scope, endpoint.varName);
+    if (managedId === null) unmanagedRuntimeIds.push(endpoint.runtimeId);
+    else managedObjectIds.push(managedId);
+  }
+  return {
+    changeIndex,
+    targetPath: connection.targetPath,
+    managedObjectIds: [...new Set(managedObjectIds)].sort(),
+    unmanagedRuntimeIds: [...new Set(unmanagedRuntimeIds)].sort(),
+    signalKinds: signalKindsForChange(change),
+  };
+}
+
+function signalKindsForChange(
+  change: PatchSnapshotChange
+): readonly PatchEditSignalKind[] {
+  if (change.kind === "box_added") return ["object_addition"];
+  if (change.kind === "box_removed") return ["object_removal"];
+  if (
+    change.kind === "connection_added" ||
+    change.kind === "connection_removed"
+  ) {
+    return ["routing"];
+  }
+  if (change.kind === "connection_changed") {
+    return ["connection_attributes"];
+  }
+
+  const kinds = new Set<PatchEditSignalKind>();
+  for (const field of change.fields) {
+    if (field === "patchingRect") kinds.add("layout");
+    else if (field === "text" || field === "maxclass") {
+      kinds.add("object_configuration");
+    } else if (field === "comment") kinds.add("annotation");
+    else if (field === "attributes") kinds.add("box_attributes");
+    else if (field === "varName" || field === "managed") {
+      kinds.add("ownership");
+    }
+  }
+  return [...kinds];
+}
+
+function buildEditClusters(
+  evidence: readonly ChangeEvidence[]
+): readonly PatchEditCluster[] {
+  const parents = evidence.map((_, index) => index);
+  const find = (index: number): number => {
+    while (parents[index] !== index) {
+      parents[index] = parents[parents[index]];
+      index = parents[index];
+    }
+    return index;
+  };
+  const union = (left: number, right: number): void => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
+  };
+
+  for (let left = 0; left < evidence.length; left++) {
+    for (let right = left + 1; right < evidence.length; right++) {
+      if (
+        samePath(evidence[left].targetPath, evidence[right].targetPath) &&
+        sharesIdentity(evidence[left], evidence[right])
+      ) {
+        union(left, right);
+      }
+    }
+  }
+
+  const grouped = new Map<number, ChangeEvidence[]>();
+  evidence.forEach((item, index) => {
+    const root = find(index);
+    const group = grouped.get(root) ?? [];
+    group.push(item);
+    grouped.set(root, group);
+  });
+
+  return [...grouped.values()]
+    .sort((left, right) => left[0].changeIndex - right[0].changeIndex)
+    .map((group, index) => createEditCluster(group, index + 1));
+}
+
+function samePath(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return left.length === right.length &&
+    left.every((part, index) => part === right[index]);
+}
+
+function sharesIdentity(left: ChangeEvidence, right: ChangeEvidence): boolean {
+  const leftKeys = new Set([
+    ...left.managedObjectIds.map((id) => `managed:${id}`),
+    ...left.unmanagedRuntimeIds.map((id) => `unmanaged:${id}`),
+  ]);
+  return right.managedObjectIds.some((id) => leftKeys.has(`managed:${id}`)) ||
+    right.unmanagedRuntimeIds.some((id) =>
+      leftKeys.has(`unmanaged:${id}`)
+    );
+}
+
+function createEditCluster(
+  evidence: readonly ChangeEvidence[],
+  sequence: number
+): PatchEditCluster {
+  const managedObjectIds = uniqueSorted(
+    evidence.flatMap((item) => item.managedObjectIds)
+  );
+  const unmanagedRuntimeIds = uniqueSorted(
+    evidence.flatMap((item) => item.unmanagedRuntimeIds)
+  );
+  const signalKinds = uniqueInOrder(
+    evidence.flatMap((item) => item.signalKinds)
+  );
+  const interpretationRisks: PatchEditInterpretationRisk[] = [];
+  if (signalKinds.length > 1) interpretationRisks.push("mixed_effects");
+  if (unmanagedRuntimeIds.length > 0) {
+    interpretationRisks.push("touches_unmanaged_state");
+  }
+  if (signalKinds.includes("ownership")) {
+    interpretationRisks.push("ownership_boundary_changed");
+  }
+  const targetPath = evidence[0].targetPath;
+  const location = targetPath.length === 0
+    ? "the root patcher"
+    : `subpatcher ${targetPath.join("/")}`;
+  const affectedCount = managedObjectIds.length + unmanagedRuntimeIds.length;
+  return {
+    id: `edit-${sequence}`,
+    targetPath,
+    changeIndexes: evidence.map((item) => item.changeIndex).sort((a, b) => a - b),
+    managedObjectIds,
+    unmanagedRuntimeIds,
+    signalKinds,
+    interpretationRisks,
+    summary:
+      `${evidence.length} related ${evidence.length === 1 ? "change" : "changes"} ` +
+      `${affectedCount === 1 ? "affects" : "affect"} ${affectedCount} ` +
+      `${affectedCount === 1 ? "object" : "objects"} in ${location} across ` +
+      `${signalKinds.join(", ")}.`,
+  };
+}
+
+function uniqueSorted(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort();
+}
+
+function uniqueInOrder<Value>(values: readonly Value[]): readonly Value[] {
+  return [...new Set(values)];
 }

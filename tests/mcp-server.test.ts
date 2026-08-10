@@ -135,7 +135,7 @@ describe("maxforge MCP protocol surface", () => {
       expect(
         definitions.find((tool) => tool.name === "maxforge_review_live_changes")
           ?.description
-      ).toContain("never claims why");
+      ).toContain("correlated edit clusters");
       expect(
         definitions.find((tool) => tool.name === "maxforge_adopt_live_changes")
           ?.description
@@ -171,6 +171,7 @@ describe("maxforge MCP protocol surface", () => {
             topic: "workflow",
             steps: expect.arrayContaining([
               expect.stringContaining("evidence of what changed"),
+              expect.stringContaining("review.editClusters"),
               expect.stringContaining("exact reviewed structure token"),
               expect.stringContaining("workingDslRequiredAsCurrent"),
             ]),
@@ -381,6 +382,11 @@ describe("maxforge MCP protocol surface", () => {
               affectedManagedIds: [],
               affectedUnmanagedRuntimeIds: [],
               signals: [],
+              editClusters: [],
+              interpretationGuidance: {
+                mode: "evidence_only",
+                clarificationRecommendedFor: [],
+              },
             },
           },
         },

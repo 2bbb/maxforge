@@ -249,6 +249,35 @@ const editReviewSchema = z.object({
     changeIndexes: z.array(z.number().int().nonnegative()),
     summary: z.string(),
   })),
+  editClusters: z.array(z.object({
+    id: z.string(),
+    targetPath: z.array(z.string()),
+    changeIndexes: z.array(z.number().int().nonnegative()),
+    managedObjectIds: z.array(z.string()),
+    unmanagedRuntimeIds: z.array(z.string()),
+    signalKinds: z.array(z.enum([
+      "layout",
+      "object_configuration",
+      "annotation",
+      "box_attributes",
+      "ownership",
+      "object_addition",
+      "object_removal",
+      "routing",
+      "connection_attributes",
+    ])),
+    interpretationRisks: z.array(z.enum([
+      "mixed_effects",
+      "touches_unmanaged_state",
+      "ownership_boundary_changed",
+    ])),
+    summary: z.string(),
+  })),
+  interpretationGuidance: z.object({
+    mode: z.literal("evidence_only"),
+    clarificationRecommendedFor: z.array(z.string()),
+    instruction: z.string(),
+  }),
 });
 
 const liveChangeReviewSchema = z.object({
@@ -278,6 +307,7 @@ const HELP_CONTENT = {
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
       "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
+      "Interpret related changes together using review.editClusters. Treat interpretationRisks as prompts for reasoning, and use interpretationGuidance.clarificationRecommendedFor to identify clusters that may require a human question.",
       "To accept the current managed graph as the baseline, call maxforge_adopt_live_changes with the exact reviewed structure token. If a concrete next DSL is already ready, use maxforge_reconcile_patch instead and require canApply=true.",
       "After adoption, replace the working source with the returned workingDsl before compiling the next desired state.",
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
@@ -784,7 +814,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Review human edits in a live Max patch",
       description:
-        "Turn live changes since the last acknowledged apply into neutral, structured evidence for agent intent inference. Reports exact before/after changes, affected managed identities, routing/layout/configuration signals, and whether the reviewed state can be safely adopted. This tool never claims why the human edited the patch and never mutates Max.",
+        "Turn live changes since the last acknowledged apply into neutral, structured evidence for agent intent inference. Reports exact before/after changes, affected managed identities, routing/layout/configuration signals, correlated edit clusters, interpretation risks, and whether the reviewed state can be safely adopted. This tool never claims why the human edited the patch and never mutates Max.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),

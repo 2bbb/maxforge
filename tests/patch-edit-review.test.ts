@@ -79,6 +79,29 @@ describe("reviewPatchEdits", () => {
         changeIndexes: [2],
       }),
     ]));
+    expect(review.editClusters).toEqual([expect.objectContaining({
+      id: "edit-1",
+      targetPath: [],
+      changeIndexes: [0, 1, 2],
+      managedObjectIds: ["obj-osc"],
+      unmanagedRuntimeIds: ["runtime-manual"],
+      signalKinds: [
+        "layout",
+        "object_configuration",
+        "object_addition",
+        "routing",
+      ],
+      interpretationRisks: [
+        "mixed_effects",
+        "touches_unmanaged_state",
+      ],
+    })]);
+    expect(review.interpretationGuidance).toEqual({
+      mode: "evidence_only",
+      clarificationRecommendedFor: ["edit-1"],
+      instruction:
+        "Infer intent from each edit cluster and conversation context; ask only when unresolved interpretations would change the next patch mutation.",
+    });
   });
 
   it("combines repeated edits without inventing a semantic intention", () => {
@@ -111,7 +134,28 @@ describe("reviewPatchEdits", () => {
       changeIndexes: [0, 1],
       summary: "Layout changed for 2 managed objects in the root patcher.",
     })]);
-    expect(JSON.stringify(review)).not.toMatch(/intent|wanted|preferred/i);
+    expect(review.editClusters).toEqual([
+      expect.objectContaining({
+        id: "edit-1",
+        changeIndexes: [0],
+        managedObjectIds: ["obj-a"],
+        signalKinds: ["layout"],
+        interpretationRisks: [],
+      }),
+      expect.objectContaining({
+        id: "edit-2",
+        changeIndexes: [1],
+        managedObjectIds: ["obj-b"],
+        signalKinds: ["layout"],
+        interpretationRisks: [],
+      }),
+    ]);
+    expect(review.interpretationGuidance.clarificationRecommendedFor).toEqual([]);
+    expect(JSON.stringify({
+      signals: review.signals,
+      editClusters: review.editClusters,
+    })).not.toMatch(/intent|wanted|preferred/i);
+    expect(review.interpretationGuidance.mode).toBe("evidence_only");
   });
 
   it("keeps the prior managed identity when a human removes its scripting name", () => {
@@ -136,6 +180,12 @@ describe("reviewPatchEdits", () => {
       managed: true,
       objectIds: ["obj-osc"],
     })]);
+    expect(review.editClusters).toEqual([expect.objectContaining({
+      interpretationRisks: ["ownership_boundary_changed"],
+    })]);
+    expect(review.interpretationGuidance.clarificationRecommendedFor).toEqual([
+      "edit-1",
+    ]);
   });
 });
 

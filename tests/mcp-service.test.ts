@@ -358,6 +358,21 @@ describe("MaxforgePatchService", () => {
           }),
           expect.objectContaining({ kind: "routing" }),
         ]),
+        editClusters: [expect.objectContaining({
+          id: "edit-1",
+          changeIndexes: [0, 1, 2],
+          managedObjectIds: ["obj-osc"],
+          unmanagedRuntimeIds: ["manual-meter"],
+          interpretationRisks: [
+            "mixed_effects",
+            "touches_unmanaged_state",
+          ],
+        })],
+        interpretationGuidance: {
+          mode: "evidence_only",
+          clarificationRecommendedFor: ["edit-1"],
+          instruction: expect.stringContaining("conversation context"),
+        },
       },
     });
     expect(result.observedManagedRevision).not.toBe(result.acknowledgedRevision);
