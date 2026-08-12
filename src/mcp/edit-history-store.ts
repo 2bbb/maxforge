@@ -14,8 +14,14 @@ import type { ProjectIdentity } from "../core/catalog-config.js";
 import type {
   MaxforgeEditObservedEvent,
   MaxforgeObservationBaseline,
+  MaxforgePatchHistoryIdentity,
+  MaxforgePatchHistoryIdentityAction,
+  MaxforgePatchHistoryIdentityDecision,
+  MaxforgePatchHistoryIdentityStatus,
   MaxforgePatchInfo,
   MaxforgeRetainedEditObservation,
+  ResolveMaxforgePatchHistoryIdentityRequest,
+  ResolveMaxforgePatchHistoryIdentityResult,
 } from "../max/patch-protocol.js";
 
 const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
@@ -58,46 +64,6 @@ export interface EditHistoryStoreStatus {
   readonly warnings: readonly string[];
 }
 
-export interface PatchHistoryIdentity {
-  readonly patcherId: string;
-  readonly scope: string;
-}
-
-export type PatchHistoryIdentityAction = "rekey" | "merge" | "forget";
-
-export interface ResolvePatchHistoryIdentityRequest {
-  readonly action: PatchHistoryIdentityAction;
-  readonly expectedProjectId: string;
-  readonly source: PatchHistoryIdentity;
-  readonly target?: PatchHistoryIdentity;
-  readonly reason: string;
-  readonly resolvedAt?: string;
-}
-
-export interface PatchHistoryIdentityDecision {
-  readonly action: PatchHistoryIdentityAction;
-  readonly source: PatchHistoryIdentity;
-  readonly target?: PatchHistoryIdentity;
-  readonly reason: string;
-  readonly resolvedAt: string;
-}
-
-export interface PatchHistoryIdentityStatus {
-  readonly projectId: string;
-  readonly requested: PatchHistoryIdentity;
-  readonly canonical: PatchHistoryIdentity;
-  readonly known: boolean;
-  readonly forgotten: boolean;
-  readonly aliases: readonly PatchHistoryIdentity[];
-  readonly decisions: readonly PatchHistoryIdentityDecision[];
-}
-
-export interface ResolvePatchHistoryIdentityResult
-  extends PatchHistoryIdentityStatus {
-  readonly action: PatchHistoryIdentityAction;
-  readonly physicalDataErased: false;
-}
-
 interface SessionState {
   readonly patch: MaxforgePatchInfo;
   readonly baseline: MaxforgeObservationBaseline;
@@ -133,7 +99,7 @@ interface MetadataRecord {
   readonly patch: MaxforgePatchInfo;
 }
 
-interface IdentityResolutionRecord extends PatchHistoryIdentityDecision {
+interface IdentityResolutionRecord extends MaxforgePatchHistoryIdentityDecision {
   readonly schemaVersion: 1;
   readonly record: "identity-resolution";
 }
@@ -153,7 +119,10 @@ export interface EditHistoryStore {
     reason: "saved"
   ): void;
   patchMetadata(patcherId: string, scope: string): readonly PersistedPatchMetadata[];
-  patchIdentity(patcherId: string, scope: string): PatchHistoryIdentityStatus;
+  patchIdentity(
+    patcherId: string,
+    scope: string
+  ): MaxforgePatchHistoryIdentityStatus;
   matchesPatchIdentity(
     historicalPatcherId: string,
     historicalScope: string,
@@ -161,8 +130,8 @@ export interface EditHistoryStore {
     requestedScope: string
   ): boolean;
   resolvePatchIdentity(
-    request: ResolvePatchHistoryIdentityRequest
-  ): ResolvePatchHistoryIdentityResult;
+    request: ResolveMaxforgePatchHistoryIdentityRequest
+  ): ResolveMaxforgePatchHistoryIdentityResult;
   status(): EditHistoryStoreStatus;
 }
 
@@ -178,7 +147,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   private readonly knownIdentities = new Set<string>();
   private readonly identityAliases = new Map<string, string>();
   private readonly forgottenIdentities = new Set<string>();
-  private readonly identityDecisions: PatchHistoryIdentityDecision[] = [];
+  private readonly identityDecisions: MaxforgePatchHistoryIdentityDecision[] = [];
   private readonly warnings: string[] = [];
 
   constructor(options: EditHistoryStoreOptions) {
@@ -344,7 +313,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   patchIdentity(
     patcherId: string,
     scope: string
-  ): PatchHistoryIdentityStatus {
+  ): MaxforgePatchHistoryIdentityStatus {
     validateIdentity({ patcherId, scope }, "requested patch history identity");
     const requestedKey = targetKey(patcherId, scope);
     const canonicalKey = this.canonicalIdentityKey(requestedKey);
@@ -388,15 +357,15 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   }
 
   resolvePatchIdentity(
-    request: ResolvePatchHistoryIdentityRequest
-  ): ResolvePatchHistoryIdentityResult {
+    request: ResolveMaxforgePatchHistoryIdentityRequest
+  ): ResolveMaxforgePatchHistoryIdentityResult {
     if (request.expectedProjectId !== this.project.id) {
       throw new Error(
         `Expected project id ${request.expectedProjectId}, but edit history belongs to ${this.project.id}`
       );
     }
     validateIdentityResolutionRequest(request);
-    const decision: PatchHistoryIdentityDecision = {
+    const decision: MaxforgePatchHistoryIdentityDecision = {
       action: request.action,
       source: { ...request.source },
       ...(request.target ? { target: { ...request.target } } : {}),
@@ -632,7 +601,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   }
 
   private validateNewIdentityDecision(
-    decision: PatchHistoryIdentityDecision
+    decision: MaxforgePatchHistoryIdentityDecision
   ): void {
     const sourceKey = targetKey(
       decision.source.patcherId,
@@ -679,7 +648,9 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     }
   }
 
-  private applyIdentityDecision(decision: PatchHistoryIdentityDecision): void {
+  private applyIdentityDecision(
+    decision: MaxforgePatchHistoryIdentityDecision
+  ): void {
     const sourceKey = targetKey(
       decision.source.patcherId,
       decision.source.scope
@@ -871,7 +842,7 @@ function isMetadataRecord(
 
 function parseIdentityResolutionRecord(
   raw: unknown
-): PatchHistoryIdentityDecision | undefined {
+): MaxforgePatchHistoryIdentityDecision | undefined {
   if (
     !isRecord(raw) ||
     raw.schemaVersion !== 1 ||
@@ -910,7 +881,7 @@ function isProjectIdentity(value: unknown): value is ProjectIdentity {
     (value.name === undefined || typeof value.name === "string");
 }
 
-function isIdentity(value: unknown): value is PatchHistoryIdentity {
+function isIdentity(value: unknown): value is MaxforgePatchHistoryIdentity {
   return isRecord(value) &&
     typeof value.patcherId === "string" &&
     IDENTIFIER_PATTERN.test(value.patcherId) &&
@@ -1035,14 +1006,14 @@ function validatePatchInfo(patch: MaxforgePatchInfo): void {
 }
 
 function validateIdentity(
-  identity: PatchHistoryIdentity,
+  identity: MaxforgePatchHistoryIdentity,
   label: string
 ): void {
   if (!isIdentity(identity)) throw new Error(`Invalid ${label}`);
 }
 
 function validateIdentityResolutionRequest(
-  request: ResolvePatchHistoryIdentityRequest
+  request: ResolveMaxforgePatchHistoryIdentityRequest
 ): void {
   validateIdentity(request.source, "source patch history identity");
   if (request.reason.trim().length === 0 || request.reason.length > 512) {
@@ -1121,7 +1092,7 @@ function targetKey(patcherId: string, scope: string): string {
   return `${patcherId}\u0000${scope}`;
 }
 
-function identityFromKey(key: string): PatchHistoryIdentity {
+function identityFromKey(key: string): MaxforgePatchHistoryIdentity {
   const separator = key.indexOf("\u0000");
   if (separator < 0) throw new Error("Invalid patch history identity key");
   return {
@@ -1130,7 +1101,7 @@ function identityFromKey(key: string): PatchHistoryIdentity {
   };
 }
 
-function formatIdentity(identity: PatchHistoryIdentity): string {
+function formatIdentity(identity: MaxforgePatchHistoryIdentity): string {
   return `${identity.patcherId}:${identity.scope}`;
 }
 

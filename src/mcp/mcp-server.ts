@@ -306,6 +306,29 @@ const liveChangeReviewSchema = z.object({
   snapshot: snapshotEventSchema,
 });
 
+const patchHistoryIdentitySchema = z.object({
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+});
+
+const patchHistoryIdentityDecisionSchema = z.object({
+  action: z.enum(["rekey", "merge", "forget"]),
+  source: patchHistoryIdentitySchema,
+  target: patchHistoryIdentitySchema.optional(),
+  reason: z.string(),
+  resolvedAt: z.string(),
+});
+
+const patchHistoryIdentityStatusSchema = z.object({
+  projectId: z.string(),
+  requested: patchHistoryIdentitySchema,
+  canonical: patchHistoryIdentitySchema,
+  known: z.boolean(),
+  forgotten: z.boolean(),
+  aliases: z.array(patchHistoryIdentitySchema),
+  decisions: z.array(patchHistoryIdentityDecisionSchema),
+});
+
 const liveEditHistorySchema = z.object({
   patcherId: patcherIdSchema,
   scope: scopeSchema,
@@ -317,6 +340,7 @@ const liveEditHistorySchema = z.object({
     location: z.string().nullable(),
     warnings: z.array(z.string()),
   }),
+  identity: patchHistoryIdentityStatusSchema.nullable(),
   patchMetadata: z.array(z.object({
     projectId: z.string(),
     patcherId: patcherIdSchema,
@@ -940,6 +964,105 @@ export function createMaxforgeMcpServer(
           afterSequence
         );
         return toolResult({ ...history });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_get_patch_history_identity",
+    {
+      title: "Inspect persistent patch history identity",
+      description:
+        "Read the project-scoped logical identity used to locate retained edit evidence, including canonical identity, aliases, explicit decisions, and logical-forget state. This works for disconnected historical identities when persistent edit history is enabled. Saved paths remain locator metadata and are never promoted to identity.",
+      inputSchema: patchHistoryIdentitySchema,
+      outputSchema: patchHistoryIdentityStatusSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ patcherId, scope }) => {
+      try {
+        return toolResult({
+          ...options.service.getPatchHistoryIdentity(patcherId, scope),
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_resolve_patch_history_identity",
+    {
+      title: "Resolve persistent patch history identity",
+      description:
+        "Append an explicit project-scoped history decision. rekey moves one closed historical identity to an unused ID; merge combines one closed source into an already known canonical target after the human confirms they are the same patch; forget hides a closed identity group from Agent-facing history. This never rewrites live maxforge.sync routing or original NDJSON evidence, and forget is not secure physical erasure.",
+      inputSchema: z.object({
+        action: z.enum(["rekey", "merge", "forget"]),
+        expectedProjectId: z.string().describe(
+          "Exact project.id shown by maxforge_status or identity inspection"
+        ),
+        sourcePatcherId: patcherIdSchema.describe(
+          "Closed source logical patch identity"
+        ),
+        scope: scopeSchema.describe(
+          "Exact scope shared by source and target"
+        ),
+        targetPatcherId: patcherIdSchema.optional().describe(
+          "Required for rekey and merge; omit for forget"
+        ),
+        reason: z.string().min(1).max(512).describe(
+          "Human-confirmed reason recorded in the append-only decision ledger"
+        ),
+      }).superRefine((value, context) => {
+        if (value.action === "forget" && value.targetPatcherId !== undefined) {
+          context.addIssue({
+            code: "custom",
+            message: "forget must omit targetPatcherId",
+            path: ["targetPatcherId"],
+          });
+        }
+        if (value.action !== "forget" && value.targetPatcherId === undefined) {
+          context.addIssue({
+            code: "custom",
+            message: `${value.action} requires targetPatcherId`,
+            path: ["targetPatcherId"],
+          });
+        }
+      }),
+      outputSchema: patchHistoryIdentityStatusSchema.extend({
+        action: z.enum(["rekey", "merge", "forget"]),
+        physicalDataErased: z.literal(false),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+    },
+    async ({
+      action,
+      expectedProjectId,
+      sourcePatcherId,
+      scope,
+      targetPatcherId,
+      reason,
+    }) => {
+      try {
+        const result = options.service.resolvePatchHistoryIdentity({
+          action,
+          expectedProjectId,
+          source: { patcherId: sourcePatcherId, scope },
+          ...(targetPatcherId
+            ? { target: { patcherId: targetPatcherId, scope } }
+            : {}),
+          reason,
+        });
+        return toolResult({ ...result });
       } catch (error) {
         return toolError(error);
       }

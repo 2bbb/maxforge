@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
@@ -25,6 +28,7 @@ import {
 } from "../src/mcp/state-store.js";
 import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import { PatchGraph, PatchPlan, PatchSetValue } from "../src/max/patch-graph.js";
+import { JsonLinesEditHistoryStore } from "../src/mcp/edit-history-store.js";
 
 const database = dbData as ObjectDatabase;
 
@@ -59,6 +63,7 @@ describe("MaxforgePatchService", () => {
       supported: true,
       droppedEvents: 0,
       persistence: disabledHistoryPersistence(),
+      identity: null,
       patchMetadata: [],
       observations: [
         {
@@ -131,6 +136,7 @@ describe("MaxforgePatchService", () => {
       supported: true,
       droppedEvents: 3,
       persistence: disabledHistoryPersistence(),
+      identity: null,
       patchMetadata: [],
       observations: [{
         sequence: 4,
@@ -174,6 +180,7 @@ describe("MaxforgePatchService", () => {
       supported: true,
       droppedEvents: 0,
       persistence: disabledHistoryPersistence(),
+      identity: null,
       patchMetadata: [],
       observations: [
         retainedObservation(1, 1, "session-old", transport.snapshot, empty),
@@ -188,6 +195,51 @@ describe("MaxforgePatchService", () => {
       comparisonBasis: "session_baseline",
       changes: [{ kind: "box_changed", fields: ["patchingRect"] }],
     });
+  });
+
+  it("rejects history identity mutation while the source group is connected", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-service-identity-"));
+    try {
+      const transport = new FakeTransport();
+      const patch: MaxforgePatchInfo = {
+        patcherId: "patch-a",
+        scope: "voices",
+        instanceId: "instance-a",
+        sessionId: "session-a",
+        revision: null,
+        controller: false,
+        title: "Patch A",
+        filename: "patch-a.maxpat",
+        filepath: "/project/patch-a.maxpat",
+        capabilities: ["edit_observation_v1", "session_baseline_v1"],
+      };
+      transport.patches = [patch];
+      const store = new JsonLinesEditHistoryStore({
+        directory,
+        project: { id: "studio_patchset" },
+      });
+      store.load();
+      store.startSession(patch, {
+        structureToken: "0".repeat(16),
+        patcher: transport.snapshot,
+      }, "2026-08-13T00:00:00.000Z");
+      const service = new MaxforgePatchService(
+        new DslPatchAdapter(database),
+        transport,
+        undefined,
+        store
+      );
+
+      expect(() => service.resolvePatchHistoryIdentity({
+        action: "rekey",
+        expectedProjectId: "studio_patchset",
+        source: { patcherId: "patch-a", scope: "voices" },
+        target: { patcherId: "patch-renamed", scope: "voices" },
+        reason: "Attempted while Max is still connected",
+      })).toThrow("is connected");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
@@ -1181,10 +1233,12 @@ class FakeTransport implements PatchPlanTransport {
   postApplyInspectionFailure: Error | undefined;
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
+  patches: readonly MaxforgePatchInfo[] = [];
   editHistory: MaxforgeEditObservationHistory = {
     supported: true,
     droppedEvents: 0,
     persistence: disabledHistoryPersistence(),
+    identity: null,
     patchMetadata: [],
     observations: [],
   };
@@ -1292,7 +1346,7 @@ class FakeTransport implements PatchPlanTransport {
   }
 
   listPatches(): readonly MaxforgePatchInfo[] {
-    return [];
+    return this.patches;
   }
 
   getLiveRevision(

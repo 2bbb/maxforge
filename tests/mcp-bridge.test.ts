@@ -531,6 +531,67 @@ describe("MaxforgeWebSocketBridge", () => {
       });
   });
 
+  it("queries original evidence through an explicitly rekeyed history identity", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-bridge-rekey-"));
+    temporaryDirectories.push(directory);
+    const firstStore = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    const firstBridge = createBridge(firstStore);
+    const firstStatus = await firstBridge.start();
+    const firstClient = await connect(firstStatus.port);
+    await register(
+      firstBridge,
+      firstClient,
+      registration("patch-a", "voices", false)
+    );
+    firstClient.send(JSON.stringify(editObservation("patch-a", "voices", {
+      causes: ["box"],
+    })));
+    await waitFor(() =>
+      firstBridge.getEditObservationHistory("patch-a", "voices")
+        .observations.length === 1
+    );
+    firstClient.terminate();
+    await waitFor(() => firstBridge.listPatches().length === 0);
+    await firstBridge.close();
+
+    firstStore.resolvePatchIdentity({
+      action: "rekey",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-renamed", scope: "voices" },
+      reason: "The Max object was deliberately renamed",
+    });
+
+    const secondStore = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    const secondBridge = createBridge(secondStore);
+    const secondStatus = await secondBridge.start();
+    const secondClient = await connect(secondStatus.port);
+    await register(
+      secondBridge,
+      secondClient,
+      registration("patch-renamed", "voices", false)
+    );
+
+    expect(secondBridge.getEditObservationHistory("patch-renamed", "voices"))
+      .toMatchObject({
+        identity: {
+          canonical: { patcherId: "patch-renamed", scope: "voices" },
+          aliases: [{ patcherId: "patch-a", scope: "voices" }],
+        },
+        patchMetadata: [
+          expect.objectContaining({ patcherId: "patch-a" }),
+          expect.objectContaining({ patcherId: "patch-renamed" }),
+        ],
+        observations: [{ event: { patcherId: "patch-a", causes: ["box"] } }],
+      });
+  });
+
   it("ignores edit observations from mismatched or incapable clients", async () => {
     const bridge = createBridge();
     const status = await bridge.start();

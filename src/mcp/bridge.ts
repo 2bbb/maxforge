@@ -354,12 +354,20 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       supported,
       droppedEvents: this.droppedEditEvents.get(key) ?? 0,
       persistence: this.editHistoryPersistenceStatus(),
+      identity: this.editHistoryStore
+        ?.patchIdentity(patcherId, scope) ?? null,
       patchMetadata: this.editHistoryStore
         ?.patchMetadata(patcherId, scope) ?? [],
       observations: this.editObservations
         .filter((entry) =>
-          entry.patcherId === patcherId &&
-          entry.scope === scope
+          this.editHistoryStore
+            ? this.editHistoryStore.matchesPatchIdentity(
+              entry.patcherId,
+              entry.scope,
+              patcherId,
+              scope
+            )
+            : entry.patcherId === patcherId && entry.scope === scope
         )
         .map(({
           sequence,

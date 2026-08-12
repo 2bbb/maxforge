@@ -73,7 +73,12 @@ export async function main(): Promise<void> {
     ? new JsonFilePatchStateStore(stateFile)
     : undefined;
   const patchAdapter = new DslPatchAdapter(catalog.database);
-  const service = new MaxforgePatchService(patchAdapter, bridge, stateStore);
+  const service = new MaxforgePatchService(
+    patchAdapter,
+    bridge,
+    stateStore,
+    editHistoryStore
+  );
   let handle;
   try {
     handle = serveStdio(() =>

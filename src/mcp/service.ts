@@ -15,9 +15,12 @@ import {
   MaxforgeEditObservationCause,
   MaxforgeEditHistoryPersistence,
   MaxforgePatchMetadata,
+  MaxforgePatchHistoryIdentityStatus,
   MaxforgePatcherSnapshot,
   MaxforgeSnapshotEvent,
   PatchPlanTransport,
+  ResolveMaxforgePatchHistoryIdentityRequest,
+  ResolveMaxforgePatchHistoryIdentityResult,
 } from "../max/patch-protocol.js";
 import {
   diffPatcherSnapshots,
@@ -32,6 +35,7 @@ import {
   PendingPatchApply,
 } from "./state-store.js";
 import type { PatchGraphAdapter } from "./patch-adapter.js";
+import type { EditHistoryStore } from "./edit-history-store.js";
 
 export interface CompilePlanRequest {
   readonly patcherId: string;
@@ -109,6 +113,7 @@ export interface LiveEditHistoryResult {
   readonly supported: boolean;
   readonly droppedEvents: number;
   readonly persistence: MaxforgeEditHistoryPersistence;
+  readonly identity: MaxforgePatchHistoryIdentityStatus | null;
   readonly patchMetadata: readonly MaxforgePatchMetadata[];
   readonly latestSequence: number | null;
   readonly observations: readonly LiveEditHistoryEntry[];
@@ -151,7 +156,8 @@ export class MaxforgePatchService {
   constructor(
     private readonly patchAdapter: PatchGraphAdapter,
     private readonly transport: PatchPlanTransport,
-    private readonly stateStore?: PatchStateStore
+    private readonly stateStore?: PatchStateStore,
+    private readonly editHistoryStore?: EditHistoryStore
   ) {
     const state = stateStore?.load();
     this.managedGraphs = new Map(state?.managedGraphs);
@@ -378,6 +384,7 @@ export class MaxforgePatchService {
       supported: history.supported,
       droppedEvents: history.droppedEvents,
       persistence: history.persistence,
+      identity: history.identity,
       patchMetadata: history.patchMetadata,
       latestSequence,
       observations: observations.filter(
@@ -387,8 +394,38 @@ export class MaxforgePatchService {
         "Observations are debounced structural snapshots, not Max undo actions or proof of human intent.",
         "Each session starts from the snapshot sent during registration; observedAt is snapshot arrival time, not an edit-action timestamp.",
         "History is bounded; incomplete_after_drop means one or more earlier observations from that session are unavailable.",
+        "Identity rekey or merge decisions affect history lookup only; they do not rewrite Max routing or original NDJSON evidence.",
       ],
     };
+  }
+
+  getPatchHistoryIdentity(
+    patcherId: string,
+    scope: string
+  ): MaxforgePatchHistoryIdentityStatus {
+    return this.requireEditHistoryStore().patchIdentity(patcherId, scope);
+  }
+
+  resolvePatchHistoryIdentity(
+    request: ResolveMaxforgePatchHistoryIdentityRequest
+  ): ResolveMaxforgePatchHistoryIdentityResult {
+    const store = this.requireEditHistoryStore();
+    const connectedSource = this.transport.listPatches().find((patch) =>
+      store.matchesPatchIdentity(
+        patch.patcherId,
+        patch.scope,
+        request.source.patcherId,
+        request.source.scope
+      )
+    );
+    if (connectedSource) {
+      throw new Error(
+        `Cannot ${request.action} patch history identity while source group ` +
+        `${connectedSource.patcherId}:${connectedSource.scope} is connected. ` +
+        "Close it first; this operation does not rewrite live maxforge.sync routing."
+      );
+    }
+    return store.resolvePatchIdentity(request);
   }
 
   async reviewLiveChanges(
@@ -811,6 +848,15 @@ export class MaxforgePatchService {
         `"${patcherId}" scope "${scope}"`
       );
     }
+  }
+
+  private requireEditHistoryStore(): EditHistoryStore {
+    if (!this.editHistoryStore) {
+      throw new Error(
+        "Patch history identity management requires persistent edit history and a configured project.id"
+      );
+    }
+    return this.editHistoryStore;
   }
 }
 

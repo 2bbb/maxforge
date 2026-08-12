@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   InMemoryTransport,
   JSONRPCMessage,
@@ -25,6 +28,7 @@ import { createMaxforgeMcpServer } from "../src/mcp/mcp-server.js";
 import { MaxforgePatchService } from "../src/mcp/service.js";
 import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 import { PatchPlan } from "../src/max/patch-graph.js";
+import { JsonLinesEditHistoryStore } from "../src/mcp/edit-history-store.js";
 
 const database = dbData as ObjectDatabase;
 const configuredDatabase: ObjectDatabase = {
@@ -122,13 +126,15 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_inspect_patch",
         "maxforge_review_live_changes",
         "maxforge_get_live_edit_history",
+        "maxforge_get_patch_history_identity",
+        "maxforge_resolve_patch_history_identity",
         "maxforge_adopt_live_changes",
         "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(16);
+      expect(definitions).toHaveLength(18);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -585,6 +591,87 @@ describe("maxforge MCP protocol surface", () => {
       await client.close();
     }
   });
+
+  it("inspects and explicitly rekeys disconnected persistent history", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-mcp-identity-"));
+    const transport = new FakeTransport();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    const snapshot = await transport.inspect("patch_a", "voices");
+    store.startSession({
+      patcherId: "patch_a",
+      scope: "voices",
+      instanceId: "instance_a",
+      sessionId: "session_a",
+      revision: null,
+      controller: false,
+      title: "Patch A",
+      filename: "patch-a.maxpat",
+      filepath: "/project/patch-a.maxpat",
+      capabilities: ["edit_observation_v1", "session_baseline_v1"],
+    }, {
+      structureToken: snapshot.structureToken,
+      patcher: snapshot.patcher,
+    }, "2026-08-13T00:00:00.000Z");
+    const patchAdapter = new DslPatchAdapter(configuredDatabase);
+    const service = new MaxforgePatchService(
+      patchAdapter,
+      transport,
+      undefined,
+      store
+    );
+    const server = createMaxforgeMcpServer({
+      service,
+      transport,
+      version: "test",
+      catalog,
+      replaceObjectDatabase: (database) =>
+        patchAdapter.replaceDatabase(database),
+      reloadCatalog: async () => catalog,
+    });
+    const client = new InMemoryMcpClient(server);
+
+    try {
+      await client.connect();
+      const before = await client.request(101, "tools/call", {
+        name: "maxforge_get_patch_history_identity",
+        arguments: { patcherId: "patch_a", scope: "voices" },
+      });
+      expect(before).toMatchObject({
+        result: { structuredContent: {
+          projectId: "studio_patchset",
+          known: true,
+          canonical: { patcherId: "patch_a", scope: "voices" },
+        } },
+      });
+
+      const rekeyed = await client.request(102, "tools/call", {
+        name: "maxforge_resolve_patch_history_identity",
+        arguments: {
+          action: "rekey",
+          expectedProjectId: "studio_patchset",
+          sourcePatcherId: "patch_a",
+          scope: "voices",
+          targetPatcherId: "patch_renamed",
+          reason: "Human confirmed a deliberate patcherId rename",
+        },
+      });
+      expect(rekeyed).toMatchObject({
+        result: { structuredContent: {
+          action: "rekey",
+          physicalDataErased: false,
+          canonical: { patcherId: "patch_renamed", scope: "voices" },
+          aliases: [{ patcherId: "patch_a", scope: "voices" }],
+        } },
+      });
+    } finally {
+      await client.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 class InMemoryMcpClient {
@@ -718,6 +805,7 @@ class FakeTransport implements PatchPlanTransport {
         location: null,
         warnings: [],
       },
+      identity: null,
       patchMetadata: [],
       observations: [],
     };

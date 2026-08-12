@@ -124,8 +124,49 @@ export interface MaxforgeEditObservationHistory {
   readonly supported: boolean;
   readonly droppedEvents: number;
   readonly persistence: MaxforgeEditHistoryPersistence;
+  readonly identity: MaxforgePatchHistoryIdentityStatus | null;
   readonly patchMetadata: readonly MaxforgePatchMetadata[];
   readonly observations: readonly MaxforgeRetainedEditObservation[];
+}
+
+export interface MaxforgePatchHistoryIdentity {
+  readonly patcherId: string;
+  readonly scope: string;
+}
+
+export type MaxforgePatchHistoryIdentityAction = "rekey" | "merge" | "forget";
+
+export interface ResolveMaxforgePatchHistoryIdentityRequest {
+  readonly action: MaxforgePatchHistoryIdentityAction;
+  readonly expectedProjectId: string;
+  readonly source: MaxforgePatchHistoryIdentity;
+  readonly target?: MaxforgePatchHistoryIdentity;
+  readonly reason: string;
+  readonly resolvedAt?: string;
+}
+
+export interface MaxforgePatchHistoryIdentityDecision {
+  readonly action: MaxforgePatchHistoryIdentityAction;
+  readonly source: MaxforgePatchHistoryIdentity;
+  readonly target?: MaxforgePatchHistoryIdentity;
+  readonly reason: string;
+  readonly resolvedAt: string;
+}
+
+export interface MaxforgePatchHistoryIdentityStatus {
+  readonly projectId: string;
+  readonly requested: MaxforgePatchHistoryIdentity;
+  readonly canonical: MaxforgePatchHistoryIdentity;
+  readonly known: boolean;
+  readonly forgotten: boolean;
+  readonly aliases: readonly MaxforgePatchHistoryIdentity[];
+  readonly decisions: readonly MaxforgePatchHistoryIdentityDecision[];
+}
+
+export interface ResolveMaxforgePatchHistoryIdentityResult
+  extends MaxforgePatchHistoryIdentityStatus {
+  readonly action: MaxforgePatchHistoryIdentityAction;
+  readonly physicalDataErased: false;
 }
 
 export interface MaxforgeEditHistoryPersistence {
