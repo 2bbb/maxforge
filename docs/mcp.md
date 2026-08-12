@@ -377,6 +377,38 @@ selection, gesture boundaries, causality, and human intent are not available.
 Use `maxforge_inspect_patch` as current truth and
 `maxforge_review_live_changes`/adoption/reconciliation for baseline ownership.
 
+### `maxforge_get_patch_history_identity`
+
+Reads the project-scoped identity ledger without requiring the historical patch
+to be connected. The result includes the requested identity, current canonical
+identity, known/forgotten state, aliases, and every explicit decision relevant
+to that identity group. This is the inspection step for a saved-path warning;
+the path itself is not evidence that two patch identities are equal.
+
+Persistent history and a configured `project.id` are required. This tool does
+not inspect or mutate live Max routing.
+
+### `maxforge_resolve_patch_history_identity`
+
+Appends one explicit decision to `identity-resolutions-v1.ndjson`:
+
+- `rekey` moves one known, closed source history to an unused `targetPatcherId`;
+- `merge` combines one known, closed source history with an already known
+  target after the human confirms they represent the same logical patch;
+- `forget` excludes a known, closed identity group from Agent-facing history.
+
+Pass the exact `expectedProjectId`, source ID, shared `scope`, a target ID for
+`rekey`/`merge`, and a concrete human-confirmed `reason`. The source group must
+be disconnected. Resolutions cannot cross scopes, target an alias, create a
+cycle, or infer identity from a filepath.
+
+This operation deliberately does **not** rewrite a live `maxforge.sync`
+`patcherId`, move or rewrite original observation chunks, or change Max files.
+`forget` is a logical visibility decision and returns
+`physicalDataErased: false`; retained NDJSON remains until normal retention.
+If secure erasure is required, stop all project writers and remove the project
+history directory through an explicit filesystem operation outside MCP.
+
 ### `maxforge_review_live_changes`
 
 Inspects the target and converts changes since the comparison baseline into a
@@ -682,6 +714,10 @@ patcher/scope, native instance, MCP session, title/filename/filepath, and the
 exact registration baseline. Save events append updated path metadata. Path is
 useful for locating a saved patch, but `project.id + patcherId + scope` remains
 the durable logical identity; `instanceId + sessionId` bounds runtime evidence.
+Explicit history identity decisions are stored separately in
+`identity-resolutions-v1.ndjson`, so evidence chunks remain append-only and
+auditable. Rekey/merge affect lookup only; logical forget does not claim secure
+deletion.
 
 Before sending a plan, Maxforge writes an in-flight record containing both base
 and target revisions. If acknowledgement is lost, the next process waits for the

@@ -252,6 +252,8 @@ human-readable status and local diagnostics. See
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
 - `maxforge_get_live_edit_history`
+- `maxforge_get_patch_history_identity`
+- `maxforge_resolve_patch_history_identity`
 - `maxforge_review_live_changes`
 - `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
@@ -304,6 +306,16 @@ Ordered edit evidence is a separate bounded NDJSON journal and is disabled
 without stable project identity. Saved paths are retained as locators, not used
 as patch IDs. Set `MAXFORGE_STATE_FILE` or `MAXFORGE_EDIT_HISTORY_DIR`
 explicitly when needed.
+
+Path ambiguity is never resolved automatically. Use
+`maxforge_get_patch_history_identity` to inspect the canonical history identity,
+aliases, prior decisions, and logical-forget state. After the human confirms the
+relationship and the source patch is closed,
+`maxforge_resolve_patch_history_identity` can `rekey` history to an unused ID,
+`merge` it into a known ID, or `forget` it from Agent-facing lookup. These
+append-only decisions affect historical lookup only: they do not rewrite the
+live `maxforge.sync` object, cross scopes, edit original evidence, or securely
+erase retained NDJSON.
 
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without

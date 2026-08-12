@@ -406,6 +406,11 @@ MCPはcwd探索を行わないため、server起動設定で`MAXFORGE_CONFIG`に
 新しいdigestを確認する。server再起動は不要で、reload失敗時は旧catalogが残る。
 MCPのstate/edit historyを再起動後もproject単位で保持する場合は、一意で安定した
 `project.id`をroot configへ設定する。保存pathはlocatorでありpatch identityではない。
+pathの衝突warningは自動解決しない。`maxforge_get_patch_history_identity`でcanonical
+identity、aliases、過去のdecisionを確認し、人間が同一性を確認した場合だけsourceを
+閉じて`maxforge_resolve_patch_history_identity`を使う。`rekey`は未使用IDへの変更、
+`merge`は既知IDへの統合、`forget`はAgent-facing lookupからの論理除外である。
+いずれもlive `maxforge.sync`のroutingや元のNDJSONを書き換えず、`forget`も物理削除ではない。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

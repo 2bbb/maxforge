@@ -128,6 +128,10 @@ for i in 0..7 {
   plan, and bundle discover it upward from the input; `--config` selects one explicitly.
   Add a unique stable `project.id` when MCP state and edit evidence must survive
   restarts; do not use a saved path, filename, or title as project/patch identity.
+  For ambiguous retained history, inspect `maxforge_get_patch_history_identity`
+  and require human confirmation before using
+  `maxforge_resolve_patch_history_identity`. Rekey/merge affect history lookup
+  only; logical forget is not secure erasure.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use bounded `ports.mode: "arguments"` when integer initialization arguments
   deterministically control counts; it is not an arbitrary expression hook.

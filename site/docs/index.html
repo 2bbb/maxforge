@@ -484,6 +484,13 @@ source[1] -&gt; destination[2]</code></pre>
           persistent edit history is disabled rather than merged into a shared
           default cache.
         </p>
+        <p>
+          Saved paths remain locators. When a path warning is ambiguous, inspect
+          the append-only identity ledger instead of guessing. Explicit
+          <code>rekey</code>, <code>merge</code>, and logical <code>forget</code>
+          decisions affect historical lookup only; they never rewrite live Max
+          routing, cross scopes, or claim physical erasure.
+        </p>
       </section>
 
       <section id="mcp-workflow" class="docs-section">
@@ -526,6 +533,8 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_close_patch</code></td><td>Close a registered patch; dirty-state discard is explicit and opt-in.</td></tr>
               <tr><td><code>maxforge_inspect_patch</code></td><td>Read boxes, patch cords, nested paths, ownership, and changes without screenshots.</td></tr>
               <tr><td><code>maxforge_get_live_edit_history</code></td><td>Read bounded, ordered 75 ms structural observations. Arrival time is not an edit timestamp; check drop and comparison metadata. This is not Max undo history or proof of intent.</td></tr>
+              <tr><td><code>maxforge_get_patch_history_identity</code></td><td>Inspect canonical project history identity, aliases, explicit decisions, and logical-forget state without requiring the old patch to be connected.</td></tr>
+              <tr><td><code>maxforge_resolve_patch_history_identity</code></td><td>After human confirmation and source closure, append a rekey, merge, or logical-forget decision. It does not rewrite live routing or erase original evidence.</td></tr>
               <tr><td><code>maxforge_review_live_changes</code></td><td>Classify structural evidence, correlate related changes into identity-bound edit clusters, expose interpretation risks and clarification candidates, and provide proposed working DSL when lossless.</td></tr>
               <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>

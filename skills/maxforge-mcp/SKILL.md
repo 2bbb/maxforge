@@ -63,6 +63,13 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    is bounded; project-scoped NDJSON may survive bridge restart, while reconnect
    starts a new session baseline. `observedAt` is snapshot-arrival time. Treat
    `patchMetadata.filepath` as a locator only, never as target identity.
+   If path warnings are ambiguous, call `maxforge_get_patch_history_identity`
+   for each candidate. Do not resolve them from path similarity. Only after the
+   human confirms the relationship and the source patch is closed may you call
+   `maxforge_resolve_patch_history_identity`: `rekey` requires an unused target,
+   `merge` requires a known target, and `forget` only hides Agent-facing history.
+   These operations neither rewrite live `maxforge.sync` routing nor physically
+   erase append-only evidence.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
