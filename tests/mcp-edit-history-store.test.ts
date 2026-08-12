@@ -154,6 +154,162 @@ describe("JsonLinesEditHistoryStore", () => {
     );
   });
 
+  it("rekeys history to a new logical patch identity without rewriting evidence", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+
+    const result = store.resolvePatchIdentity({
+      action: "rekey",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-renamed", scope: "voices" },
+      reason: "Renamed maxforge.sync patcherId after saving the project",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    });
+
+    expect(result.canonical).toEqual({
+      patcherId: "patch-renamed",
+      scope: "voices",
+    });
+    expect(store.patchMetadata("patch-renamed", "voices")).toEqual([
+      expect.objectContaining({ patcherId: "patch-a", scope: "voices" }),
+    ]);
+    expect(store.matchesPatchIdentity(
+      "patch-a",
+      "voices",
+      "patch-renamed",
+      "voices"
+    )).toBe(true);
+
+    const restored = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    restored.load();
+    expect(restored.patchIdentity("patch-renamed", "voices")).toMatchObject({
+      known: true,
+      forgotten: false,
+      aliases: [{ patcherId: "patch-a", scope: "voices" }],
+    });
+  });
+
+  it("merges explicitly duplicated identities and clears resolved path ambiguity", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+    store.startSession({
+      ...patchInfo(),
+      patcherId: "patch-b",
+      instanceId: "instance-b",
+      sessionId: "session-b",
+    }, observationBaseline(), "2026-08-11T00:00:01.000Z");
+    expect(store.status().warnings.join(" ")).toContain(
+      "associated with multiple patch identities"
+    );
+
+    store.resolvePatchIdentity({
+      action: "merge",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-b", scope: "voices" },
+      target: { patcherId: "patch-a", scope: "voices" },
+      reason: "Confirmed that patch-b was an accidental duplicate identity",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    });
+
+    expect(store.patchMetadata("patch-a", "voices")).toHaveLength(2);
+    expect(store.status().warnings.join(" ")).not.toContain(
+      "associated with multiple patch identities"
+    );
+  });
+
+  it("forgets one logical history group without claiming physical erasure", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+
+    const result = store.resolvePatchIdentity({
+      action: "forget",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      reason: "This patch identity belongs to a discarded experiment",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    });
+
+    expect(result).toMatchObject({ forgotten: true, physicalDataErased: false });
+    expect(store.patchMetadata("patch-a", "voices")).toEqual([]);
+    expect(store.matchesPatchIdentity(
+      "patch-a",
+      "voices",
+      "patch-a",
+      "voices"
+    )).toBe(false);
+    expect(historyFiles(directory)).not.toEqual([]);
+  });
+
+  it("rejects unsafe or ambiguous identity resolutions", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+
+    expect(() => store.resolvePatchIdentity({
+      action: "merge",
+      expectedProjectId: "wrong-project",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-b", scope: "voices" },
+      reason: "Wrong namespace",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    })).toThrow("project id");
+    expect(() => store.resolvePatchIdentity({
+      action: "rekey",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-b", scope: "meters" },
+      reason: "Unsafe scope migration",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    })).toThrow("same scope");
+    expect(() => store.resolvePatchIdentity({
+      action: "merge",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "missing", scope: "voices" },
+      reason: "Target is not known",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    })).toThrow("known target");
+  });
+
   it("does not invent a shared project cache without project identity", () => {
     expect(editHistoryDirectoryFromEnvironment({}, undefined)).toBeUndefined();
     expect(editHistoryDirectoryFromEnvironment(
