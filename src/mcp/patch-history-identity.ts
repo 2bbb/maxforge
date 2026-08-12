@@ -216,7 +216,13 @@ export class PatchHistoryIdentityLedger {
   }
 
   private apply(decision: MaxforgePatchHistoryIdentityDecision): void {
-    const source = this.canonicalKey(identityKey(decision.source));
+    const sourceKey = identityKey(decision.source);
+    const source = this.canonicalKey(sourceKey);
+    if (source !== sourceKey) {
+      throw new Error(
+        `Patch history identity ${formatIdentity(decision.source)} is already an alias`
+      );
+    }
     if (decision.action === "forget") {
       this.forgotten.add(source);
       this.decisions.push(decision);
@@ -227,7 +233,13 @@ export class PatchHistoryIdentityLedger {
     if (decision.source.scope !== target.scope) {
       throw new Error("Patch history identity resolution requires the same scope");
     }
-    const canonicalTarget = this.canonicalKey(identityKey(target));
+    const targetKey = identityKey(target);
+    const canonicalTarget = this.canonicalKey(targetKey);
+    if (canonicalTarget !== targetKey) {
+      throw new Error(
+        `Target patch history identity ${formatIdentity(target)} is already an alias`
+      );
+    }
     if (source === canonicalTarget) {
       throw new Error("Patch history identity resolution cannot target itself");
     }

@@ -202,6 +202,53 @@ describe("JsonLinesEditHistoryStore", () => {
     });
   });
 
+  it("ignores replayed decisions that mutate an identity through an old alias", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+    store.resolvePatchIdentity({
+      action: "rekey",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-renamed", scope: "voices" },
+      reason: "Renamed the logical patch identity",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    });
+    appendFileSync(
+      join(directory, "identity-resolutions-v1.ndjson"),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        record: "identity-resolution",
+        action: "rekey",
+        source: { patcherId: "patch-a", scope: "voices" },
+        target: { patcherId: "patch-corrupted", scope: "voices" },
+        reason: "Semantically invalid replay through an old alias",
+        resolvedAt: "2026-08-11T00:00:04.000Z",
+      })}\n`,
+      "utf8"
+    );
+
+    const restored = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    restored.load();
+
+    expect(restored.patchIdentity("patch-renamed", "voices")).toMatchObject({
+      canonical: { patcherId: "patch-renamed", scope: "voices" },
+      aliases: [{ patcherId: "patch-a", scope: "voices" }],
+    });
+    expect(restored.status().warnings.join(" ")).toContain("already an alias");
+  });
+
   it("merges explicitly duplicated identities and clears resolved path ambiguity", () => {
     const directory = temporaryDirectory();
     const store = new JsonLinesEditHistoryStore({
