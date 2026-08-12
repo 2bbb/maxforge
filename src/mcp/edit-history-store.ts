@@ -15,14 +15,13 @@ import type {
   MaxforgeEditObservedEvent,
   MaxforgeObservationBaseline,
   MaxforgePatchHistoryIdentity,
-  MaxforgePatchHistoryIdentityAction,
-  MaxforgePatchHistoryIdentityDecision,
   MaxforgePatchHistoryIdentityStatus,
   MaxforgePatchInfo,
   MaxforgeRetainedEditObservation,
   ResolveMaxforgePatchHistoryIdentityRequest,
   ResolveMaxforgePatchHistoryIdentityResult,
 } from "../max/patch-protocol.js";
+import { PatchHistoryIdentityLedger } from "./patch-history-identity.js";
 
 const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
 const DEFAULT_MAX_AGE_DAYS = 7;
@@ -99,11 +98,6 @@ interface MetadataRecord {
   readonly patch: MaxforgePatchInfo;
 }
 
-interface IdentityResolutionRecord extends MaxforgePatchHistoryIdentityDecision {
-  readonly schemaVersion: 1;
-  readonly record: "identity-resolution";
-}
-
 export interface EditHistoryStore {
   readonly description: string;
   load(): LoadedEditHistory;
@@ -142,18 +136,19 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   private readonly maxBytes: number;
   private readonly maxAgeMilliseconds: number;
   private readonly chunkBytes: number;
+  private readonly identityLedger: PatchHistoryIdentityLedger;
   private readonly sessions = new Map<string, SessionState>();
   private readonly metadata = new Map<string, PersistedPatchMetadata[]>();
-  private readonly knownIdentities = new Set<string>();
-  private readonly identityAliases = new Map<string, string>();
-  private readonly forgottenIdentities = new Set<string>();
-  private readonly identityDecisions: MaxforgePatchHistoryIdentityDecision[] = [];
   private readonly warnings: string[] = [];
 
   constructor(options: EditHistoryStoreOptions) {
     this.directory = resolve(options.directory);
     this.description = this.directory;
     this.project = { ...options.project };
+    this.identityLedger = new PatchHistoryIdentityLedger(
+      this.directory,
+      this.project.id
+    );
     this.maxBytes = positiveInteger(
       options.maxBytes ?? DEFAULT_MAX_BYTES,
       "edit history maxBytes"
@@ -176,13 +171,9 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     this.ensureDirectory();
     this.warnings.length = 0;
     this.sessions.clear();
-    this.knownIdentities.clear();
-    this.identityAliases.clear();
-    this.forgottenIdentities.clear();
-    this.identityDecisions.length = 0;
     this.prune(new Set());
     this.metadata.clear();
-    this.readIdentityResolutions();
+    this.warnings.push(...this.identityLedger.load());
     const observations: MaxforgeRetainedEditObservation[] = [];
     for (const path of this.historyFiles()) {
       this.readHistoryFile(path, observations);
@@ -218,7 +209,10 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     };
     this.openChunk(state);
     this.sessions.set(patch.sessionId, state);
-    this.knownIdentities.add(targetKey(patch.patcherId, patch.scope));
+    this.identityLedger.observe({
+      patcherId: patch.patcherId,
+      scope: patch.scope,
+    });
     this.addMetadata(metadataFromPatch(
       this.project.id,
       patch,
@@ -298,14 +292,10 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     patcherId: string,
     scope: string
   ): readonly PersistedPatchMetadata[] {
-    const requested = targetKey(patcherId, scope);
-    const canonical = this.canonicalIdentityKey(requested);
-    if (this.forgottenIdentities.has(canonical)) return [];
+    const requested = { patcherId, scope };
+    if (this.identityLedger.isForgotten(requested)) return [];
     return [...this.metadata.entries()]
-      .filter(([key]) =>
-        !this.isForgottenIdentity(key) &&
-        this.canonicalIdentityKey(key) === canonical
-      )
+      .filter(([key]) => this.identityLedger.matches(identityFromKey(key), requested))
       .flatMap(([, entries]) => entries)
       .sort((left, right) => left.observedAt.localeCompare(right.observedAt));
   }
@@ -314,33 +304,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     patcherId: string,
     scope: string
   ): MaxforgePatchHistoryIdentityStatus {
-    validateIdentity({ patcherId, scope }, "requested patch history identity");
-    const requestedKey = targetKey(patcherId, scope);
-    const canonicalKey = this.canonicalIdentityKey(requestedKey);
-    const members = [...this.knownIdentities]
-      .filter((key) => this.canonicalIdentityKey(key) === canonicalKey)
-      .sort()
-      .map(identityFromKey);
-    const groupKeys = new Set([
-      canonicalKey,
-      ...members.map((identity) => targetKey(identity.patcherId, identity.scope)),
-    ]);
-    return {
-      projectId: this.project.id,
-      requested: { patcherId, scope },
-      canonical: identityFromKey(canonicalKey),
-      known: this.knownIdentities.has(requestedKey) || 0 < members.length,
-      forgotten: this.forgottenIdentities.has(canonicalKey),
-      aliases: members.filter((identity) =>
-        targetKey(identity.patcherId, identity.scope) !== canonicalKey
-      ),
-      decisions: this.identityDecisions.filter((decision) =>
-        groupKeys.has(targetKey(decision.source.patcherId, decision.source.scope)) ||
-        (decision.target !== undefined && groupKeys.has(
-          targetKey(decision.target.patcherId, decision.target.scope)
-        ))
-      ),
-    };
+    return this.identityLedger.status(patcherId, scope);
   }
 
   matchesPatchIdentity(
@@ -349,48 +313,16 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     requestedPatcherId: string,
     requestedScope: string
   ): boolean {
-    const historical = targetKey(historicalPatcherId, historicalScope);
-    const requested = targetKey(requestedPatcherId, requestedScope);
-    return !this.isForgottenIdentity(historical) &&
-      this.canonicalIdentityKey(historical) ===
-        this.canonicalIdentityKey(requested);
+    return this.identityLedger.matches(
+      { patcherId: historicalPatcherId, scope: historicalScope },
+      { patcherId: requestedPatcherId, scope: requestedScope }
+    );
   }
 
   resolvePatchIdentity(
     request: ResolveMaxforgePatchHistoryIdentityRequest
   ): ResolveMaxforgePatchHistoryIdentityResult {
-    if (request.expectedProjectId !== this.project.id) {
-      throw new Error(
-        `Expected project id ${request.expectedProjectId}, but edit history belongs to ${this.project.id}`
-      );
-    }
-    validateIdentityResolutionRequest(request);
-    const decision: MaxforgePatchHistoryIdentityDecision = {
-      action: request.action,
-      source: { ...request.source },
-      ...(request.target ? { target: { ...request.target } } : {}),
-      reason: request.reason,
-      resolvedAt: request.resolvedAt ?? new Date().toISOString(),
-    };
-    this.validateNewIdentityDecision(decision);
-    this.ensureDirectory();
-    appendFileSync(this.identityResolutionPath(), jsonLine({
-      schemaVersion: 1,
-      record: "identity-resolution",
-      ...decision,
-    } satisfies IdentityResolutionRecord), {
-      encoding: "utf8",
-      mode: 0o600,
-      flag: "a",
-    });
-    chmodSync(this.identityResolutionPath(), 0o600);
-    this.applyIdentityDecision(decision);
-    const selected = decision.target ?? decision.source;
-    return {
-      ...this.patchIdentity(selected.patcherId, selected.scope),
-      action: decision.action,
-      physicalDataErased: false,
-    };
+    return this.identityLedger.resolve(request);
   }
 
   status(): EditHistoryStoreStatus {
@@ -451,10 +383,10 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       );
       return;
     }
-    this.knownIdentities.add(targetKey(
-      header.patch.patcherId,
-      header.patch.scope
-    ));
+    this.identityLedger.observe({
+      patcherId: header.patch.patcherId,
+      scope: header.patch.scope,
+    });
     this.addMetadata(metadataFromPatch(
       this.project.id,
       header.patch,
@@ -542,7 +474,10 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
 
   private addMetadata(metadata: PersistedPatchMetadata): void {
     const key = targetKey(metadata.patcherId, metadata.scope);
-    this.knownIdentities.add(key);
+    this.identityLedger.observe({
+      patcherId: metadata.patcherId,
+      scope: metadata.scope,
+    });
     const entries = this.metadata.get(key) ?? [];
     const duplicate = entries.some((entry) =>
       entry.sessionId === metadata.sessionId &&
@@ -556,153 +491,17 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     }
   }
 
-  private readIdentityResolutions(): void {
-    const path = this.identityResolutionPath();
-    let source: string;
-    try {
-      source = readFileSync(path, "utf8");
-    } catch (error) {
-      if (isMissingFileError(error)) return;
-      throw error;
-    }
-    const lines = source.split("\n");
-    if (lines.at(-1) === "") lines.pop();
-    for (let index = 0; index < lines.length; index++) {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(lines[index]);
-      } catch (error) {
-        if (index === lines.length - 1) {
-          this.warn(`${path}: ignored incomplete final identity resolution`);
-          return;
-        }
-        this.warn(
-          `${path}: invalid identity resolution ${index + 1}: ${errorMessage(error)}`
-        );
-        continue;
-      }
-      const decision = parseIdentityResolutionRecord(raw);
-      if (!decision) {
-        this.warn(`${path}: ignored invalid identity resolution ${index + 1}`);
-        continue;
-      }
-      try {
-        this.applyIdentityDecision(decision);
-      } catch (error) {
-        this.warn(
-          `${path}: ignored identity resolution ${index + 1}: ${errorMessage(error)}`
-        );
-      }
-    }
-  }
-
-  private identityResolutionPath(): string {
-    return join(this.directory, "identity-resolutions-v1.ndjson");
-  }
-
-  private validateNewIdentityDecision(
-    decision: MaxforgePatchHistoryIdentityDecision
-  ): void {
-    const sourceKey = targetKey(
-      decision.source.patcherId,
-      decision.source.scope
-    );
-    const canonicalSource = this.canonicalIdentityKey(sourceKey);
-    if (canonicalSource !== sourceKey) {
-      throw new Error(
-        `Patch history identity ${formatIdentity(decision.source)} is already an alias of ${formatIdentity(identityFromKey(canonicalSource))}`
-      );
-    }
-    if (!this.knownIdentities.has(sourceKey)) {
-      throw new Error(
-        `Patch history identity ${formatIdentity(decision.source)} is not known`
-      );
-    }
-    if (this.forgottenIdentities.has(sourceKey)) {
-      throw new Error(
-        `Patch history identity ${formatIdentity(decision.source)} is already forgotten`
-      );
-    }
-    if (decision.action === "forget") return;
-    const target = decision.target!;
-    const targetKeyValue = targetKey(target.patcherId, target.scope);
-    if (this.canonicalIdentityKey(targetKeyValue) !== targetKeyValue) {
-      throw new Error(
-        `Target patch history identity ${formatIdentity(target)} is already an alias`
-      );
-    }
-    if (this.forgottenIdentities.has(targetKeyValue)) {
-      throw new Error(
-        `Target patch history identity ${formatIdentity(target)} is forgotten`
-      );
-    }
-    if (decision.action === "rekey" && this.knownIdentities.has(targetKeyValue)) {
-      throw new Error(
-        `Rekey requires an unused target identity; ${formatIdentity(target)} is already known. Use merge only after confirming both identities are the same patch.`
-      );
-    }
-    if (decision.action === "merge" && !this.knownIdentities.has(targetKeyValue)) {
-      throw new Error(
-        `Merge requires a known target identity; ${formatIdentity(target)} is not known`
-      );
-    }
-  }
-
-  private applyIdentityDecision(
-    decision: MaxforgePatchHistoryIdentityDecision
-  ): void {
-    const sourceKey = targetKey(
-      decision.source.patcherId,
-      decision.source.scope
-    );
-    const canonicalSource = this.canonicalIdentityKey(sourceKey);
-    if (decision.action === "forget") {
-      this.forgottenIdentities.add(canonicalSource);
-      this.identityDecisions.push(decision);
-      return;
-    }
-    const target = decision.target;
-    if (!target) throw new Error(`${decision.action} requires a target identity`);
-    if (decision.source.scope !== target.scope) {
-      throw new Error("Patch history identity resolution requires the same scope");
-    }
-    const targetKeyValue = targetKey(target.patcherId, target.scope);
-    const canonicalTarget = this.canonicalIdentityKey(targetKeyValue);
-    if (canonicalSource === canonicalTarget) {
-      throw new Error("Patch history identity resolution cannot target itself");
-    }
-    if (this.forgottenIdentities.has(canonicalSource) ||
-        this.forgottenIdentities.has(canonicalTarget)) {
-      throw new Error("Forgotten patch history identities cannot be resolved");
-    }
-    this.identityAliases.set(canonicalSource, canonicalTarget);
-    this.knownIdentities.add(targetKeyValue);
-    this.identityDecisions.push(decision);
-  }
-
-  private canonicalIdentityKey(key: string): string {
-    const visited = new Set<string>();
-    let current = key;
-    while (this.identityAliases.has(current)) {
-      if (visited.has(current)) {
-        throw new Error("Patch history identity resolution contains a cycle");
-      }
-      visited.add(current);
-      current = this.identityAliases.get(current)!;
-    }
-    return current;
-  }
-
-  private isForgottenIdentity(key: string): boolean {
-    return this.forgottenIdentities.has(this.canonicalIdentityKey(key));
-  }
-
   private metadataWarnings(): string[] {
     const result: string[] = [];
     const pathIdentities = new Map<string, Set<string>>();
     for (const [key, entries] of this.metadata) {
-      if (this.isForgottenIdentity(key)) continue;
-      const canonical = this.canonicalIdentityKey(key);
+      const identity = identityFromKey(key);
+      if (this.identityLedger.isForgotten(identity)) continue;
+      const canonicalIdentity = this.identityLedger.canonical(identity);
+      const canonical = targetKey(
+        canonicalIdentity.patcherId,
+        canonicalIdentity.scope
+      );
       for (const entry of entries) {
         if (entry.filepath.length === 0) continue;
         const identities = pathIdentities.get(entry.filepath) ?? new Set<string>();
@@ -713,7 +512,6 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       if (saved.some((entry) => saved.some((other) =>
         entry.instanceId !== other.instanceId && entry.filepath !== other.filepath
       ))) {
-        const identity = identityFromKey(key);
         result.push(
           `patch ${identity.patcherId}:${identity.scope} changed saved path across native instances; verify move, Save As, or duplicate identity`
         );
@@ -840,53 +638,12 @@ function isMetadataRecord(
     raw.patch.instanceId === header.patch.instanceId;
 }
 
-function parseIdentityResolutionRecord(
-  raw: unknown
-): MaxforgePatchHistoryIdentityDecision | undefined {
-  if (
-    !isRecord(raw) ||
-    raw.schemaVersion !== 1 ||
-    raw.record !== "identity-resolution" ||
-    (raw.action !== "rekey" &&
-      raw.action !== "merge" &&
-      raw.action !== "forget") ||
-    !isIdentity(raw.source) ||
-    typeof raw.reason !== "string" ||
-    raw.reason.trim().length === 0 ||
-    raw.reason.length > 512 ||
-    typeof raw.resolvedAt !== "string" ||
-    !Number.isFinite(Date.parse(raw.resolvedAt))
-  ) {
-    return undefined;
-  }
-  if (raw.action === "forget") {
-    if (raw.target !== undefined) return undefined;
-  } else if (!isIdentity(raw.target) || raw.target.scope !== raw.source.scope) {
-    return undefined;
-  }
-  return {
-    action: raw.action,
-    source: raw.source,
-    ...(raw.target ? { target: raw.target } : {}),
-    reason: raw.reason,
-    resolvedAt: raw.resolvedAt,
-  };
-}
-
 function isProjectIdentity(value: unknown): value is ProjectIdentity {
   return isRecord(value) &&
     typeof value.id === "string" &&
     value.id.length <= 128 &&
     IDENTIFIER_PATTERN.test(value.id) &&
     (value.name === undefined || typeof value.name === "string");
-}
-
-function isIdentity(value: unknown): value is MaxforgePatchHistoryIdentity {
-  return isRecord(value) &&
-    typeof value.patcherId === "string" &&
-    IDENTIFIER_PATTERN.test(value.patcherId) &&
-    typeof value.scope === "string" &&
-    IDENTIFIER_PATTERN.test(value.scope);
 }
 
 function isPatchInfo(value: unknown): value is MaxforgePatchInfo {
@@ -1005,37 +762,6 @@ function validatePatchInfo(patch: MaxforgePatchInfo): void {
   if (!isPatchInfo(patch)) throw new Error("Invalid edit-history patch identity");
 }
 
-function validateIdentity(
-  identity: MaxforgePatchHistoryIdentity,
-  label: string
-): void {
-  if (!isIdentity(identity)) throw new Error(`Invalid ${label}`);
-}
-
-function validateIdentityResolutionRequest(
-  request: ResolveMaxforgePatchHistoryIdentityRequest
-): void {
-  validateIdentity(request.source, "source patch history identity");
-  if (request.reason.trim().length === 0 || request.reason.length > 512) {
-    throw new Error("Patch history identity resolution reason must contain 1 to 512 characters");
-  }
-  const resolvedAt = request.resolvedAt ?? new Date().toISOString();
-  validateTimestamp(resolvedAt, "patch history identity resolution");
-  if (request.action === "forget") {
-    if (request.target !== undefined) {
-      throw new Error("Forget must not include a target identity");
-    }
-    return;
-  }
-  if (!request.target) {
-    throw new Error(`${request.action} requires a target identity`);
-  }
-  validateIdentity(request.target, "target patch history identity");
-  if (request.source.scope !== request.target.scope) {
-    throw new Error("Patch history identity resolution requires the same scope");
-  }
-}
-
 function validateBaseline(baseline: MaxforgeObservationBaseline): void {
   if (!isBaseline(baseline)) throw new Error("Invalid edit-history session baseline");
 }
@@ -1099,10 +825,6 @@ function identityFromKey(key: string): MaxforgePatchHistoryIdentity {
     patcherId: key.slice(0, separator),
     scope: key.slice(separator + 1),
   };
-}
-
-function formatIdentity(identity: MaxforgePatchHistoryIdentity): string {
-  return `${identity.patcherId}:${identity.scope}`;
 }
 
 function jsonLine(value: unknown): string {
