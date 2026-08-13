@@ -169,6 +169,22 @@ export interface ResolveMaxforgePatchHistoryIdentityResult
   readonly physicalDataErased: false;
 }
 
+export interface EraseMaxforgeProjectHistoryRequest {
+  readonly expectedProjectId: string;
+  readonly confirmation: string;
+}
+
+export interface EraseMaxforgeProjectHistoryResult {
+  readonly projectId: string;
+  readonly location: string;
+  readonly filesDeleted: number;
+  readonly bytesDeleted: number;
+  readonly retainedObservationsCleared: number;
+  readonly directoryRemoved: boolean;
+  readonly physicalDataDeleted: true;
+  readonly secureOverwriteGuaranteed: false;
+}
+
 export interface MaxforgeEditHistoryPersistence {
   readonly enabled: boolean;
   readonly projectId: string | null;
@@ -280,6 +296,7 @@ export interface PatchPlanTransport {
     patcherId: string,
     scope: string
   ): MaxforgeEditObservationHistory;
+  clearEditObservationHistory(): number;
   createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo>;
   openPatch(request: OpenMaxPatchRequest): Promise<MaxforgePatchInfo>;
   savePatch(request: SaveMaxPatchRequest): Promise<MaxforgePatchSavedEvent>;

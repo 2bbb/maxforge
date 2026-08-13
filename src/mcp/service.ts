@@ -11,6 +11,8 @@ import {
   reconstructManagedGraph,
 } from "./reconcile.js";
 import {
+  EraseMaxforgeProjectHistoryRequest,
+  EraseMaxforgeProjectHistoryResult,
   MaxforgeAppliedEvent,
   MaxforgeEditObservationCause,
   MaxforgeEditHistoryPersistence,
@@ -426,6 +428,31 @@ export class MaxforgePatchService {
       );
     }
     return store.resolvePatchIdentity(request);
+  }
+
+  eraseProjectHistory(
+    request: EraseMaxforgeProjectHistoryRequest
+  ): EraseMaxforgeProjectHistoryResult {
+    const store = this.requireEditHistoryStore();
+    const status = this.transport.getStatus();
+    if (status.connectedClients > 0 || status.registeredPatches.length > 0) {
+      throw new Error(
+        "Cannot erase project history while any Max WebSocket client is connected. " +
+        "Close every maxforge.sync patch first."
+      );
+    }
+    const erased = store.eraseProjectHistory(
+      request.expectedProjectId,
+      request.confirmation
+    );
+    const retainedObservationsCleared =
+      this.transport.clearEditObservationHistory();
+    return {
+      ...erased,
+      retainedObservationsCleared,
+      physicalDataDeleted: true,
+      secureOverwriteGuaranteed: false,
+    };
   }
 
   async reviewLiveChanges(

@@ -811,6 +811,10 @@ class FakeTransport implements PatchPlanTransport {
     };
   }
 
+  clearEditObservationHistory(): number {
+    return 0;
+  }
+
   async createPatch(
     request: CreateMaxPatchRequest
   ): Promise<MaxforgePatchInfo> {

@@ -391,6 +391,23 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     };
   }
 
+  clearEditObservationHistory(): number {
+    const connectedClients = [...this.clients].filter(
+      (client) => client.readyState === WebSocket.OPEN
+    ).length;
+    if (connectedClients > 0) {
+      throw new Error(
+        "Cannot erase project history while a Max WebSocket client is connected"
+      );
+    }
+    const cleared = this.editObservations.length;
+    this.editObservations.length = 0;
+    this.droppedEditEvents.clear();
+    this.nextEditSequence = 1;
+    this.editObservationBytes = 0;
+    return cleared;
+  }
+
   async createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo> {
     this.validateNewPatchRequest(request, "Creation");
     const controller = this.getSingleController();

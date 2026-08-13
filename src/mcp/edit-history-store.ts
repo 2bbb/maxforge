@@ -4,12 +4,13 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmdirSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ProjectIdentity } from "../core/catalog-config.js";
 import type {
   MaxforgeEditObservedEvent,
@@ -61,6 +62,14 @@ export interface EditHistoryStoreStatus {
   readonly projectId: string;
   readonly location: string;
   readonly warnings: readonly string[];
+}
+
+export interface ErasedEditHistory {
+  readonly projectId: string;
+  readonly location: string;
+  readonly filesDeleted: number;
+  readonly bytesDeleted: number;
+  readonly directoryRemoved: boolean;
 }
 
 interface SessionState {
@@ -126,6 +135,10 @@ export interface EditHistoryStore {
   resolvePatchIdentity(
     request: ResolveMaxforgePatchHistoryIdentityRequest
   ): ResolveMaxforgePatchHistoryIdentityResult;
+  eraseProjectHistory(
+    expectedProjectId: string,
+    confirmation: string
+  ): ErasedEditHistory;
   status(): EditHistoryStoreStatus;
 }
 
@@ -325,6 +338,47 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     return this.identityLedger.resolve(request);
   }
 
+  eraseProjectHistory(
+    expectedProjectId: string,
+    confirmation: string
+  ): ErasedEditHistory {
+    if (expectedProjectId !== this.project.id) {
+      throw new Error(
+        `Expected project id ${expectedProjectId}, but edit history belongs to ${this.project.id}`
+      );
+    }
+    const expectedConfirmation = `ERASE PROJECT HISTORY ${this.project.id}`;
+    if (confirmation !== expectedConfirmation) {
+      throw new Error(
+        `Project history erasure requires exact confirmation: ${expectedConfirmation}`
+      );
+    }
+
+    const files = this.ownedHistoryFiles();
+    const bytesDeleted = files.reduce(
+      (total, path) => total + statSync(path).size,
+      0
+    );
+    const directories = [...new Set(files.map(dirname))]
+      .filter((path) => path !== this.directory)
+      .sort((left, right) => right.length - left.length);
+    for (const path of files) rmSync(path, { force: true });
+    for (const path of directories) removeEmptyDirectory(path);
+    const directoryRemoved = removeEmptyDirectory(this.directory);
+
+    this.sessions.clear();
+    this.metadata.clear();
+    this.warnings.length = 0;
+    this.identityLedger.load();
+    return {
+      projectId: this.project.id,
+      location: this.directory,
+      filesDeleted: files.length,
+      bytesDeleted,
+      directoryRemoved,
+    };
+  }
+
   status(): EditHistoryStoreStatus {
     return {
       enabled: true,
@@ -459,6 +513,29 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
           entry.name.endsWith(".ndjson") &&
           entry.name !== "identity-resolutions-v1.ndjson"
         )
+        .map((entry) => join(entry.parentPath, entry.name))
+        .sort();
+    } catch (error) {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    }
+  }
+
+  private ownedHistoryFiles(): string[] {
+    try {
+      return readdirSync(this.directory, { recursive: true, withFileTypes: true })
+        .filter((entry) => {
+          if (!entry.isFile()) return false;
+          if (
+            entry.parentPath === this.directory &&
+            entry.name === "identity-resolutions-v1.ndjson"
+          ) return true;
+          return dirname(entry.parentPath) === this.directory &&
+            /^[A-Za-z_][A-Za-z0-9_-]*--[A-Za-z_][A-Za-z0-9_-]*$/.test(
+              basename(entry.parentPath)
+            ) &&
+            /^\d+-[A-Za-z0-9_-]{1,128}-\d{6}\.ndjson$/.test(entry.name);
+        })
         .map((entry) => join(entry.parentPath, entry.name))
         .sort();
     } catch (error) {
@@ -875,6 +952,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error.code === "ENOENT";
+}
+
+function removeEmptyDirectory(path: string): boolean {
+  try {
+    rmdirSync(path);
+    return true;
+  } catch (error) {
+    if (
+      isRecord(error) &&
+      (error.code === "ENOENT" || error.code === "ENOTEMPTY")
+    ) return error.code === "ENOENT";
+    throw error;
+  }
 }
 
 function errorMessage(error: unknown): string {

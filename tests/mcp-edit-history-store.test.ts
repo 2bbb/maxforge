@@ -4,6 +4,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -316,6 +317,57 @@ describe("JsonLinesEditHistoryStore", () => {
       "voices"
     )).toBe(false);
     expect(historyFiles(directory)).not.toEqual([]);
+  });
+
+  it("physically deletes only owned project history after exact confirmation", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+    store.load();
+    store.startSession(
+      patchInfo(),
+      observationBaseline(),
+      "2026-08-11T00:00:00.000Z"
+    );
+    store.resolvePatchIdentity({
+      action: "rekey",
+      expectedProjectId: "studio_patchset",
+      source: { patcherId: "patch-a", scope: "voices" },
+      target: { patcherId: "patch-renamed", scope: "voices" },
+      reason: "Create an identity ledger before erasure",
+      resolvedAt: "2026-08-11T00:00:03.000Z",
+    });
+    const unrelated = join(directory, "keep-me.txt");
+    writeFileSync(unrelated, "not maxforge history\n", "utf8");
+
+    expect(() => store.eraseProjectHistory(
+      "studio_patchset",
+      "erase it"
+    )).toThrow("exact confirmation");
+    expect(historyFiles(directory)).toHaveLength(2);
+
+    const erased = store.eraseProjectHistory(
+      "studio_patchset",
+      "ERASE PROJECT HISTORY studio_patchset"
+    );
+
+    expect(erased).toMatchObject({
+      projectId: "studio_patchset",
+      location: directory,
+      filesDeleted: 2,
+      directoryRemoved: false,
+    });
+    expect(erased.bytesDeleted).toBeGreaterThan(0);
+    expect(historyFiles(directory)).toEqual([]);
+    expect(statSync(unrelated).isFile()).toBe(true);
+    expect(store.patchIdentity("patch-renamed", "voices")).toMatchObject({
+      known: false,
+      forgotten: false,
+      aliases: [],
+      decisions: [],
+    });
   });
 
   it("rejects unsafe or ambiguous identity resolutions", () => {

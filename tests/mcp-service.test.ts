@@ -242,6 +242,55 @@ describe("MaxforgePatchService", () => {
     }
   });
 
+  it("erases disconnected project history from disk and retained memory", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-service-erasure-"));
+    try {
+      const transport = new FakeTransport();
+      transport.connectedClients = 0;
+      transport.retainedHistoryCount = 3;
+      const store = new JsonLinesEditHistoryStore({
+        directory,
+        project: { id: "studio_patchset" },
+      });
+      store.load();
+      store.startSession({
+        patcherId: "patch-a",
+        scope: "voices",
+        instanceId: "instance-a",
+        sessionId: "session-a",
+        revision: null,
+        controller: false,
+        title: "Patch A",
+        filename: "patch-a.maxpat",
+        filepath: "/project/patch-a.maxpat",
+        capabilities: ["edit_observation_v1", "session_baseline_v1"],
+      }, {
+        structureToken: "0".repeat(16),
+        patcher: transport.snapshot,
+      }, "2026-08-13T00:00:00.000Z");
+      const service = new MaxforgePatchService(
+        new DslPatchAdapter(database),
+        transport,
+        undefined,
+        store
+      );
+
+      expect(service.eraseProjectHistory({
+        expectedProjectId: "studio_patchset",
+        confirmation: "ERASE PROJECT HISTORY studio_patchset",
+      })).toMatchObject({
+        projectId: "studio_patchset",
+        filesDeleted: 1,
+        retainedObservationsCleared: 3,
+        physicalDataDeleted: true,
+        secureOverwriteGuaranteed: false,
+      });
+      expect(transport.retainedHistoryCount).toBe(0);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);
@@ -1234,6 +1283,8 @@ class FakeTransport implements PatchPlanTransport {
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
   patches: readonly MaxforgePatchInfo[] = [];
+  connectedClients = 1;
+  retainedHistoryCount = 0;
   editHistory: MaxforgeEditObservationHistory = {
     supported: true,
     droppedEvents: 0,
@@ -1289,6 +1340,12 @@ class FakeTransport implements PatchPlanTransport {
 
   getEditObservationHistory(): MaxforgeEditObservationHistory {
     return this.editHistory;
+  }
+
+  clearEditObservationHistory(): number {
+    const cleared = this.retainedHistoryCount;
+    this.retainedHistoryCount = 0;
+    return cleared;
   }
 
   async createPatch(
@@ -1360,7 +1417,7 @@ class FakeTransport implements PatchPlanTransport {
     return {
       host: "127.0.0.1",
       port: 8766,
-      connectedClients: 1,
+      connectedClients: this.connectedClients,
       registeredPatches: [],
       liveRevisions: Object.fromEntries(this.liveRevisions),
       editHistoryPersistence: disabledHistoryPersistence(),
