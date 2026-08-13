@@ -181,7 +181,7 @@ export interface EraseMaxforgeProjectHistoryResult {
   readonly bytesDeleted: number;
   readonly retainedObservationsCleared: number;
   readonly directoryRemoved: boolean;
-  readonly physicalDataDeleted: true;
+  readonly physicalDataDeleted: boolean;
   readonly secureOverwriteGuaranteed: false;
 }
 

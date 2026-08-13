@@ -336,7 +336,7 @@ const projectHistoryErasureSchema = z.object({
   bytesDeleted: z.number().int().nonnegative(),
   retainedObservationsCleared: z.number().int().nonnegative(),
   directoryRemoved: z.boolean(),
-  physicalDataDeleted: z.literal(true),
+  physicalDataDeleted: z.boolean(),
   secureOverwriteGuaranteed: z.literal(false),
 });
 

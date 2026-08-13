@@ -286,6 +286,14 @@ describe("MaxforgePatchService", () => {
         secureOverwriteGuaranteed: false,
       });
       expect(transport.retainedHistoryCount).toBe(0);
+      expect(service.eraseProjectHistory({
+        expectedProjectId: "studio_patchset",
+        confirmation: "ERASE PROJECT HISTORY studio_patchset",
+      })).toMatchObject({
+        filesDeleted: 0,
+        retainedObservationsCleared: 0,
+        physicalDataDeleted: false,
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -450,7 +450,7 @@ export class MaxforgePatchService {
     return {
       ...erased,
       retainedObservationsCleared,
-      physicalDataDeleted: true,
+      physicalDataDeleted: erased.filesDeleted > 0,
       secureOverwriteGuaranteed: false,
     };
   }
