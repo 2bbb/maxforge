@@ -1,7 +1,9 @@
 import {
   appendFileSync,
   chmodSync,
+  closeSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   rmdirSync,
@@ -11,6 +13,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { ProjectIdentity } from "../core/catalog-config.js";
 import type {
   MaxforgeEditObservedEvent,
@@ -30,6 +33,7 @@ const DEFAULT_CHUNK_BYTES = 16 * 1024 * 1024;
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const STRUCTURE_TOKEN_PATTERN = /^[a-f0-9]{16}$/;
+const WRITER_LEASE_FILENAME = "writer-v1.lock";
 
 export interface EditHistoryStoreOptions {
   readonly directory: string;
@@ -107,8 +111,18 @@ interface MetadataRecord {
   readonly patch: MaxforgePatchInfo;
 }
 
+interface WriterLease {
+  readonly schemaVersion: 1;
+  readonly projectId: string;
+  readonly pid: number;
+  readonly token: string;
+  readonly acquiredAt: string;
+}
+
 export interface EditHistoryStore {
   readonly description: string;
+  acquireWriterLease(): void;
+  releaseWriterLease(): void;
   load(): LoadedEditHistory;
   startSession(
     patch: MaxforgePatchInfo,
@@ -153,6 +167,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   private readonly sessions = new Map<string, SessionState>();
   private readonly metadata = new Map<string, PersistedPatchMetadata[]>();
   private readonly warnings: string[] = [];
+  private writerLeaseToken: string | undefined;
 
   constructor(options: EditHistoryStoreOptions) {
     this.directory = resolve(options.directory);
@@ -178,6 +193,55 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     if (this.maxBytes < this.chunkBytes) {
       throw new Error("edit history chunkBytes cannot exceed maxBytes");
     }
+  }
+
+  acquireWriterLease(): void {
+    if (this.writerLeaseToken) {
+      throw new Error(`Edit-history writer lease is already held by this store`);
+    }
+    this.ensureDirectory();
+    const token = randomUUID();
+    const source = `${JSON.stringify({
+      schemaVersion: 1,
+      projectId: this.project.id,
+      pid: process.pid,
+      token,
+      acquiredAt: new Date().toISOString(),
+    })}\n`;
+    const path = this.writerLeasePath();
+    let created = false;
+    try {
+      const descriptor = openSync(path, "wx", 0o600);
+      created = true;
+      try {
+        writeFileSync(descriptor, source, "utf8");
+      } finally {
+        closeSync(descriptor);
+      }
+      this.writerLeaseToken = token;
+    } catch (error) {
+      if (created) rmSync(path, { force: true });
+      if (!isAlreadyExistsError(error)) throw error;
+      throw new Error(
+        `Edit history ${this.directory} already has an active writer lease. ` +
+        "Use one maxforge-mcp process per project; if the prior process crashed, " +
+        `verify it is stopped before removing ${path}.`
+      );
+    }
+  }
+
+  releaseWriterLease(): void {
+    const token = this.writerLeaseToken;
+    if (!token) return;
+    this.writerLeaseToken = undefined;
+    const path = this.writerLeasePath();
+    try {
+      const lease = parseWriterLease(readFileSync(path, "utf8"));
+      if (lease?.token === token) rmSync(path, { force: true });
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+    }
+    removeEmptyDirectory(this.directory);
   }
 
   load(): LoadedEditHistory {
@@ -415,6 +479,10 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       flag: "wx",
     });
     state.bytes = Buffer.byteLength(source);
+  }
+
+  private writerLeasePath(): string {
+    return join(this.directory, WRITER_LEASE_FILENAME);
   }
 
   private readHistoryFile(
@@ -952,6 +1020,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error.code === "ENOENT";
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return isRecord(error) && error.code === "EEXIST";
+}
+
+function parseWriterLease(source: string): WriterLease | undefined {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(source);
+  } catch {
+    return undefined;
+  }
+  if (
+    !isRecord(raw) ||
+    raw.schemaVersion !== 1 ||
+    typeof raw.projectId !== "string" ||
+    !Number.isSafeInteger(raw.pid) ||
+    (raw.pid as number) <= 0 ||
+    typeof raw.token !== "string" ||
+    raw.token.length === 0 ||
+    typeof raw.acquiredAt !== "string" ||
+    !Number.isFinite(Date.parse(raw.acquiredAt))
+  ) return undefined;
+  return raw as unknown as WriterLease;
 }
 
 function removeEmptyDirectory(path: string): boolean {

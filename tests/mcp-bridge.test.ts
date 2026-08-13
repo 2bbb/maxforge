@@ -531,6 +531,31 @@ describe("MaxforgeWebSocketBridge", () => {
       });
   });
 
+  it("enforces one active bridge writer per project history directory", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-bridge-writer-"));
+    temporaryDirectories.push(directory);
+    const firstBridge = createBridge(new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    }));
+    const secondBridge = createBridge(new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    }));
+
+    await firstBridge.start();
+    await expect(secondBridge.start()).rejects.toThrow(
+      "already has an active writer lease"
+    );
+    await firstBridge.close();
+    await expect(secondBridge.start()).resolves.toMatchObject({
+      editHistoryPersistence: {
+        enabled: true,
+        projectId: "studio_patchset",
+      },
+    });
+  });
+
   it("queries original evidence through an explicitly rekeyed history identity", async () => {
     const directory = mkdtempSync(join(tmpdir(), "maxforge-bridge-rekey-"));
     temporaryDirectories.push(directory);

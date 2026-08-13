@@ -291,6 +291,31 @@ describe("MaxforgePatchService", () => {
     }
   });
 
+  it("rejects project history erasure while any Max client is connected", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-service-erasure-"));
+    try {
+      const transport = new FakeTransport();
+      const store = new JsonLinesEditHistoryStore({
+        directory,
+        project: { id: "studio_patchset" },
+      });
+      store.load();
+      const service = new MaxforgePatchService(
+        new DslPatchAdapter(database),
+        transport,
+        undefined,
+        store
+      );
+
+      expect(() => service.eraseProjectHistory({
+        expectedProjectId: "studio_patchset",
+        confirmation: "ERASE PROJECT HISTORY studio_patchset",
+      })).toThrow("while any Max WebSocket client is connected");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("advances remembered desired state only after Max acknowledges an apply", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);

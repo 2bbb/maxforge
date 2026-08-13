@@ -370,6 +370,21 @@ describe("JsonLinesEditHistoryStore", () => {
     });
   });
 
+  it("does not replace another writer lease and releases only its own", () => {
+    const directory = temporaryDirectory();
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    });
+
+    store.acquireWriterLease();
+    expect(() => new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+    }).acquireWriterLease()).toThrow("active writer lease");
+    store.releaseWriterLease();
+  });
+
   it("rejects unsafe or ambiguous identity resolutions", () => {
     const directory = temporaryDirectory();
     const store = new JsonLinesEditHistoryStore({

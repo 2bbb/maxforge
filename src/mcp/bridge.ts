@@ -143,6 +143,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private nextEditSequence = 1;
   private editObservationBytes = 0;
   private readonly persistenceWarnings: string[] = [];
+  private writerLeaseHeld = false;
 
   constructor(
     options: MaxforgeBridgeOptions = {},
@@ -181,79 +182,93 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
 
     if (this.editHistoryStore) {
-      try {
-        const restored = this.editHistoryStore.load();
-        for (const observation of restored.observations) {
-          const byteSize = Buffer.byteLength(JSON.stringify(observation.event));
-          this.editObservations.push({
-            ...observation,
-            patcherId: observation.event.patcherId,
-            scope: observation.event.scope,
-            byteSize,
-          });
-          this.editObservationBytes += byteSize;
+      this.editHistoryStore.acquireWriterLease();
+      this.writerLeaseHeld = true;
+    }
+
+    try {
+      if (this.editHistoryStore) {
+        try {
+          const restored = this.editHistoryStore.load();
+          for (const observation of restored.observations) {
+            const byteSize = Buffer.byteLength(JSON.stringify(observation.event));
+            this.editObservations.push({
+              ...observation,
+              patcherId: observation.event.patcherId,
+              scope: observation.event.scope,
+              byteSize,
+            });
+            this.editObservationBytes += byteSize;
+          }
+          this.nextEditSequence = restored.nextSequence;
+          this.trimEditObservations();
+        } catch (error) {
+          this.recordPersistenceWarning(error);
         }
-        this.nextEditSequence = restored.nextSequence;
-        this.trimEditObservations();
-      } catch (error) {
-        this.recordPersistenceWarning(error);
       }
+
+      const server = new WebSocketServer({
+        host: this.host,
+        port: this.requestedPort,
+        maxPayload: MAX_MESSAGE_BYTES,
+      });
+      this.server = server;
+      server.on("connection", (client) => this.addClient(client));
+
+      await new Promise<void>((resolve, reject) => {
+        const handleListening = () => {
+          server.off("error", handleStartupError);
+          resolve();
+        };
+        const handleStartupError = (error: Error) => {
+          server.off("listening", handleListening);
+          this.server = undefined;
+          reject(error);
+        };
+        server.once("listening", handleListening);
+        server.once("error", handleStartupError);
+      });
+
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        await this.close();
+        throw new Error("Could not determine WebSocket listening port");
+      }
+      this.listeningPort = address.port;
+      server.on("error", (error) => this.rejectAllPending(error));
+      return this.getStatus();
+    } catch (error) {
+      this.releaseWriterLease();
+      throw error;
     }
-
-    const server = new WebSocketServer({
-      host: this.host,
-      port: this.requestedPort,
-      maxPayload: MAX_MESSAGE_BYTES,
-    });
-    this.server = server;
-    server.on("connection", (client) => this.addClient(client));
-
-    await new Promise<void>((resolve, reject) => {
-      const handleListening = () => {
-        server.off("error", handleStartupError);
-        resolve();
-      };
-      const handleStartupError = (error: Error) => {
-        server.off("listening", handleListening);
-        this.server = undefined;
-        reject(error);
-      };
-      server.once("listening", handleListening);
-      server.once("error", handleStartupError);
-    });
-
-    const address = server.address();
-    if (!address || typeof address === "string") {
-      await this.close();
-      throw new Error("Could not determine WebSocket listening port");
-    }
-    this.listeningPort = address.port;
-    server.on("error", (error) => this.rejectAllPending(error));
-    return this.getStatus();
   }
 
   async close(): Promise<void> {
     const server = this.server;
-    this.server = undefined;
-    this.listeningPort = undefined;
-    this.rejectAllPending(new Error("WebSocket bridge closed"));
+    try {
+      this.server = undefined;
+      this.listeningPort = undefined;
+      this.rejectAllPending(new Error("WebSocket bridge closed"));
 
-    for (const client of this.clients) client.terminate();
-    this.clients.clear();
-    this.authenticatedClients.clear();
-    this.registrations.clear();
-    this.clientPatcherIds.clear();
-    this.editObservations.splice(0);
-    this.droppedEditEvents.clear();
-    this.editObservationBytes = 0;
+      for (const client of this.clients) client.terminate();
+      this.clients.clear();
+      this.authenticatedClients.clear();
+      this.registrations.clear();
+      this.clientPatcherIds.clear();
+      this.editObservations.splice(0);
+      this.droppedEditEvents.clear();
+      this.editObservationBytes = 0;
 
-    if (!server) return;
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) reject(error);
-        else resolve();
+      if (!server) return;
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error);
+          else resolve();
+        });
       });
-    });
+    } finally {
+      this.releaseWriterLease();
+    }
   }
 
   async apply(
@@ -630,6 +645,12 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       ...status,
       warnings: [...status.warnings, ...this.persistenceWarnings],
     };
+  }
+
+  private releaseWriterLease(): void {
+    if (!this.writerLeaseHeld) return;
+    this.writerLeaseHeld = false;
+    this.editHistoryStore?.releaseWriterLease();
   }
 
   private addClient(client: WebSocket): void {
