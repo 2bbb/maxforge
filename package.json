@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "bin": {
     "maxforge": "dist/cli/index.js",
-    "maxforge-mcp": "dist/mcp/server.js"
+    "maxforge-mcp": "dist/mcp/bin.js"
   },
   "scripts": {
     "build": "tsc",
@@ -15,7 +15,7 @@
     "pretest": "npm run build",
     "pretest:coverage": "npm run build",
     "dev": "tsc --watch",
-    "mcp": "node dist/mcp/server.js",
+    "mcp": "node dist/mcp/bin.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/vitest run --coverage",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",

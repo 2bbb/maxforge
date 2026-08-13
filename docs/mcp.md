@@ -36,7 +36,7 @@ the protocol channel.
 
 ```bash
 npm run build
-node dist/mcp/server.js
+node dist/mcp/bin.js
 ```
 
 Published-package MCP configuration:

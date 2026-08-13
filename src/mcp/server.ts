@@ -1,8 +1,4 @@
-#!/usr/bin/env node
-
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { loadObjectCatalog } from "../core/catalog-config.js";
 import { MaxforgeWebSocketBridge } from "./bridge.js";
@@ -159,17 +155,4 @@ async function packageVersion(): Promise<string> {
     version?: unknown;
   };
   return typeof packageJson.version === "string" ? packageJson.version : "unknown";
-}
-
-const executablePath = process.argv[1]
-  ? resolve(process.argv[1])
-  : undefined;
-if (
-  executablePath &&
-  resolve(fileURLToPath(import.meta.url)) === executablePath
-) {
-  void main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  });
 }

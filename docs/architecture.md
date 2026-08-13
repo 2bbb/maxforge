@@ -35,7 +35,8 @@ The rules are:
 4. `MaxforgePatchService` coordinates revisions, reconciliation, persistence,
    and transport. DSL compilation and catalog-backed box resolution are
    injected through `PatchGraphAdapter`.
-5. Entry points compose concrete implementations. `src/mcp/server.ts` owns the
+5. Entry points compose concrete implementations. `src/mcp/bin.ts` starts the
+   executable unconditionally, while `src/mcp/server.ts` owns the
    `DslPatchAdapter`, state store, WebSocket bridge, and MCP server lifecycle.
 
 ## Source boundaries
