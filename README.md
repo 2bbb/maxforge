@@ -5,748 +5,157 @@
 
 [Website](https://2bit.jp/maxforge/) · [Documentation](https://2bit.jp/maxforge/docs/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
 
-Unofficial text-first toolkit for generating and managing Max/MSP patches.
-Compile compact DSL to `.maxpat`, or reconcile it with a live patch through MCP.
+maxforge is an unofficial toolkit for describing Max patches as text. Its main
+use case is generating repeated object and connection structures that are
+tedious to build by hand.
 
-maxforge is not affiliated with, endorsed by, or sponsored by Cycling '74.
+It is not affiliated with, endorsed by, or sponsored by Cycling '74.
 
-## Overview
+## What it provides
 
-maxforge is for the boring part of Max patching: creating many similar objects,
-placing them, and wiring them consistently. Instead of duplicating objects by
-hand in the Max GUI, describe the patch as concise `.maxdsl` text and compile it
-to `.maxpat`. The experimental live-control stack can also treat that DSL as
-desired state and reconcile it with an open patch without making DSL part of the
-native transport protocol.
+The offline toolchain can:
 
-It supports:
+- compile `.maxdsl` text to `.maxpat` JSON;
+- generate repeated structures with `for`, `if`, and numeric expressions;
+- validate objects and ports against built-in or project-supplied metadata;
+- decompile supported `.maxpat` structure back to DSL; and
+- emit Max clipboard text or a portable package directory.
 
-- **Forward compilation** — `.maxdsl` → `.maxpat` JSON
-- **Reverse decompilation** — `.maxpat` → `.maxdsl` text (structure and `at(x, y)` positions round-trip verified; exact source text is not preserved)
-- **Clipboard output** — compressed text pasteable directly into Max
-- **Clipboard input** — decompress pasted patches back to DSL
-- **320 Max 9 object names/aliases with local identity evidence**, plus the project-owned `maxforge.sync` external; port metadata has explicit fixed, argument-dependent, and dynamic categories
-- **Project object catalogs** for third-party externals and reusable `.maxpat` abstractions
-- **Subpatcher support** with nested recursion
-- **Auto-layout** via topological sort, with optional `at(x, y)` position or `at(x, y, width, height)` rectangle override
-- **Bounded macro expansion** — `for`, `if`/`else`, and `${expr}` for generating large repeated patches without unbounded output
-- **Desired-state diff plans** — stable managed IDs and ordered patch operations for live patch synchronization
+The repository also contains an **experimental** live-control stack:
 
-## Quickstart
+- `maxforge-mcp`, a Node.js MCP server; and
+- `maxforge.sync`, a native Max external that inspects and mutates its
+  containing patcher.
 
-Run without installing globally:
+The live stack is a managed desired-state system, not a general Max automation
+API, Max undo replacement, or transaction engine.
+
+## Quick start
+
+Node.js 20 or newer is required for the npm tools.
 
 ```bash
 npx maxforge@latest compile input.maxdsl -o output.maxpat
 npx maxforge@latest validate input.maxdsl
-npx maxforge@latest catalog cycle~ --json
 ```
 
-Try the generative example after cloning this repository:
-
-```bash
-npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
-
-# Build a portable Max package directory with declared abstractions/externals
-npx maxforge@latest bundle input.maxdsl -o my-package
-```
-
-For repository development:
-
-```bash
-npm install
-npm run build
-```
-
-Write a patch:
+A small repeated patch:
 
 ```maxdsl
-patch "Basic Synth"
+patch "Oscillator bank"
 
-freq = number
-mt = mtof
-osc = cycle~ 440
-mul = *~ 0.5
-vol = gain~
-dac = ezdac~
-
-freq -> mt -> osc -> mul -> vol -> dac
-vol[1] -> dac[1]
-```
-
-Compile:
-
-```bash
-node dist/cli/index.js compile basic_synth.maxdsl -o basic_synth.maxpat
-```
-
-## Examples
-
-```bash
-# Basic hand-written synth patch
-npx maxforge@latest compile examples/basic_synth.maxdsl -o basic_synth.maxpat
-
-# Repeated oscillator bank generated with for/if/arithmetic
-npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
-```
-
-`examples/voice_bank.maxdsl` shows the main reason to use maxforge instead of
-manual patching: generating many similar Max objects and connections from a
-small loop.
-
-## Max / node.script integration (experimental)
-
-maxforge can emit Max `thispatcher` scripting message arrays from `.maxdsl`:
-
-```js
-// In a Max node.script file. `max-api` is provided by Max, not by maxforge.
-const maxApi = require("max-api");
-
-async function compileToThispatcher(dsl) {
-  const { compileDslToThispatcherCommands, loadDatabase } = await import("maxforge");
-  const db = await loadDatabase();
-  const result = compileDslToThispatcherCommands(dsl, db);
-
-  if (!result.success) {
-    maxApi.error(JSON.stringify(result.errors));
-    return;
-  }
-
-  for (const command of result.commands) {
-    if (command.targetPath.length === 0) {
-      maxApi.outlet(...command.message);
-    } else {
-      // Nested subpatcher commands need a Max-side router/helper.
-      maxApi.post(JSON.stringify(command));
-    }
-  }
-}
-
-maxApi.addHandler("dsl", compileToThispatcher);
-```
-
-Connect the node.script outlet to `thispatcher` for flat patch generation. When using
-`{ asSubpatcher: "Name" }` or DSL-defined `p name { ... }`, commands targeting the
-inside of the subpatcher are emitted with `targetPath`; plain `thispatcher` does not
-magically route those messages into nested patchers. Use a small Max-side router/helper
-or generate a flat patch if you need direct outlet-to-`thispatcher` operation today.
-
-A runnable smoke-test patch lives in `examples/max_node_script/`:
-
-```bash
-npm install
-npm run build
-open examples/max_node_script/maxforge_node_script_demo.maxpat
-```
-
-The harness patch itself is generated from
-`examples/max_node_script/maxforge_node_script_demo.maxdsl` with maxforge; the
-runtime payload is `examples/max_node_script/generated_patch.maxdsl`.
-
-## Managed patch synchronization (experimental)
-
-The library API can compile DSL into a scope-owned desired graph and diff it
-against the previously applied graph:
-
-```js
-import {
-  compileDslToPatchGraph,
-  createEmptyPatchGraph,
-  diffPatchGraphs,
-  loadDatabase,
-} from "maxforge";
-
-const db = await loadDatabase();
-const result = compileDslToPatchGraph(dsl, db, "voices");
-if (!result.success) throw new Error(JSON.stringify(result.errors));
-
-const current = createEmptyPatchGraph("voices");
-const plan = diffPatchGraphs(current, result.graph);
-```
-
-Plans contain ordered `disconnect`, `delete`, `create`, `set`, and `connect`
-operations. Objects use stable scripting names derived from the DSL name, so
-growing a `for` loop only creates the new instances instead of replacing the
-whole generated patch.
-
-Generate a plan from the CLI:
-
-```bash
-# Empty managed scope -> desired DSL
-npx maxforge@latest plan desired.maxdsl \
-  --scope voices \
-  --compact \
-  -o plan.json
-
-# Diff current desired DSL -> next desired DSL
-npx maxforge@latest plan next.maxdsl \
-  --scope voices \
-  --current current.maxdsl \
-  -o plan.json
-```
-
-This repository also contains the native `maxforge.sync` Max external. It owns
-the WebSocket connection to `maxforge-mcp`, validates complete plans,
-and mutates the containing patcher directly through the Max SDK. It does not
-route through JavaScript, `thispatcher`, or a separate transport object. Its
-`inspect` request walks the live containing patcher and emits a machine-readable
-structural snapshot, including text/comments and bounded serializable changed
-attributes exposed by boxes and patch cords. Volatile object values and
-opaque/structured attributes are excluded, so an agent can read patch edits
-without using the screen or a saved `.maxpat`.
-
-Plans also include reverse operations. `maxforge.sync` validates them and tries
-to restore the managed graph after a partial apply failure. This is not Max undo
-or a transaction: runtime identity, opaque state, and unmanaged boundary cords
-are not guaranteed, so every apply error still requires inspection.
-
-Build and install it for local development:
-
-```bash
-git submodule update --init --recursive
-cmake -S . -B build
-cmake --build build
-
-mkdir -p "$HOME/Documents/Max 9/Packages"
-ln -s "$PWD" "$HOME/Documents/Max 9/Packages/maxforge"
-# Restart Max after installing an external.
-```
-
-Prebuilt Max packages are available from
-[GitHub Releases](https://github.com/2bbb/maxforge/releases). `maxforge.zip`
-contains both the universal macOS `maxforge.sync.mxo` and x64 Windows
-`maxforge.sync.mxe64`, together with `package-info.json`, the `.maxhelp`, its
-supporting plan, the Max reference XML, documentation, and examples. Extract
-the top-level `maxforge` directory into the Max `Packages` directory. The
-moving `latest` release follows successful `main` builds; use a versioned
-release when the exact build must remain pinned.
-
-The macOS external is ad-hoc signed but is not notarized. It must not be
-described as Gatekeeper-safe. See [`docs/releasing.md`](docs/releasing.md) for
-CI triggers, archive validation, private-submodule credentials, and the
-versioned release procedure.
-
-Open `examples/max_sync/maxforge_sync_demo.maxpat` for an end-to-end native
-example, including managed objects inside a generated subpatcher.
-
-`maxforge.sync` auto-connects and registers after its containing top-level
-patcher has a visible view. It verifies `baseRevision` and never touches objects
-outside the exact `maxforge_<scope>_obj_...` namespace. Protocol v1 does
-attempt generated reverse operations after a runtime mutation failure, but does
-**not** guarantee transactional rollback. Its outlet remains available for
-human-readable status and local diagnostics. See
-[`docs/patch-sync.md`](docs/patch-sync.md) for the protocol and failure contract.
-
-### MCP live control
-
-`maxforge-mcp` exposes the managed workflow to MCP clients over stdio:
-
-- `maxforge_help`
-- `maxforge_status`
-- `maxforge_catalog`
-- `maxforge_reload_catalog`
-- `maxforge_list_patches`
-- `maxforge_create_patch`
-- `maxforge_open_patch`
-- `maxforge_save_patch`
-- `maxforge_close_patch`
-- `maxforge_inspect_patch`
-- `maxforge_get_live_edit_history`
-- `maxforge_get_patch_history_identity`
-- `maxforge_resolve_patch_history_identity`
-- `maxforge_erase_project_history`
-- `maxforge_review_live_changes`
-- `maxforge_adopt_live_changes`
-- `maxforge_reconcile_patch`
-- `maxforge_compile_plan`
-- `maxforge_apply_dsl`
-
-`maxforge_get_live_edit_history` returns bounded, ordered evidence captured by
-the native external while Max is being edited. Each entry is a 75 ms debounced
-structural snapshot with a monotonic sequence number and a difference against
-the exact registration-session baseline or previous observation in that
-session. It does not reconstruct Max undo actions or prove intent. With a
-stable `project.id`, append-only local history survives MCP restart; reconnect
-starts a new session boundary instead of comparing unrelated snapshots.
-Agent-authored applies and notifications that leave the
-structure token unchanged are excluded.
-
-`maxforge_review_live_changes` turns live differences into neutral evidence such
-as layout, object-configuration, annotation, ownership, and routing signals. It
-also correlates changes that share a target path and object identity into
-`editClusters`, so an Agent can reason about a structural correlation candidate
-instead of isolated diff rows. `interpretationRisks` mark mixed effects, unmanaged context,
-and ownership-boundary changes; `clarificationRecommendedFor` identifies the
-clusters most likely to need a question. These are reasoning aids, not claims
-that a structural difference proves human intent. Once the agent and human have
-accepted the managed edits, `maxforge_adopt_live_changes`
-binds adoption to the reviewed structure token, reconstructs the managed graph,
-and advances the native revision without replaying edits already made in Max.
-It returns round-trip-checked `workingDsl` for the next Agent edit. Unmanaged
-additions remain outside automatic ownership.
-
-`maxforge_reconcile_patch` performs a read-only three-way merge of the last
-agent intent, the current live Max graph, and the next complete DSL. Apply with
-`manualChanges: "merge"` only when it returns `canApply: true`. Non-conflicting
-human edits remain preserved across later reconciliations; same-field and
-change-vs-delete conflicts are never resolved by silent overwrite.
-Apply-side inspection is bound to native mutation by a structure token, so a
-box or cord edit made in between causes rejection rather than stale overwrite.
-
-By default it listens for native `maxforge.sync` clients on
-`127.0.0.1:8766`. Setting a human-chosen `MAXFORGE_WS_TOKEN` publishes the
-bridge on `0.0.0.0`; a Max instance on the LAN can connect using the MCP
-machine's address and the same `@token`. Non-loopback publication without a
-token is rejected. This is plaintext trusted-LAN authentication, not a public
-Internet service. See [`docs/mcp.md`](docs/mcp.md) for configuration.
-
-Acknowledged graphs, human-edit baselines, and unresolved applies are persisted
-atomically. A configured `project.id` scopes state under
-`~/.maxforge/projects/<project.id>/`; otherwise state uses the per-port fallback.
-Ordered edit evidence is a separate bounded NDJSON journal and is disabled
-without stable project identity. Saved paths are retained as locators, not used
-as patch IDs. Set `MAXFORGE_STATE_FILE` or `MAXFORGE_EDIT_HISTORY_DIR`
-explicitly when needed.
-
-Path ambiguity is never resolved automatically. Use
-`maxforge_get_patch_history_identity` to inspect the canonical history identity,
-aliases, prior decisions, and logical-forget state. After the human confirms the
-relationship and the source patch is closed,
-`maxforge_resolve_patch_history_identity` can `rekey` history to an unused ID,
-`merge` it into a known ID, or `forget` it from Agent-facing lookup. These
-append-only decisions affect historical lookup only: they do not rewrite the
-live `maxforge.sync` object, cross scopes, edit original evidence, or securely
-erase retained NDJSON.
-
-When retained edit evidence itself must be deleted, first close every Max patch
-using the project and then call `maxforge_erase_project_history` with the exact
-project ID and confirmation phrase `ERASE PROJECT HISTORY <project.id>`. It
-deletes maxforge-owned history chunks and the identity ledger, and clears the
-bridge's retained observations. It does not delete `.maxpat`/DSL/config files or
-the separate desired-state cache. The result reports deleted files and bytes,
-but correctly returns `secureOverwriteGuaranteed: false`: ordinary filesystem
-deletion cannot promise SSD or snapshot-level secure overwrite.
-
-Persistent history is single-writer. Bridge startup creates
-`writer-v1.lock` in the history directory and rejects another `maxforge-mcp`
-process targeting the same directory. Clean shutdown removes the matching lock.
-After a crash, maxforge deliberately does not auto-delete it: verify the PID in
-the lock is no longer running before removing the file manually. This prevents
-undefined sequence allocation and identity-ledger races; it does not implement
-multi-writer merging. If edit-history persistence is disabled, this filesystem
-guard is unavailable and one MCP writer per project remains an operator rule.
-
-Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
-and can therefore be created or operated as an independent Max window without
-ambiguity. No JavaScript or helper patch wiring runs inside Max.
-
-`maxforge_open_patch` opens an existing `.maxpat` on the Max host and injects
-one `maxforge.sync`; it refuses a patch that already contains the external.
-Apply mutates only live state: use `maxforge_save_patch` explicitly to persist
-it. Save-as refuses an existing destination unless `overwrite` is true, and a
-dirty patch cannot be closed unless `discard` is explicitly true.
-
-The npm package supplies the `maxforge-mcp` Node.js server, but it does **not**
-install the native `maxforge.sync` external into Max. Build/install the external
-and open a controller patch before expecting `maxforge_list_patches` to return a
-target.
-
-```json
-{
-  "mcpServers": {
-    "maxforge": {
-      "command": "npx",
-      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"]
-    }
-  }
-}
-```
-
-Add `MAXFORGE_CONFIG` to that server's `env` only when desired DSL uses a
-project catalog; use an absolute path.
-
-Open `examples/mcp_bridge/maxforge_mcp_bridge.maxpat` after installing the
-native external. The patch contains exactly one configured object and no patch
-cords. Agents should call `maxforge_help` with `topic: "workflow"` before their
-first mutation and `topic: "recovery"` after an ambiguous failure. See
-[`docs/mcp.md`](docs/mcp.md) for tool arguments and result contracts,
-transport lifecycle, troubleshooting, state recovery, security boundaries, and
-the acknowledgement contract.
-
-## AI agent skills
-
-List the skills exposed by this repository:
-
-```bash
-npx skills add 2bbb/maxforge --list
-```
-
-Install the offline DSL/compiler skill when the agent creates or validates
-`.maxdsl`, `.maxpat`, or `.maxhelp` files:
-
-```bash
-npx skills add 2bbb/maxforge --skill maxforge
-```
-
-Install the stricter live-control skill when the agent will inspect or mutate an
-open Max patch through MCP:
-
-```bash
-npx skills add 2bbb/maxforge --skill maxforge-mcp
-```
-
-The `maxforge-mcp` skill encodes target selection, complete desired-state
-semantics, plan review, revision acknowledgement, post-apply inspection, and
-restart/timeout/manual-drift recovery. A skill supplies agent instructions only;
-it does not install the npm server or native Max external.
-
-## CLI Reference
-
-After `npm run build`, local development can use `node dist/cli/index.js ...`.
-When installed as a package binary, use `maxforge ...`.
-
-```bash
-# DSL → maxpat
-maxforge compile input.maxdsl -o output.maxpat
-
-# DSL → compressed text (paste into Max with Ctrl+V / Cmd+V)
-maxforge compile input.maxdsl --clipboard | pbcopy
-
-# Compressed text → DSL (from stdin)
-pbpaste | maxforge from-clipboard -o output.maxdsl
-
-# maxpat → DSL (from file)
-maxforge decompile input.maxpat -o output.maxdsl
-
-# Validate without writing output
-maxforge validate input.maxdsl
-
-# Desired DSL → managed PatchPlan for maxforge.sync
-maxforge plan desired.maxdsl --scope voices --compact -o plan.json
-
-# Diff from a prior desired DSL or a scoped maxpat snapshot
-maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
-
-# Validate project object catalogs and derived abstraction ports
-maxforge doctor --input input.maxdsl
-
-# Allow objects not in the database
-maxforge compile input.maxdsl --allow-unknown -o output.maxpat
-```
-
-`--allow-unknown` creates a `newobj` with representative 1-inlet/1-outlet
-metadata and skips upper-bound port rejection. It does not verify the external's
-real shape. Use it only when Max or the external's own documentation is the
-source of truth.
-
-### Project externals and abstractions
-
-Put `maxforge.config.json` at the project root when DSL uses an external or a
-reusable `.maxpat` abstraction that is not in the bundled catalog:
-
-```json
-{
-  "$schema": "https://2bit.jp/maxforge/schema/config-v1.json",
-  "schemaVersion": 1,
-  "project": { "id": "studio_patchset", "name": "Studio Patchset" },
-  "catalogs": ["./catalogs/studio.json"],
-  "objects": [
-    {
-      "name": "vendor.filter~",
-      "kind": "external",
-      "ports": {
-        "mode": "fixed",
-        "inlets": 2,
-        "outlets": ["signal", ""]
-      }
-    }
-  ],
-  "abstractions": [
-    {
-      "name": "studio.voice",
-      "path": "./patchers/studio.voice.maxpat",
-      "ports": "derive"
-    }
-  ]
-}
-```
-
-`compile`, `validate`, `plan`, and `bundle` search upward from the input DSL for that
-filename. `--config path` selects it explicitly. `doctor` validates every
-source and reads abstractions before a build. Imported files use the
-[`objects-v1` schema](https://2bit.jp/maxforge/schema/objects-v1.json) and may
-not recursively import more catalogs.
-
-`maxforge catalog [query] --json` searches the effective metadata. With no
-query it lists configured project objects; a query searches built-ins too, and
-`--all` produces an unfiltered built-in listing. Project catalogs can use
-`ports.mode: "arguments"` for bounded integer argument/index rules; see the
-object-catalog documentation for the schema and fallback behavior.
-
-An abstraction `name` must match its `.maxpat` filename. Normal compilation
-validates the file and its port metadata but does not embed it, so its directory
-must be available on Max's search path. `bundle` instead copies every referenced
-declared abstraction and external path into the generated package.
-
-The MCP server intentionally does not search its working directory. Set an
-absolute `MAXFORGE_CONFIG` path in the MCP client configuration, then call
-`maxforge_catalog` to inspect the catalog actually loaded by that server.
-Catalog metadata tells maxforge how to serialize and validate a box; it neither
-installs an external/abstraction nor proves that the Max machine can load it.
-See [Project object catalogs](docs/object-catalog.md#project-object-catalogs).
-
-## DSL Syntax
-
-### Patch Declaration (optional)
-
-```maxdsl
-patch "Title"
-patch "Title" | "Description"
-patch "Title" | "Description" | 800x600
-```
-
-If omitted, no explicit Max `title` is stored, `description` is empty, and the
-patcher rectangle is `640x480`; Max may derive its visible title from the saved
-filename. Quoted title/description text uses JSON escapes and may contain `|`.
-
-### Object Definition
-
-```maxdsl
-name = type [args...] [@attr value...] [at(x, y[, width, height])]
-```
-
-- `name` — identifier, unique within scope
-- `type args` — resolved using audited fixed metadata, an explicit argument rule, or a dynamic-port marker
-- `@attr value` — optional attributes; emitted directly as box JSON properties
-- escape a literal Max object-text attribute as `\@attr`; otherwise maxforge treats it as a box JSON property
-- `at(x, y)` — optional position override; omit for auto-layout
-- `at(x, y, width, height)` — preserve an explicit resized box rectangle
-- structural keys such as `id`, `maxclass`, `patching_rect`, `text`, and `patcher` are reserved and cannot be set with `@`
-
-```maxdsl
-# audio oscillator
-osc = cycle~ 440
-
-# signal multiply
-mul = *~ 0.5
-
-# attributes
-freq = number @minimum 0 @maximum 127
-vol = slider @size 20 140
-
-# comment and message boxes
-cmt = comment "Hello"
-msg = message "open"
-
-# manual position
-filt = lores~ 1000 0.5 at(50, 200)
-```
-
-Inline comments after a statement are not supported; put comments on their own line.
-
-### Repetition and Arithmetic
-
-Use `for`, `if`, and `${expr}` when Max would otherwise require many similar objects.
-Expansion happens before normal parsing.
-
-```maxdsl
 for i in 0..7 {
-  osc_${i} = cycle~ ${220 + i * 20} at(${50 + i * 100}, 80)
-  amp_${i} = *~ 0.125 at(${50 + i * 100}, 140)
+  osc_${i} = cycle~ ${220 + i * 20}
+  amp_${i} = *~ 0.125
   osc_${i} -> amp_${i}
-
-  if i < 2 {
-    meter_${i} = meter~ at(${50 + i * 100}, 200)
-    amp_${i} -> meter_${i}
-  }
 }
 ```
 
-- `0..7` is inclusive; use `step`, e.g. `for i in 0..6 step 2`
-- expressions support loop variables, `+ - * / %`, `! && ||`, parentheses, and comparisons
-- expansion rejects non-finite arithmetic, loops above 100,000 iterations, and output above 100,000 lines
-- `${expr}` can be used in names, object arguments, attributes, positions, and connections
-- expressions are deliberately numeric only; there are no strings, arrays, functions, or modulo operator
+Compile the included example:
 
-### Connections
-
-```maxdsl
-# chain: outlet 0 → inlet 0
-a -> b -> c
-
-# outlet 1 → inlet 1
-vol[1] -> dac[1]
-
-# outlet 0 → inlet 2
-src[0] -> dst[2]
+```bash
+npx maxforge@latest compile examples/voice_bank.maxdsl -o voice_bank.maxpat
 ```
 
-Indices are 0-based (leftmost = 0). `[N]` on a destination means destination inlet `N`.
+The range is inclusive. Expansion is bounded; it is not an unrestricted
+programming language. See the [DSL specification](docs/dsl-spec.md) for exact
+syntax and limits.
 
-### Subpatchers
+## CLI
 
-```maxdsl
-fx = p delay_fx {
-  in = inlet signal "audio input"
-  out = outlet signal "audio output"
-  buf = tapin~ 500
-  tap = tapout~ 250
-  fb = *~ 0.4
+Common commands:
 
-  in -> buf -> tap -> fb -> buf
-  tap -> out
-}
+```bash
+maxforge compile input.maxdsl -o output.maxpat
+maxforge decompile input.maxpat -o output.maxdsl
+maxforge validate input.maxdsl
+maxforge catalog cycle~ --json
+maxforge doctor --input input.maxdsl
+maxforge bundle input.maxdsl -o my-package
 ```
 
-- `inlet` and `outlet` are the only subpatcher port objects
-- add the maxforge-only `signal` modifier (`inlet signal`, `outlet signal`) to emit the real Max `inlet`/`outlet` classes with signal metadata
-- `numinlets`/`numoutlets` auto-derived from internal inlet/outlet count
-- Nestable
+Run `npx maxforge@latest --help` or read the [CLI guide](docs/cli.md) for all
+commands and options. Third-party externals and abstractions require explicit
+metadata; see [Object catalogs](docs/object-catalog.md).
 
-### Argument-dependent Objects
+## Live control through MCP
 
-Some objects change inlet/outlet count based on arguments:
+Live control requires both the npm server and the native `maxforge.sync`
+external. Installing the npm package does **not** install the external into Max.
 
-| Object | Rule |
-|--------|------|
-| `gate 4` | outlets = 4 |
-| `route 1 2 3` | inlets = outlets = args + 1 in current Max 9 saved patches |
-| `sel 1 2 3` | inlets = outlets = args + 1; matched outlets are bang |
-| `pack 0 0. 0` | inlets = arg count |
-| `unpack 0 0 0` | outlets = arg count |
-| `trigger b b f` | outlets = arg count, types from args |
-| `matrix~ 4 4` | 4 inlets, 4 signal outlets, plus a status outlet |
-| `selector~ 4` | inlets = first arg + 1 |
+Codex configuration:
 
-This table is representative, not exhaustive. `dynamicPorts` objects such as
-`poly~`, `bpatcher`, `gen~`, and `jit.gl.slab` do not have a trustworthy fixed
-upper port bound. See [Object catalog: evidence and limits](docs/object-catalog.md)
-before extending the catalog or relying on generated port metadata.
-
-## Project Structure
-
+```toml
+[mcp_servers.maxforge]
+command = "npx"
+args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
 ```
-src/
-  cli/index.ts         CLI entry point
-  dsl/parser.ts        Line-oriented DSL parser
-  dsl/blocks.ts        Shared brace-delimited block collection
-  dsl/object-syntax.ts Object attributes and position suffix parsing
-  dsl/expander.ts      for/if/${expr} macro expansion
-  dsl/expression.ts    Numeric expression evaluator for macro expansion
-  core/
-    compiler.ts        AST → maxpat JSON compiler
-    compiled-model.ts  Compiler intermediate box/line model
-    connection-compiler.ts Connection validation and line compilation
-    patcher-json.ts    Compiler model → maxpat JSON builder
-    port-objects.ts    inlet/outlet object classification helpers
-    decompiler.ts      maxpat JSON → DSL text
-    attributes.ts      Shared box attribute helpers
-    object-db.ts       Object lookup + argument-dependent port resolution
-    catalog-config.ts  Project external/abstraction catalog loading
-    layout.ts          Auto-layout via topological sort
-    clipboard.ts       Compress/decompress for Max clipboard
-    serializer.ts      JSON serialization
-    types.ts           Type definitions
-  max/
-    dsl-patch-graph.ts DSL compiler → managed PatchGraph adapter
-    patch-graph.ts     Managed graph, revisions, and PatchPlan diff
-    patch-protocol.ts  Transport-neutral live patch contracts
-    patch-snapshot.ts  Snapshot comparison and attribute reconstruction
-    thispatcher.ts     thispatcher command generation
-  mcp/
-    server.ts          stdio MCP executable
-    mcp-server.ts      Agent-facing tools, help, and schemas
-    patch-adapter.ts   Desired graph and live metadata adapter contract
-    dsl-patch-adapter.ts DSL/catalog implementation of that contract
-    service.ts         Live state, reconciliation, and persistence coordinator
-    bridge.ts          WebSocket transport implementation for Max
-source/projects/
-  maxforge.sync/       Native min-api PatchPlan consumer
-deps/
-  bbb.agent/           Pinned reusable WebSocket transport source
-data/
-  objects.json         321-entry audited compiler metadata catalog
-schema/
-  config-v1.json       maxforge.config.json JSON Schema
-  objects-v1.json      Reusable catalog JSON Schema
-docs/
-  architecture.md      Module boundaries and dependency rules
-  dsl-spec.md          Formal DSL specification (EBNF)
-  agent-guide.md       AI agent documentation
-  object-catalog.md    Catalog evidence, dynamic ports, and non-claims
-  mcp.md               MCP setup, tools, recovery, and troubleshooting
-  patch-sync.md        Native PatchPlan ownership protocol
-  releasing.md         Max package CI and release procedure
-  website.md           GitHub Pages source and deployment procedure
-scripts/
-  assemble-max-package.sh Build the Max package directory
-  audit-object-catalog.py Compare catalog identity/static metadata with local Max 9 resources
-  verify-max-package.py   Validate source, package, and ZIP contents
-  verify-pages.py         Validate static Pages files and local references
-.github/workflows/
-  build-max-package.yml Cross-platform external build and release CI
-  deploy-pages.yml     Validate and deploy the static project website
-site/
-  index.html           GitHub Pages entry page
-  styles.css           Responsive site presentation
-  main.js              Dependency-free copy controls
-  docs/index.html      Installation, DSL, MCP, and recovery guide
-  docs/docs.css        Documentation-specific layout and typography
-  sitemap.xml          Public home and documentation URLs
-skills/
-  maxforge/            Offline DSL/compiler agent skill
-  maxforge-mcp/        Live MCP control agent skill
-tests/
-  mcp-*.test.ts        MCP server, service, bridge, and example tests
-  compiler.test.ts     Compiler/parser/decompiler test suite
-  block.test.ts        Brace block parsing regression tests
-  expander.test.ts     for/if/${expr} expansion test suite
-  native/              Max-independent C++ protocol/validation tests
-  fixtures/            DSL fixture files for snapshot testing
-examples/
-  basic_synth.maxdsl   Example patch
-  voice_bank.maxdsl    Repeated-object generation example
-  max_sync/            Native external end-to-end example
-  mcp_bridge/          MCP-to-native-Max controller example
-```
+
+Install the Max package from
+[GitHub Releases](https://github.com/2bbb/maxforge/releases), then open a patch
+containing one `maxforge.sync` object. The server listens on
+`127.0.0.1:8766` by default.
+
+Read [MCP setup and tool contracts](docs/mcp.md) before relying on live
+mutation. The shorter [native synchronization overview](docs/patch-sync.md)
+documents ownership, revisions, rollback limits, and failure handling.
+
+## Other integrations
+
+- [`node.script` / `thispatcher`](docs/node-script.md) — command generation for
+  flat patches; nested targets require Max-side routing.
+- [AI agent guide](docs/agent-guide.md) — guidance for generating DSL and using
+  managed live control.
+- Repository skills:
+
+  ```bash
+  npx skills add 2bbb/maxforge --skill maxforge
+  npx skills add 2bbb/maxforge --skill maxforge-mcp
+  ```
+
+Skills provide agent instructions only. They do not install the npm server or
+the native external.
+
+## Documentation
+
+| Topic | Document |
+|---|---|
+| DSL grammar, expansion, errors, and output | [docs/dsl-spec.md](docs/dsl-spec.md) |
+| CLI commands and options | [docs/cli.md](docs/cli.md) |
+| External and abstraction metadata | [docs/object-catalog.md](docs/object-catalog.md) |
+| MCP setup, tools, persistence, security, and recovery | [docs/mcp.md](docs/mcp.md) |
+| Native managed-patch protocol | [docs/patch-sync.md](docs/patch-sync.md) |
+| `node.script` integration | [docs/node-script.md](docs/node-script.md) |
+| Module boundaries | [docs/architecture.md](docs/architecture.md) |
+| Local development and testing | [docs/development.md](docs/development.md) |
+| Release process | [docs/releasing.md](docs/releasing.md) |
+
+## Current limits
+
+- Decompilation reconstructs supported structure; it does not recover the
+  original source text or every Max-specific field.
+- Object metadata is a validation aid, not proof that an object is installed or
+  behaves identically on every Max version.
+- Auto-layout is basic and deterministic, not a replacement for manual visual
+  design.
+- Live control manages only its declared scope. It does not guarantee complete
+  rollback of runtime state after a failed mutation.
+- The macOS external is ad-hoc signed and not notarized.
+
+The detailed documents state narrower limits for each subsystem. Those limits
+are part of the contract, not optional caveats.
 
 ## Development
 
 ```bash
-npm run build          # compile TypeScript
-npm test               # run tests with vitest
-npm run test:coverage  # run the CI V8 coverage gate
-npm run dev            # watch mode
-npm run pack:dry-run   # inspect npm package contents
-
-# Native protocol tests; no Max application/runtime is required
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
-cmake --build build --config Release --parallel 4
-ctest --test-dir build --build-config Release --output-on-failure
-
-# Static website validation (CI stages schema/*.json under site/schema first)
-mkdir -p site/schema && cp schema/*.json site/schema/
-python3 scripts/verify-pages.py site && node --check site/main.js
-rm -rf site/schema
+npm install
+npm run build
+npm test
 ```
 
-Coverage excludes the subprocess-only CLI entrypoint and gates instrumented
-`src/` code at 82% statements, 72% branches, 88% functions, and 84% lines.
-Dedicated CLI E2E tests still execute the built `dist/cli/index.js` binary.
-
-## Error Codes
-
-| Code | Meaning |
-|------|---------|
-| E001 | Duplicate object name |
-| E002 | Undefined reference in connection |
-| E003 | Unknown object type (not in DB) |
-| E004 | Outlet index out of range |
-| E005 | Inlet index out of range |
-| E006 | inlet/outlet used outside subpatcher |
-| E007 | Syntax error |
-| E008 | Subpatcher has no inlet or outlet |
-| E009 | Reserved attribute key |
+See [docs/development.md](docs/development.md) for native builds, coverage,
+package validation, website checks, and the repository map. Release tags are
+created only as part of the versioned release procedure.
 
 ## License
 
