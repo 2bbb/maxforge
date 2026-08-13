@@ -1,3 +1,8 @@
+import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   bridgeOptionsFromEnvironment,
@@ -60,3 +65,108 @@ describe("maxforge MCP environment", () => {
     );
   });
 });
+
+describe("maxforge MCP executable", () => {
+  it("responds to initialize when Node receives the npm bin symlink as argv[1]", async () => {
+    const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const packageJson = JSON.parse(
+      readFileSync(join(repository, "package.json"), "utf8")
+    ) as { bin?: Record<string, string> };
+    const entrypoint = packageJson.bin?.["maxforge-mcp"];
+    expect(entrypoint).toBeTypeOf("string");
+
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-mcp-bin-"));
+    const symlink = join(directory, basename(entrypoint!));
+    symlinkSync(resolve(repository, entrypoint!), symlink);
+
+    try {
+      const response = await initializeThroughSymlink(repository, symlink);
+      expect(response).toMatchObject({
+        jsonrpc: "2.0",
+        id: 1,
+        result: {
+          serverInfo: { name: "maxforge" },
+        },
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 10_000);
+});
+
+function initializeThroughSymlink(
+  repository: string,
+  symlink: string
+): Promise<Record<string, unknown>> {
+  return new Promise((resolveResponse, reject) => {
+    const child = spawn(process.execPath, [symlink], {
+      cwd: repository,
+      env: {
+        ...process.env,
+        MAXFORGE_WS_PORT: "0",
+        MAXFORGE_STATE_FILE: "off",
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const finish = (
+      error: Error | undefined,
+      response?: Record<string, unknown>
+    ) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.kill("SIGTERM");
+      if (error) reject(error);
+      else resolveResponse(response!);
+    };
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      for (const line of stdout.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const message = JSON.parse(line) as Record<string, unknown>;
+          if (message.id === 1) {
+            finish(undefined, message);
+            return;
+          }
+        } catch {
+          // Wait for a complete newline-delimited JSON-RPC message.
+        }
+      }
+    });
+    child.once("error", (error) => finish(error));
+    child.once("exit", (code, signal) => {
+      if (!settled) {
+        finish(new Error(
+          `maxforge-mcp exited before initialize response ` +
+          `(code=${String(code)}, signal=${String(signal)}, stderr=${stderr.trim()})`
+        ));
+      }
+    });
+
+    const timeout = setTimeout(() => {
+      finish(new Error(
+        `maxforge-mcp timed out before initialize response; stderr=${stderr.trim()}`
+      ));
+    }, 5_000);
+
+    child.stdin.write(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "maxforge-regression-test", version: "1.0.0" },
+      },
+    }) + "\n");
+  });
+}
