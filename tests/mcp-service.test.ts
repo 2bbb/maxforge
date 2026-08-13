@@ -466,6 +466,101 @@ describe("MaxforgePatchService", () => {
     expect(store.state?.pendingApplies.size).toBe(0);
   });
 
+  it("explicitly rebases a stale pending apply onto an exact third live revision", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const service = createService(transport, store);
+    const baseDsl = "osc = cycle~ 440";
+    transport.snapshotAfterApply = snapshotForDsl(baseDsl, "voices");
+    const initial = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+    expect(initial.baselineCaptured).toBe(true);
+
+    const pendingDsl = `${baseDsl}\ngain = *~ 0.5`;
+    transport.failureAfterApply = new Error("acknowledgement lost");
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: pendingDsl,
+    })).rejects.toThrow("acknowledgement lost");
+
+    const liveDsl = `${baseDsl}\nmeter = meter~`;
+    const liveGraph = compileDslToPatchGraph(liveDsl, database, "voices").graph!;
+    transport.failureAfterApply = undefined;
+    transport.liveRevisions.set("patch-a:voices", liveGraph.revision);
+    transport.snapshot = snapshotForGraph(liveGraph);
+    const restarted = createService(transport, store);
+
+    const inspected = await (restarted as unknown as {
+      inspectPendingApply(
+        patcherId: string,
+        scope: string
+      ): Promise<{
+        baseRevision: string;
+        targetRevision: string;
+        liveRevision: string | null;
+        structureToken: string;
+        targetWorkingDsl: string;
+      }>;
+    }).inspectPendingApply("patch-a", "voices");
+    expect(inspected).toMatchObject({
+      baseRevision: store.state?.managedGraphs.get("patch-a:voices")?.revision,
+      targetRevision: compileDslToPatchGraph(
+        pendingDsl,
+        database,
+        "voices"
+      ).graph!.revision,
+      liveRevision: liveGraph.revision,
+      structureToken: "0".repeat(16),
+    });
+    expect(inspected.targetWorkingDsl).toContain("gain = *~ 0.5");
+
+    const recovered = await (restarted as unknown as {
+      recoverPendingApply(request: {
+        patcherId: string;
+        scope: string;
+        action: "rebase_live";
+        expectedLiveRevision: string;
+        expectedStructureToken: string;
+        currentDsl: string;
+      }): Promise<{
+        action: "rebase_live";
+        managedRevision: string;
+        workingDsl: string;
+        targetWorkingDsl: string;
+      }>;
+    }).recoverPendingApply({
+      patcherId: "patch-a",
+      scope: "voices",
+      action: "rebase_live",
+      expectedLiveRevision: liveGraph.revision,
+      expectedStructureToken: inspected.structureToken,
+      currentDsl: liveDsl,
+    });
+    expect(recovered).toMatchObject({
+      action: "rebase_live",
+      managedRevision: liveGraph.revision,
+    });
+    expect(recovered.workingDsl).toContain("meter = meter~");
+    expect(recovered.targetWorkingDsl).toContain("gain = *~ 0.5");
+    expect(store.state?.pendingApplies.size).toBe(0);
+
+    const next = restarted.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: `${liveDsl}\nbutton_1 = button`,
+    });
+    expect(next.plan.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        box: expect.objectContaining({ id: "obj-button_1" }),
+      }),
+    ]);
+  });
+
   it("rejects caller-provided current DSL when its revision differs from Max", async () => {
     const transport = new FakeTransport();
     transport.liveRevisions.set("patch-a:voices", "b".repeat(64));
@@ -1055,7 +1150,6 @@ describe("MaxforgePatchService", () => {
         },
       },
     });
-
     const applied = await service.applyDsl({
       patcherId: "patch-a",
       scope: "voices",
@@ -1105,6 +1199,84 @@ describe("MaxforgePatchService", () => {
     });
     expect(aligned.workingDslRequiredAsCurrent).toBe(false);
     expect(aligned.baselineCaptured).toBe(true);
+  });
+
+  it("ignores runtime bpatcher port metadata during lossless reconciliation", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const baseDsl = [
+      "global_speed = bpatcher @name fparam.maxpat @args speed /speed 0. 4. at(10, 10, 268, 31)",
+      "global_reset = bpatcher @name bparam.maxpat @args reset /reset at(10, 50, 106, 31)",
+    ].join("\n");
+    transport.snapshotAfterApply = snapshotForDsl(baseDsl, "voices");
+    const initial = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+    expect(initial.baselineCaptured).toBe(true);
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box, index) => ({
+        ...box,
+        attributes: {
+          ...box.attributes,
+          ...(box.attributes.args
+            ? {
+                args: box.attributes.args.map((value) =>
+                  value === "0." ? "0" : value === "4." ? "4" : value
+                ),
+              }
+            : {}),
+          numinlets: index + 1,
+          numoutlets: index + 2,
+          outlettype: Array.from({ length: index + 2 }, () => ""),
+        },
+      })),
+    };
+    expect(transport.snapshot.boxes[0].attributes).toHaveProperty(
+      "numinlets",
+      1
+    );
+    const desiredDsl = `${baseDsl}\ntrigger_1 = button at(10, 100)`;
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      currentDsl: baseDsl,
+      desiredDsl,
+    });
+    expect(preview).toMatchObject({
+      canApply: true,
+      conflicts: [],
+      plan: {
+        operations: [{ op: "create", box: { id: "obj-trigger_1" } }],
+      },
+    });
+    expect(preview.mergedGraph?.patcher.boxes[0].attributes).not.toHaveProperty(
+      "numinlets"
+    );
+    expect(preview.mergedGraph?.patcher.boxes[1].attributes.args).toEqual([
+      "speed",
+      "/speed",
+      "0",
+      "4",
+    ]);
+
+    const applied = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      currentDsl: baseDsl,
+      desiredDsl,
+      manualChanges: "merge",
+    });
+    expect(applied.plan.operations).toEqual([
+      expect.objectContaining({
+        op: "create",
+        box: expect.objectContaining({ id: "obj-trigger_1" }),
+      }),
+    ]);
+    expect(applied.workingDsl).not.toMatch(/@numinlets|@numoutlets|@outlettype/);
   });
 
   it("rejects merge when live and desired DSL change the same field", async () => {
