@@ -329,6 +329,17 @@ const patchHistoryIdentityStatusSchema = z.object({
   decisions: z.array(patchHistoryIdentityDecisionSchema),
 });
 
+const projectHistoryErasureSchema = z.object({
+  projectId: z.string(),
+  location: z.string(),
+  filesDeleted: z.number().int().nonnegative(),
+  bytesDeleted: z.number().int().nonnegative(),
+  retainedObservationsCleared: z.number().int().nonnegative(),
+  directoryRemoved: z.boolean(),
+  physicalDataDeleted: z.literal(true),
+  secureOverwriteGuaranteed: z.literal(false),
+});
+
 const liveEditHistorySchema = z.object({
   patcherId: patcherIdSchema,
   scope: scopeSchema,
@@ -470,6 +481,7 @@ const HELP_CONTENT = {
       "Adoption rejects a stale structure token and advances revision without replaying edits that already exist in Max.",
       "Reconciliation preserves non-conflicting managed edits but never silently chooses between conflicting changes.",
       "History rekey changes one closed identity to an unused ID; merge combines a closed source with a known target; forget only hides Agent-facing history and does not physically erase NDJSON.",
+      "Use maxforge_erase_project_history only after the human explicitly requests deletion, every Max client is disconnected, and the exact project ID and confirmation phrase have been checked. It deletes retained edit evidence and the identity ledger, not Max files, DSL sources, project config, or the desired-state cache.",
       "History identity decisions never rewrite live maxforge.sync routing, never cross scopes, and must not be inferred from a filepath alone.",
       "Protocol v1 attempts generated reverse operations after a runtime mutation failure, but is not transactional; inspect before retrying while the revision remains unchanged.",
     ],
@@ -479,6 +491,7 @@ const HELP_CONTENT = {
       "maxforge_get_live_edit_history",
       "maxforge_get_patch_history_identity",
       "maxforge_resolve_patch_history_identity",
+      "maxforge_erase_project_history",
       "maxforge_review_live_changes",
       "maxforge_adopt_live_changes",
       "maxforge_reconcile_patch",
@@ -1068,6 +1081,41 @@ export function createMaxforgeMcpServer(
           reason,
         });
         return toolResult({ ...result });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_erase_project_history",
+    {
+      title: "Erase retained project edit history",
+      description:
+        "Physically delete maxforge-owned edit-history chunks and the project identity-resolution ledger, then clear retained observations from MCP memory. Every Max WebSocket client must be disconnected. Call this only after the human explicitly requests deletion and supplies the exact confirmation phrase. This does not delete Max patches, DSL/config files, or the desired-state cache, and filesystem/SSD secure overwrite is not guaranteed.",
+      inputSchema: z.object({
+        expectedProjectId: z.string().describe(
+          "Exact project.id shown by maxforge_status"
+        ),
+        confirmation: z.string().describe(
+          "Exact phrase: ERASE PROJECT HISTORY <project.id>"
+        ),
+      }),
+      outputSchema: projectHistoryErasureSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+    },
+    async ({ expectedProjectId, confirmation }) => {
+      try {
+        return toolResult({
+          ...options.service.eraseProjectHistory({
+            expectedProjectId,
+            confirmation,
+          }),
+        });
       } catch (error) {
         return toolError(error);
       }

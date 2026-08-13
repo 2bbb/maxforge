@@ -128,13 +128,14 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_get_live_edit_history",
         "maxforge_get_patch_history_identity",
         "maxforge_resolve_patch_history_identity",
+        "maxforge_erase_project_history",
         "maxforge_adopt_live_changes",
         "maxforge_reconcile_patch",
         "maxforge_compile_plan",
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(18);
+      expect(definitions).toHaveLength(19);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -665,6 +666,23 @@ describe("maxforge MCP protocol surface", () => {
           physicalDataErased: false,
           canonical: { patcherId: "patch_renamed", scope: "voices" },
           aliases: [{ patcherId: "patch_a", scope: "voices" }],
+        } },
+      });
+
+      const erased = await client.request(103, "tools/call", {
+        name: "maxforge_erase_project_history",
+        arguments: {
+          expectedProjectId: "studio_patchset",
+          confirmation: "ERASE PROJECT HISTORY studio_patchset",
+        },
+      });
+      expect(erased).toMatchObject({
+        result: { structuredContent: {
+          projectId: "studio_patchset",
+          filesDeleted: 2,
+          retainedObservationsCleared: 0,
+          physicalDataDeleted: true,
+          secureOverwriteGuaranteed: false,
         } },
       });
     } finally {
