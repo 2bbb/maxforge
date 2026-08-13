@@ -78,6 +78,9 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `maxforge_erase_project_history` with the exact project ID and confirmation
    phrase. Never present it as secure overwrite: it excludes Max/DSL/config
    files and desired-state cache, and SSD/filesystem remnants are not guaranteed.
+   Persistent history allows one `maxforge-mcp` writer per directory. If startup
+   reports `writer-v1.lock`, do not bypass it. After a crash, require human
+   verification that its recorded PID is stopped before manual removal.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and

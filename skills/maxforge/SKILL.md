@@ -137,6 +137,10 @@ for i in 0..7 {
   connected clients, and the exact `ERASE PROJECT HISTORY <project.id>` phrase
   is available. It deletes the edit journal and identity ledger, not Max/DSL/
   config files or desired-state cache, and cannot guarantee SSD secure overwrite.
+- Treat persistent history as single-writer. Never remove `writer-v1.lock` to
+  run another MCP process. After a crash, require the human to verify that the
+  PID recorded in the lock is stopped before manual removal; maxforge does not
+  auto-reclaim the lock because that would race a new writer.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use bounded `ports.mode: "arguments"` when integer initialization arguments
   deterministically control counts; it is not an arbitrary expression hook.

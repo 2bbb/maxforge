@@ -417,6 +417,10 @@ identity、aliases、過去のdecisionを確認し、人間が同一性を確認
 `ERASE PROJECT HISTORY <project.id>`を渡す。この操作はhistory chunkとidentity ledger、
 bridge上のretained observationを削除するが、Max patch、DSL/config、desired-state cacheは
 削除せず、SSD等のsecure overwriteも保証しない。
+永続historyはhistory directoryごとにsingle writerである。server起動時の
+`writer-v1.lock`が2つ目の`maxforge-mcp`を拒否する。異常終了後も自動削除しないため、
+lock内PIDのprocess停止を人間が確認した後だけ手動削除する。lockを消して並行writerを
+起動してはいけない。history persistenceを無効化した場合、この機械的guardも無い。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

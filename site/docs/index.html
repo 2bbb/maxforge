@@ -500,6 +500,14 @@ source[1] -&gt; destination[2]</code></pre>
           delete Max/DSL/config files or desired-state cache, and it cannot
           guarantee secure overwrite on SSDs, backups, or filesystem snapshots.
         </p>
+        <p>
+          Persistent history is single-writer. Startup creates
+          <code>writer-v1.lock</code> and rejects a second
+          <code>maxforge-mcp</code> process using the same history directory.
+          Clean shutdown releases it. After a crash, verify the recorded PID is
+          stopped before manual removal; automatic stale-lock deletion would
+          race a new writer. This is exclusion, not multi-writer merging.
+        </p>
       </section>
 
       <section id="mcp-workflow" class="docs-section">

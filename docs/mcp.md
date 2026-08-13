@@ -428,6 +428,20 @@ patches, DSL sources, catalog config, npm files, or `mcp-state-v1.json`. It also
 returns `secureOverwriteGuaranteed: false`; filesystem deletion does not prove
 that SSD blocks, backups, or filesystem snapshots were overwritten.
 
+### Single-writer lease
+
+Persistent edit history supports one `maxforge-mcp` writer per history
+directory. Bridge startup atomically creates `writer-v1.lock`; a second process
+using that directory fails before loading or appending history. Clean bridge
+shutdown removes the lock only when its random token still matches.
+
+An abnormal process termination can leave the lock behind. Maxforge does not
+auto-remove a supposedly stale lock because checking a PID and unlinking later
+would race a newly started writer. Inspect the lock, verify that the recorded
+process is stopped, and only then remove it manually. Do not remove the file to
+run concurrent writers. When persistent edit history is disabled, no history
+lease exists; single-writer-per-project is then an operational requirement.
+
 ### `maxforge_review_live_changes`
 
 Inspects the target and converts changes since the comparison baseline into a
@@ -741,6 +755,10 @@ deletion.
 journal and ledger. It requires zero connected Max clients and exact project
 confirmation, clears the retained in-memory copy, and does not claim secure
 overwrite or delete the separate desired-state document.
+The active bridge keeps `writer-v1.lock` while performing this deletion, so the
+history directory can remain present until clean shutdown. The lease prevents
+another process from racing sequence allocation or identity decisions; it is
+not a multi-writer merge protocol.
 
 Before sending a plan, Maxforge writes an in-flight record containing both base
 and target revisions. If acknowledgement is lost, the next process waits for the

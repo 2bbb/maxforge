@@ -327,6 +327,15 @@ the separate desired-state cache. The result reports deleted files and bytes,
 but correctly returns `secureOverwriteGuaranteed: false`: ordinary filesystem
 deletion cannot promise SSD or snapshot-level secure overwrite.
 
+Persistent history is single-writer. Bridge startup creates
+`writer-v1.lock` in the history directory and rejects another `maxforge-mcp`
+process targeting the same directory. Clean shutdown removes the matching lock.
+After a crash, maxforge deliberately does not auto-delete it: verify the PID in
+the lock is no longer running before removing the file manually. This prevents
+undefined sequence allocation and identity-ledger races; it does not implement
+multi-writer merging. If edit-history persistence is disabled, this filesystem
+guard is unavailable and one MCP writer per project remains an operator rule.
+
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without
 ambiguity. No JavaScript or helper patch wiring runs inside Max.

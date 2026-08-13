@@ -469,6 +469,7 @@ const HELP_CONTENT = {
       "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
       "Use maxforge_get_live_edit_history when operation order or intermediate states could change the interpretation; account for droppedEvents and comparisonBasis.",
       "If saved-path warnings remain ambiguous, inspect both identities with maxforge_get_patch_history_identity. Only after the human confirms the relationship may you close the source and call maxforge_resolve_patch_history_identity.",
+      "If startup reports an active edit-history writer lease after a crash, inspect writer-v1.lock and verify the recorded process is no longer running before removing it. Never delete an active lease to start a second writer.",
       "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then replace the working source with its returned workingDsl.",
       "If a concrete next desired DSL is ready, call maxforge_reconcile_patch instead.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
@@ -483,6 +484,7 @@ const HELP_CONTENT = {
       "History rekey changes one closed identity to an unused ID; merge combines a closed source with a known target; forget only hides Agent-facing history and does not physically erase NDJSON.",
       "Use maxforge_erase_project_history only after the human explicitly requests deletion, every Max client is disconnected, and the exact project ID and confirmation phrase have been checked. It deletes retained edit evidence and the identity ledger, not Max files, DSL sources, project config, or the desired-state cache.",
       "History identity decisions never rewrite live maxforge.sync routing, never cross scopes, and must not be inferred from a filepath alone.",
+      "Persistent edit history permits one maxforge-mcp writer per history directory. The writer lease protects sequence allocation and the identity ledger; it is not multi-writer synchronization.",
       "Protocol v1 attempts generated reverse operations after a runtime mutation failure, but is not transactional; inspect before retrying while the revision remains unchanged.",
     ],
     relatedTools: [
