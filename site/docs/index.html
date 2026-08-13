@@ -491,6 +491,15 @@ source[1] -&gt; destination[2]</code></pre>
           decisions affect historical lookup only; they never rewrite live Max
           routing, cross scopes, or claim physical erasure.
         </p>
+        <p>
+          When the human explicitly requests deletion of retained edit evidence,
+          close every Max client and use
+          <code>maxforge_erase_project_history</code> with the exact project ID
+          and confirmation phrase. It deletes maxforge-owned history chunks and
+          the identity ledger and clears retained MCP observations. It does not
+          delete Max/DSL/config files or desired-state cache, and it cannot
+          guarantee secure overwrite on SSDs, backups, or filesystem snapshots.
+        </p>
       </section>
 
       <section id="mcp-workflow" class="docs-section">
@@ -535,6 +544,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_get_live_edit_history</code></td><td>Read bounded, ordered 75 ms structural observations. Arrival time is not an edit timestamp; check drop and comparison metadata. This is not Max undo history or proof of intent.</td></tr>
               <tr><td><code>maxforge_get_patch_history_identity</code></td><td>Inspect canonical project history identity, aliases, explicit decisions, and logical-forget state without requiring the old patch to be connected.</td></tr>
               <tr><td><code>maxforge_resolve_patch_history_identity</code></td><td>After human confirmation and source closure, append a rekey, merge, or logical-forget decision. It does not rewrite live routing or erase original evidence.</td></tr>
+              <tr><td><code>maxforge_erase_project_history</code></td><td>After explicit human confirmation and full Max disconnection, delete retained edit-history chunks and the identity ledger and clear their in-memory copy. Secure overwrite and deletion of project source/state files are out of scope.</td></tr>
               <tr><td><code>maxforge_review_live_changes</code></td><td>Classify structural evidence, correlate related changes into identity-bound edit clusters, expose interpretation risks and clarification candidates, and provide proposed working DSL when lossless.</td></tr>
               <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
               <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>

@@ -132,6 +132,11 @@ for i in 0..7 {
   and require human confirmation before using
   `maxforge_resolve_patch_history_identity`. Rekey/merge affect history lookup
   only; logical forget is not secure erasure.
+- Call `maxforge_erase_project_history` only after the human explicitly asks to
+  delete retained evidence, all Max clients are closed, status reports zero
+  connected clients, and the exact `ERASE PROJECT HISTORY <project.id>` phrase
+  is available. It deletes the edit journal and identity ledger, not Max/DSL/
+  config files or desired-state cache, and cannot guarantee SSD secure overwrite.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use bounded `ports.mode: "arguments"` when integer initialization arguments
   deterministically control counts; it is not an arbitrary expression hook.

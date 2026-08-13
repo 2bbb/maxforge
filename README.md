@@ -254,6 +254,7 @@ human-readable status and local diagnostics. See
 - `maxforge_get_live_edit_history`
 - `maxforge_get_patch_history_identity`
 - `maxforge_resolve_patch_history_identity`
+- `maxforge_erase_project_history`
 - `maxforge_review_live_changes`
 - `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
@@ -316,6 +317,15 @@ relationship and the source patch is closed,
 append-only decisions affect historical lookup only: they do not rewrite the
 live `maxforge.sync` object, cross scopes, edit original evidence, or securely
 erase retained NDJSON.
+
+When retained edit evidence itself must be deleted, first close every Max patch
+using the project and then call `maxforge_erase_project_history` with the exact
+project ID and confirmation phrase `ERASE PROJECT HISTORY <project.id>`. It
+deletes maxforge-owned history chunks and the identity ledger, and clears the
+bridge's retained observations. It does not delete `.maxpat`/DSL/config files or
+the separate desired-state cache. The result reports deleted files and bytes,
+but correctly returns `secureOverwriteGuaranteed: false`: ordinary filesystem
+deletion cannot promise SSD or snapshot-level secure overwrite.
 
 Each live patch contains one `maxforge.sync`, registers a stable `patcherId`,
 and can therefore be created or operated as an independent Max window without

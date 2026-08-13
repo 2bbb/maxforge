@@ -23,6 +23,9 @@ Require these MCP tools:
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
 - `maxforge_get_live_edit_history`
+- `maxforge_get_patch_history_identity`
+- `maxforge_resolve_patch_history_identity`
+- `maxforge_erase_project_history`
 - `maxforge_review_live_changes`
 - `maxforge_adopt_live_changes`
 - `maxforge_reconcile_patch`
@@ -70,6 +73,11 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `merge` requires a known target, and `forget` only hides Agent-facing history.
    These operations neither rewrite live `maxforge.sync` routing nor physically
    erase append-only evidence.
+   If the human explicitly requests physical history deletion, close every Max
+   client, verify `maxforge_status.connectedClients` is zero, and call
+   `maxforge_erase_project_history` with the exact project ID and confirmation
+   phrase. Never present it as secure overwrite: it excludes Max/DSL/config
+   files and desired-state cache, and SSD/filesystem remnants are not guaranteed.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and

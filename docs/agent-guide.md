@@ -411,6 +411,12 @@ identity、aliases、過去のdecisionを確認し、人間が同一性を確認
 閉じて`maxforge_resolve_patch_history_identity`を使う。`rekey`は未使用IDへの変更、
 `merge`は既知IDへの統合、`forget`はAgent-facing lookupからの論理除外である。
 いずれもlive `maxforge.sync`のroutingや元のNDJSONを書き換えず、`forget`も物理削除ではない。
+人間が履歴そのものの削除を明示した場合だけ、全Max clientを閉じ、
+`maxforge_status.connectedClients == 0`を確認してから
+`maxforge_erase_project_history`へ正確なproject IDと
+`ERASE PROJECT HISTORY <project.id>`を渡す。この操作はhistory chunkとidentity ledger、
+bridge上のretained observationを削除するが、Max patch、DSL/config、desired-state cacheは
+削除せず、SSD等のsecure overwriteも保証しない。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

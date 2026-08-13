@@ -406,8 +406,27 @@ This operation deliberately does **not** rewrite a live `maxforge.sync`
 `patcherId`, move or rewrite original observation chunks, or change Max files.
 `forget` is a logical visibility decision and returns
 `physicalDataErased: false`; retained NDJSON remains until normal retention.
-If secure erasure is required, stop all project writers and remove the project
-history directory through an explicit filesystem operation outside MCP.
+
+### `maxforge_erase_project_history`
+
+Deletes retained edit evidence instead of hiding it. Before calling it:
+
+1. the human must explicitly request deletion;
+2. close every Max patch containing `maxforge.sync` for the project;
+3. verify `maxforge_status.connectedClients` is zero;
+4. pass the exact `expectedProjectId` and confirmation text
+   `ERASE PROJECT HISTORY <project.id>`.
+
+The operation deletes maxforge-owned session chunks and
+`identity-resolutions-v1.ndjson`, then clears retained observations, drop
+counters, and the next history sequence from MCP memory. It preserves unrelated
+files in a custom history directory. The result includes `filesDeleted`,
+`bytesDeleted`, and `retainedObservationsCleared`.
+
+This is deliberately narrower than “erase the project.” It does not delete Max
+patches, DSL sources, catalog config, npm files, or `mcp-state-v1.json`. It also
+returns `secureOverwriteGuaranteed: false`; filesystem deletion does not prove
+that SSD blocks, backups, or filesystem snapshots were overwritten.
 
 ### `maxforge_review_live_changes`
 
@@ -718,6 +737,10 @@ Explicit history identity decisions are stored separately in
 `identity-resolutions-v1.ndjson`, so evidence chunks remain append-only and
 auditable. Rekey/merge affect lookup only; logical forget does not claim secure
 deletion.
+`maxforge_erase_project_history` is the explicit destructive boundary for that
+journal and ledger. It requires zero connected Max clients and exact project
+confirmation, clears the retained in-memory copy, and does not claim secure
+overwrite or delete the separate desired-state document.
 
 Before sending a plan, Maxforge writes an in-flight record containing both base
 and target revisions. If acknowledgement is lost, the next process waits for the
