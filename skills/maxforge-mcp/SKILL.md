@@ -22,6 +22,8 @@ Require these MCP tools:
 - `maxforge_save_patch`
 - `maxforge_close_patch`
 - `maxforge_inspect_patch`
+- `maxforge_inspect_pending_apply`
+- `maxforge_recover_pending_apply`
 - `maxforge_get_live_edit_history`
 - `maxforge_get_patch_history_identity`
 - `maxforge_resolve_patch_history_identity`
@@ -161,6 +163,13 @@ disabled or its file is unavailable, provide the exact previous complete DSL as
 `currentDsl` once. Never guess it, reset the revision, or claim the scope is
 empty. A pending scope must reconnect so Maxforge can compare its recorded base
 and target revisions.
+
+If Max reports a third revision, stop ordinary compile/review/reconcile calls.
+Call `maxforge_inspect_pending_apply` and preserve its base, target, intent, and
+live DSL evidence. Call `maxforge_recover_pending_apply` with `rebase_live` only
+when trusted complete `currentDsl` compiles to the exact returned live revision,
+and pass the unchanged structure token. A stale token, guessed DSL, state-file
+deletion, or fabricated empty graph is not recovery.
 
 ### Managed manual edit detected
 

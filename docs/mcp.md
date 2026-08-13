@@ -442,6 +442,38 @@ process is stopped, and only then remove it manually. Do not remove the file to
 run concurrent writers. When persistent edit history is disabled, no history
 lease exists; single-writer-per-project is then an operational requirement.
 
+### `maxforge_inspect_pending_apply`
+
+Reads a persisted in-flight apply without invoking the normal base/target
+auto-resolution path. Use it when `maxforge_status.state.pendingScopes` contains
+the target and Max reports a third revision.
+
+The result retains all three persisted identities (`baseRevision`,
+`targetRevision`, and `intentRevision`), their recoverable DSL sources, the
+current `liveRevision`, `liveState`, exact `structureToken`, snapshot, and
+baseline-relative edit evidence. It is read-only and does not clear the pending
+record. A revision hash alone is not enough to recover a graph; retain or locate
+the complete DSL that produced the third live revision.
+
+### `maxforge_recover_pending_apply`
+
+Explicitly rebases an ambiguous pending apply onto inspected live state. The
+only action is `rebase_live`. It requires:
+
+- the same `patcherId` and `scope`;
+- `expectedLiveRevision` and `expectedStructureToken` copied from the immediately
+  preceding pending inspection;
+- trusted complete `currentDsl` whose compiled revision exactly equals that live
+  revision.
+
+Recovery re-inspects Max, rejects either stale guard, reconstructs the actual
+managed snapshot, and verifies lossless DSL serialization before replacing the
+baseline. If snapshot-derived managed state requires a revision change, Maxforge
+sends only a token-bound zero-operation revision transition. The result returns
+both canonical `workingDsl` and the superseded `targetWorkingDsl`; the abandoned
+side is not silently hidden. Do not use guessed DSL or delete the state file as
+a substitute.
+
 ### `maxforge_review_live_changes`
 
 Inspects the target and converts changes since the comparison baseline into a
@@ -539,6 +571,12 @@ The result contains `canApply`, a structured `conflicts` array, and an ordered
 plan only when the merge is safe. This tool never mutates Max. Do not convert
 `canApply: false` into an overwrite: inspect the conflict and make the intended
 winner explicit in Max or in the next baseline/DSL.
+
+`canApply` also requires the merged graph to serialize and compile back to the
+same revision. An `unrepresentable_graph` conflict is therefore reported during
+preview instead of allowing apply to fail later. Numeric-looking string
+attributes are quoted in canonical DSL so Max-normalized abstraction arguments
+such as the symbol `"0"` remain strings rather than becoming numeric atoms.
 
 The acknowledged merged graph is tracked separately and supplies concrete live
 metadata plus the native `baseRevision`. Plan operations describe the actual
@@ -764,7 +802,10 @@ Before sending a plan, Maxforge writes an in-flight record containing both base
 and target revisions. If acknowledgement is lost, the next process waits for the
 same patch to reconnect and accepts only those two outcomes: base means no
 mutation was committed; target means the acknowledged graph is promoted. Any
-third revision is reported as ambiguous rather than guessed.
+third revision is reported as ambiguous rather than guessed. Inspect it with
+`maxforge_inspect_pending_apply`; if complete source for that live revision is
+available, use `maxforge_recover_pending_apply` with the exact returned revision
+and structure token.
 
 `maxforge_status` reports the persistence path and unresolved scopes. A normal
 restart retains comparison history and does not require `currentDsl`.
@@ -789,7 +830,8 @@ optimistic concurrency.
 | Patch creation reports multiple controllers | More than one controller patch is open | Leave exactly one controller registered before creating a patch |
 | Duplicate `patcherId` | Two live patches advertise the same transport identity | Change one `@patcher_id`; titles are irrelevant |
 | Process has no graph state for an initialized revision | Persistence was disabled, removed, or pointed at another file | Restore the matching state file or pass the exact previous complete DSL as `currentDsl` once |
-| Pending scope appears in status | Apply acknowledgement was lost | Reconnect that exact patch; Maxforge resolves only the recorded base or target revision |
+| Pending scope appears in status | Apply acknowledgement was lost | Reconnect that exact patch; Maxforge resolves the recorded base or target revision automatically |
+| Pending apply reports a third live revision | A different valid patch revision replaced both recorded outcomes | Call `maxforge_inspect_pending_apply`; rebase only with exact trusted `currentDsl`, `liveRevision`, and `structureToken` via `maxforge_recover_pending_apply` |
 | Current DSL revision does not match Max | `currentDsl`, scope, or target is wrong | Stop; recover the exact prior DSL instead of forcing empty state |
 | Managed manual changes block ordinary apply | `manualChanges` defaults to `reject` | Call `maxforge_reconcile_patch`; apply the same DSL with `manualChanges: "merge"` only when `canApply` is true |
 | Reconciliation reports conflicts | Both sides changed the same field, one changed a box the other deleted, a new reserved identity appeared, or a desired replacement would destroy an unmanaged cord | Resolve the listed conflict explicitly; do not force or retry the apply |

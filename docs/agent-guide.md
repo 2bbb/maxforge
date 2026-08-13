@@ -231,6 +231,11 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    scope、titleを指定し、既存`.maxpat`を対象にするなら
    `maxforge_open_patch`へMax host上の絶対pathを指定して登録完了まで待つ。
 5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
+   `maxforge_status`にpending scopeがあり、base/target以外の第三revisionで通常操作が
+   拒否された場合は`maxforge_inspect_pending_apply`を使う。返されたrevisionと
+   structure token、およびそのrevisionを生成した完全な`currentDsl`が揃う場合だけ
+   `maxforge_recover_pending_apply`の`rebase_live`を実行する。state file削除やDSL推測で
+   回避しない。
 6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。layout、object設定、
    annotation、ownership、routing等のsignalは「何が変わったか」の証拠であり、
    人間の意図そのものと断定しない。`review.editClusters`単位で関連差分をまとめて読み、

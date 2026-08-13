@@ -234,6 +234,13 @@ applied to patch cords, so Max versions or objects that expose saved cord
 attributes can report changes such as hidden state, color, or midpoints without
 turning ordinary UI/DSP values into patch edits.
 
+Runtime-derived structural metadata such as resolved abstraction port counts is
+inspection evidence, not an authored DSL attribute. Reconciliation retains the
+authored `bpatcher` declaration and does not add those fields to managed graph
+identity. Max may also normalize abstraction argument symbols (`0.` to `0`, for
+example); canonical DSL quotes numeric-looking strings so their atom type
+round-trips losslessly.
+
 The first apply is accepted only when the revision state is empty and the
 configured scope contains no managed root boxes. After success,
 `revision_state` advances to `targetRevision`. It is not advanced when an
