@@ -45,6 +45,11 @@ export type PatchReconciliationConflict =
       readonly id: string;
       readonly connection: MaxforgeSnapshotConnection;
       readonly message: string;
+    }
+  | {
+      readonly kind: "unrepresentable_graph";
+      readonly targetPath: readonly string[];
+      readonly message: string;
     };
 
 export interface ReconstructedManagedState {

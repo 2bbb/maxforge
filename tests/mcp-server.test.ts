@@ -124,6 +124,8 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_save_patch",
         "maxforge_close_patch",
         "maxforge_inspect_patch",
+        "maxforge_inspect_pending_apply",
+        "maxforge_recover_pending_apply",
         "maxforge_review_live_changes",
         "maxforge_get_live_edit_history",
         "maxforge_get_patch_history_identity",
@@ -135,7 +137,7 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_apply_dsl",
       ]);
       const definitions = toolDefinitions(tools);
-      expect(definitions).toHaveLength(19);
+      expect(definitions).toHaveLength(21);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
@@ -154,6 +156,10 @@ describe("maxforge MCP protocol surface", () => {
         definitions.find((tool) => tool.name === "maxforge_adopt_live_changes")
           ?.description
       ).toContain("structure token");
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_recover_pending_apply")
+          ?.description
+      ).toContain("third live revision");
 
       const help = await client.request(3, "tools/call", {
         name: "maxforge_help",
@@ -165,6 +171,7 @@ describe("maxforge MCP protocol surface", () => {
             topic: "recovery",
             steps: expect.arrayContaining([
               expect.stringContaining("currentDsl"),
+              expect.stringContaining("maxforge_inspect_pending_apply"),
               expect.stringContaining("maxforge_review_live_changes"),
               expect.stringContaining("maxforge_adopt_live_changes"),
             ]),
@@ -194,6 +201,8 @@ describe("maxforge MCP protocol surface", () => {
               expect.stringContaining("not silently claimed"),
             ]),
             relatedTools: expect.arrayContaining([
+              "maxforge_inspect_pending_apply",
+              "maxforge_recover_pending_apply",
               "maxforge_review_live_changes",
               "maxforge_adopt_live_changes",
             ]),

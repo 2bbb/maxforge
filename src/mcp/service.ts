@@ -149,6 +149,48 @@ export interface AdoptLiveChangesResult extends ReviewLiveChangesResult {
   readonly workingDsl: string;
 }
 
+export type PendingApplyLiveState = "base" | "target" | "other";
+
+export interface PendingApplyInspection {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly baseRevision: string;
+  readonly targetRevision: string;
+  readonly intentRevision: string;
+  readonly liveRevision: string;
+  readonly liveState: PendingApplyLiveState;
+  readonly structureToken: string;
+  readonly snapshot: MaxforgeSnapshotEvent;
+  readonly comparisonAvailable: boolean;
+  readonly changes: readonly PatchSnapshotChange[];
+  readonly managedChangeCount: number;
+  readonly unmanagedChangeCount: number;
+  readonly review: PatchEditReview;
+  readonly baseWorkingDsl?: string;
+  readonly targetWorkingDsl: string;
+  readonly intentWorkingDsl: string;
+}
+
+export interface RecoverPendingApplyRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly action: "rebase_live";
+  readonly expectedLiveRevision: string;
+  readonly expectedStructureToken: string;
+  readonly currentDsl: string;
+}
+
+export interface RecoverPendingApplyResult extends PendingApplyInspection {
+  readonly action: "rebase_live";
+  readonly previousLiveRevision: string;
+  readonly managedRevision: string;
+  readonly revisionAdvanced: boolean;
+  readonly acknowledgement?: MaxforgeAppliedEvent;
+  readonly statePersisted: boolean;
+  readonly stateWarning?: string;
+  readonly workingDsl: string;
+}
+
 export class MaxforgePatchService {
   private readonly managedGraphs: Map<string, PatchGraph>;
   private readonly intentGraphs: Map<string, PatchGraph>;
@@ -303,7 +345,21 @@ export class MaxforgePatchService {
           conflict.kind === "managed_identity_changed" ||
           conflict.kind === "duplicate_managed_identity"
         ).length;
-    const plan = reconciliation.plan
+    const conflicts: PatchReconciliationConflict[] = [
+      ...reconciliation.conflicts,
+    ];
+    if (conflicts.length === 0 && reconciliation.graph) {
+      try {
+        this.patchAdapter.serialize(reconciliation.graph);
+      } catch (error) {
+        conflicts.push({
+          kind: "unrepresentable_graph",
+          targetPath: [],
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const plan = reconciliation.plan && conflicts.length === 0
       ? {
           ...reconciliation.plan,
           baseStructureToken: snapshot.structureToken,
@@ -312,13 +368,13 @@ export class MaxforgePatchService {
 
     return {
       canApply:
-        reconciliation.conflicts.length === 0 &&
+        conflicts.length === 0 &&
         plan !== undefined &&
         reconciliation.graph !== undefined,
       plan,
       mergedGraph: reconciliation.graph,
       intentGraph: desired.graph,
-      conflicts: reconciliation.conflicts,
+      conflicts,
       comparisonAvailable: baseline !== undefined,
       managedChangeCount,
       unmanagedChangeCount: changes.filter((change) => !change.managed).length,
@@ -646,6 +702,142 @@ export class MaxforgePatchService {
     return {
       persistence: this.stateStore?.description ?? null,
       pendingScopes: [...this.pendingApplies.keys()].sort(),
+    };
+  }
+
+  async inspectPendingApply(
+    patcherId: string,
+    scope: string
+  ): Promise<PendingApplyInspection> {
+    const key = targetKey(patcherId, scope);
+    const pending = this.pendingApplies.get(key);
+    if (!pending) {
+      throw new Error(
+        `Max patch "${patcherId}" scope "${scope}" has no pending apply`
+      );
+    }
+    const liveRevision = this.transport.getLiveRevision(patcherId, scope);
+    if (liveRevision === undefined) {
+      throw new Error(
+        `Pending apply for Max patch "${patcherId}" scope "${scope}" cannot ` +
+        "be inspected until that patch is connected"
+      );
+    }
+    if (liveRevision === null) {
+      throw new Error(
+        `Pending apply for Max patch "${patcherId}" scope "${scope}" reports ` +
+        "an uninitialized live revision; reconnect and inspect before recovery"
+      );
+    }
+
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    if (snapshot.revision !== liveRevision) {
+      throw new Error(
+        `Live revision changed during pending-apply inspection for Max patch ` +
+        `"${patcherId}" scope "${scope}": status reported ${liveRevision}, ` +
+        `inspection reported ${snapshot.revision ?? "uninitialized"}`
+      );
+    }
+    const baseline = this.baselineSnapshots.get(key);
+    const changes = baseline
+      ? diffPatcherSnapshots(baseline, snapshot.patcher)
+      : [];
+    const baseGraph = this.managedGraphs.get(key);
+    return {
+      patcherId,
+      scope,
+      baseRevision: pending.baseRevision,
+      targetRevision: pending.nextGraph.revision,
+      intentRevision: pending.intentGraph.revision,
+      liveRevision,
+      liveState: liveRevision === pending.baseRevision
+        ? "base"
+        : liveRevision === pending.nextGraph.revision
+          ? "target"
+          : "other",
+      structureToken: snapshot.structureToken,
+      snapshot,
+      comparisonAvailable: baseline !== undefined,
+      changes,
+      managedChangeCount: changes.filter((change) => change.managed).length,
+      unmanagedChangeCount: changes.filter((change) => !change.managed).length,
+      review: reviewPatchEdits(changes, scope),
+      ...(baseGraph
+        ? { baseWorkingDsl: this.patchAdapter.serialize(baseGraph) }
+        : {}),
+      targetWorkingDsl: this.patchAdapter.serialize(pending.nextGraph),
+      intentWorkingDsl: this.patchAdapter.serialize(pending.intentGraph),
+    };
+  }
+
+  async recoverPendingApply(
+    request: RecoverPendingApplyRequest
+  ): Promise<RecoverPendingApplyResult> {
+    const inspection = await this.inspectPendingApply(
+      request.patcherId,
+      request.scope
+    );
+    if (inspection.liveRevision !== request.expectedLiveRevision) {
+      throw new Error(
+        `Pending apply live revision changed after inspection: expected ` +
+        `${request.expectedLiveRevision}, received ${inspection.liveRevision}`
+      );
+    }
+    if (inspection.structureToken !== request.expectedStructureToken) {
+      throw new Error(
+        `Max patch "${request.patcherId}" changed after pending-apply ` +
+        `inspection: expected structure token ${request.expectedStructureToken}, ` +
+        `received ${inspection.structureToken}. Inspect the pending apply again.`
+      );
+    }
+
+    const current = this.patchAdapter.compile(request.currentDsl, request.scope);
+    if (current.graph.revision !== request.expectedLiveRevision) {
+      throw new Error(
+        `Recovery currentDsl revision ${current.graph.revision} does not match ` +
+        `the inspected live revision ${request.expectedLiveRevision}`
+      );
+    }
+    const observed = reconstructManagedGraph(
+      current.graph,
+      inspection.snapshot.patcher,
+      undefined,
+      (box, baseBox) => this.patchAdapter.resolveLiveBox(box, baseBox)
+    );
+    if (observed.conflicts.length > 0) {
+      throw new PatchReconciliationError(observed.conflicts);
+    }
+    const workingDsl = this.patchAdapter.serialize(observed.graph);
+    const revisionAdvanced = observed.graph.revision !== inspection.liveRevision;
+    let acknowledgement: MaxforgeAppliedEvent | undefined;
+    if (revisionAdvanced) {
+      acknowledgement = await this.transport.apply(request.patcherId, {
+        protocolVersion: 1,
+        scope: request.scope,
+        baseRevision: inspection.liveRevision,
+        targetRevision: observed.graph.revision,
+        baseStructureToken: inspection.structureToken,
+        operations: [],
+        rollbackOperations: [],
+      });
+    }
+
+    const key = targetKey(request.patcherId, request.scope);
+    this.managedGraphs.set(key, observed.graph);
+    this.intentGraphs.set(key, observed.graph);
+    this.baselineSnapshots.set(key, inspection.snapshot.patcher);
+    this.pendingApplies.delete(key);
+    const persistence = this.tryPersistState();
+    return {
+      ...inspection,
+      action: request.action,
+      previousLiveRevision: inspection.liveRevision,
+      managedRevision: observed.graph.revision,
+      revisionAdvanced,
+      ...(acknowledgement ? { acknowledgement } : {}),
+      statePersisted: persistence.persisted,
+      ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
+      workingDsl,
     };
   }
 

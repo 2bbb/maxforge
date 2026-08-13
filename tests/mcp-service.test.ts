@@ -494,18 +494,7 @@ describe("MaxforgePatchService", () => {
     transport.snapshot = snapshotForGraph(liveGraph);
     const restarted = createService(transport, store);
 
-    const inspected = await (restarted as unknown as {
-      inspectPendingApply(
-        patcherId: string,
-        scope: string
-      ): Promise<{
-        baseRevision: string;
-        targetRevision: string;
-        liveRevision: string | null;
-        structureToken: string;
-        targetWorkingDsl: string;
-      }>;
-    }).inspectPendingApply("patch-a", "voices");
+    const inspected = await restarted.inspectPendingApply("patch-a", "voices");
     expect(inspected).toMatchObject({
       baseRevision: store.state?.managedGraphs.get("patch-a:voices")?.revision,
       targetRevision: compileDslToPatchGraph(
@@ -518,21 +507,17 @@ describe("MaxforgePatchService", () => {
     });
     expect(inspected.targetWorkingDsl).toContain("gain = *~ 0.5");
 
-    const recovered = await (restarted as unknown as {
-      recoverPendingApply(request: {
-        patcherId: string;
-        scope: string;
-        action: "rebase_live";
-        expectedLiveRevision: string;
-        expectedStructureToken: string;
-        currentDsl: string;
-      }): Promise<{
-        action: "rebase_live";
-        managedRevision: string;
-        workingDsl: string;
-        targetWorkingDsl: string;
-      }>;
-    }).recoverPendingApply({
+    await expect(restarted.recoverPendingApply({
+      patcherId: "patch-a",
+      scope: "voices",
+      action: "rebase_live",
+      expectedLiveRevision: liveGraph.revision,
+      expectedStructureToken: "f".repeat(16),
+      currentDsl: liveDsl,
+    })).rejects.toThrow("changed after pending-apply inspection");
+    expect(store.state?.pendingApplies.size).toBe(1);
+
+    const recovered = await restarted.recoverPendingApply({
       patcherId: "patch-a",
       scope: "voices",
       action: "rebase_live",
@@ -1277,6 +1262,36 @@ describe("MaxforgePatchService", () => {
       }),
     ]);
     expect(applied.workingDsl).not.toMatch(/@numinlets|@numoutlets|@outlettype/);
+  });
+
+  it("does not report canApply when the merged graph cannot serialize", async () => {
+    const transport = new FakeTransport();
+    const adapter = new DslPatchAdapter(database);
+    const service = new MaxforgePatchService(adapter, transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+    });
+    adapter.serialize = () => {
+      throw new Error("synthetic lossless round-trip failure");
+    };
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440\ngain = *~ 0.5",
+    });
+
+    expect(preview).toMatchObject({
+      canApply: false,
+      plan: undefined,
+      conflicts: [{
+        kind: "unrepresentable_graph",
+        targetPath: [],
+        message: "synthetic lossless round-trip failure",
+      }],
+    });
   });
 
   it("rejects merge when live and desired DSL change the same field", async () => {

@@ -306,6 +306,26 @@ const liveChangeReviewSchema = z.object({
   snapshot: snapshotEventSchema,
 });
 
+const pendingApplyInspectionSchema = z.object({
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  baseRevision: revisionSchema,
+  targetRevision: revisionSchema,
+  intentRevision: revisionSchema,
+  liveRevision: revisionSchema,
+  liveState: z.enum(["base", "target", "other"]),
+  structureToken: structureTokenSchema,
+  comparisonAvailable: z.boolean(),
+  managedChangeCount: z.number().int().nonnegative(),
+  unmanagedChangeCount: z.number().int().nonnegative(),
+  changes: z.array(snapshotChangeSchema),
+  review: editReviewSchema,
+  baseWorkingDsl: z.string().optional(),
+  targetWorkingDsl: z.string(),
+  intentWorkingDsl: z.string(),
+  snapshot: snapshotEventSchema,
+});
+
 const patchHistoryIdentitySchema = z.object({
   patcherId: patcherIdSchema,
   scope: scopeSchema,
@@ -425,6 +445,8 @@ const HELP_CONTENT = {
       "maxforge_reload_catalog",
       "maxforge_list_patches",
       "maxforge_inspect_patch",
+      "maxforge_inspect_pending_apply",
+      "maxforge_recover_pending_apply",
       "maxforge_get_live_edit_history",
       "maxforge_review_live_changes",
       "maxforge_adopt_live_changes",
@@ -466,6 +488,7 @@ const HELP_CONTENT = {
       "After an MCP process restart, call maxforge_status and verify that the expected state file and managed revision were restored, then inspect the target.",
       "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
       "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
+      "If the pending scope reports a third live revision, call maxforge_inspect_pending_apply. Rebase only with its exact live revision and structure token plus trusted complete current DSL; never delete the state file or guess the source.",
       "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
       "Use maxforge_get_live_edit_history when operation order or intermediate states could change the interpretation; account for droppedEvents and comparisonBasis.",
       "If saved-path warnings remain ambiguous, inspect both identities with maxforge_get_patch_history_identity. Only after the human confirms the relationship may you close the source and call maxforge_resolve_patch_history_identity.",
@@ -490,6 +513,8 @@ const HELP_CONTENT = {
     relatedTools: [
       "maxforge_status",
       "maxforge_inspect_patch",
+      "maxforge_inspect_pending_apply",
+      "maxforge_recover_pending_apply",
       "maxforge_get_live_edit_history",
       "maxforge_get_patch_history_identity",
       "maxforge_resolve_patch_history_identity",
@@ -564,6 +589,8 @@ export function createMaxforgeMcpServer(
         "targetRevision and statePersisted to be true. Never retry a timeout or " +
         "baseline/state warning blindly. Persistent state normally survives MCP " +
         "restarts; currentDsl is only a fallback when that state is unavailable. " +
+        "For an ambiguous pending scope, call maxforge_inspect_pending_apply " +
+        "and use token-bound recovery instead of deleting persistent state. " +
         "Call maxforge_help with topic 'recovery' on errors " +
         "or managed manual drift. Preserve managed manual edits only after " +
         "maxforge_reconcile_patch returns canApply=true, then apply with " +
@@ -922,6 +949,81 @@ export function createMaxforgeMcpServer(
           unmanagedChangeCount: result.unmanagedChangeCount,
           changes: result.changes,
           snapshot: result.snapshot,
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_inspect_pending_apply",
+    {
+      title: "Inspect an unresolved Max apply",
+      description:
+        "Read an unresolved apply without auto-clearing it. Returns persisted base, target, and intent revisions and DSL alongside the exact current live revision, structure token, and structural evidence. Use this when a third live revision makes ordinary compile, review, or reconcile calls ambiguous.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope with a pending apply"),
+      }),
+      outputSchema: pendingApplyInspectionSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async ({ patcherId, scope }) => {
+      try {
+        return toolResult({
+          ...await options.service.inspectPendingApply(patcherId, scope),
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    "maxforge_recover_pending_apply",
+    {
+      title: "Rebase an unresolved apply onto live Max state",
+      description:
+        "Explicitly replace an ambiguous pending apply with the exact inspected third live revision. Requires complete current DSL whose revision equals Max plus the immediately preceding revision and structure token. Reconstructs and losslessly serializes live managed state before changing the baseline, and returns the superseded target DSL.",
+      inputSchema: z.object({
+        patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
+        scope: scopeSchema.describe("Exact managed scope with a pending apply"),
+        action: z.literal("rebase_live"),
+        expectedLiveRevision: revisionSchema.describe(
+          "Exact liveRevision from maxforge_inspect_pending_apply"
+        ),
+        expectedStructureToken: structureTokenSchema.describe(
+          "Exact structureToken from maxforge_inspect_pending_apply"
+        ),
+        currentDsl: z.string().min(1).describe(
+          "Complete trusted DSL whose revision exactly matches expectedLiveRevision"
+        ),
+      }),
+      outputSchema: pendingApplyInspectionSchema.extend({
+        action: z.literal("rebase_live"),
+        previousLiveRevision: revisionSchema,
+        managedRevision: revisionSchema,
+        revisionAdvanced: z.boolean(),
+        acknowledgement: acknowledgementSchema.optional(),
+        statePersisted: z.boolean(),
+        stateWarning: z.string().optional(),
+        workingDsl: z.string(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
+    },
+    async (request) => {
+      try {
+        return toolResult({
+          ...await options.service.recoverPendingApply(request),
         });
       } catch (error) {
         return toolError(error);
