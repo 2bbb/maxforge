@@ -169,6 +169,13 @@ export interface PendingApplyInspection {
   readonly baseWorkingDsl?: string;
   readonly targetWorkingDsl: string;
   readonly intentWorkingDsl: string;
+  readonly supersededApply?: {
+    readonly baseRevision: string;
+    readonly targetRevision: string;
+    readonly intentRevision: string;
+    readonly targetWorkingDsl: string;
+    readonly intentWorkingDsl: string;
+  };
 }
 
 export interface RecoverPendingApplyRequest {
@@ -742,7 +749,7 @@ export class MaxforgePatchService {
     const changes = baseline
       ? diffPatcherSnapshots(baseline, snapshot.patcher)
       : [];
-    const baseGraph = this.managedGraphs.get(key);
+    const baseGraph = pending.recoveryBaseGraph ?? this.managedGraphs.get(key);
     return {
       patcherId,
       scope,
@@ -767,6 +774,21 @@ export class MaxforgePatchService {
         : {}),
       targetWorkingDsl: this.patchAdapter.serialize(pending.nextGraph),
       intentWorkingDsl: this.patchAdapter.serialize(pending.intentGraph),
+      ...(pending.superseded
+        ? {
+            supersededApply: {
+              baseRevision: pending.superseded.baseRevision,
+              targetRevision: pending.superseded.nextGraph.revision,
+              intentRevision: pending.superseded.intentGraph.revision,
+              targetWorkingDsl: this.patchAdapter.serialize(
+                pending.superseded.nextGraph
+              ),
+              intentWorkingDsl: this.patchAdapter.serialize(
+                pending.superseded.intentGraph
+              ),
+            },
+          }
+        : {}),
     };
   }
 
@@ -811,6 +833,26 @@ export class MaxforgePatchService {
     const revisionAdvanced = observed.graph.revision !== inspection.liveRevision;
     let acknowledgement: MaxforgeAppliedEvent | undefined;
     if (revisionAdvanced) {
+      const key = targetKey(request.patcherId, request.scope);
+      const pending = this.pendingApplies.get(key);
+      if (!pending) {
+        throw new Error(
+          `Pending apply for Max patch "${request.patcherId}" scope ` +
+          `"${request.scope}" disappeared during recovery`
+        );
+      }
+      this.pendingApplies.set(key, {
+        baseRevision: inspection.liveRevision,
+        nextGraph: observed.graph,
+        intentGraph: observed.graph,
+        recoveryBaseGraph: current.graph,
+        superseded: pending.superseded ?? {
+          baseRevision: pending.baseRevision,
+          nextGraph: pending.nextGraph,
+          intentGraph: pending.intentGraph,
+        },
+      });
+      this.persistState();
       acknowledgement = await this.transport.apply(request.patcherId, {
         protocolVersion: 1,
         scope: request.scope,
@@ -972,6 +1014,13 @@ export class MaxforgePatchService {
       throw new Error(
         `Pending apply for Max patch "${patcherId}" scope "${scope}" cannot ` +
         "be resolved until that patch is connected"
+      );
+    }
+    if (pending.superseded) {
+      throw new Error(
+        `Pending recovery for Max patch "${patcherId}" scope "${scope}" ` +
+        "requires explicit maxforge_inspect_pending_apply and " +
+        "maxforge_recover_pending_apply"
       );
     }
     const observedRevision = liveRevision ?? createEmptyPatchGraph(scope).revision;

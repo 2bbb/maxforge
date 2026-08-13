@@ -235,7 +235,8 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    拒否された場合は`maxforge_inspect_pending_apply`を使う。返されたrevisionと
    structure token、およびそのrevisionを生成した完全な`currentDsl`が揃う場合だけ
    `maxforge_recover_pending_apply`の`rebase_live`を実行する。state file削除やDSL推測で
-   回避しない。
+   回避しない。`supersededApply`が返る場合は、復旧apply自体の応答が失われた状態であり、
+   active targetと元の未確定target/intentの両方を保持したまま、同じ明示的復旧手順を完了する。
 6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。layout、object設定、
    annotation、ownership、routing等のsignalは「何が変わったか」の証拠であり、
    人間の意図そのものと断定しない。`review.editClusters`単位で関連差分をまとめて読み、

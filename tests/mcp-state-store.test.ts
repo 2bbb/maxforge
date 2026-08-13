@@ -39,7 +39,17 @@ describe("JsonFilePatchStateStore", () => {
       baselineSnapshots: new Map([["patch-a:voices", snapshot]]),
       pendingApplies: new Map([[
         "patch-b:voices",
-        { baseRevision: graph.revision, nextGraph: graph, intentGraph: graph },
+        {
+          baseRevision: graph.revision,
+          nextGraph: graph,
+          intentGraph: graph,
+          recoveryBaseGraph: graph,
+          superseded: {
+            baseRevision: graph.revision,
+            nextGraph: graph,
+            intentGraph: graph,
+          },
+        },
       ]]),
     });
 
@@ -47,6 +57,10 @@ describe("JsonFilePatchStateStore", () => {
     expect(restored.managedGraphs.get("patch-a:voices")).toEqual(graph);
     expect(restored.baselineSnapshots.get("patch-a:voices")).toEqual(snapshot);
     expect(restored.pendingApplies.get("patch-b:voices")?.nextGraph).toEqual(graph);
+    expect(restored.pendingApplies.get("patch-b:voices")?.recoveryBaseGraph)
+      .toEqual(graph);
+    expect(restored.pendingApplies.get("patch-b:voices")?.superseded?.nextGraph)
+      .toEqual(graph);
     expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 1 });
   });
 

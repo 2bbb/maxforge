@@ -546,6 +546,115 @@ describe("MaxforgePatchService", () => {
     ]);
   });
 
+  it("preserves both recovery and superseded apply evidence when recovery acknowledgement is lost", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const service = createService(transport, store);
+    const baseDsl = "osc = cycle~ 440";
+    transport.snapshotAfterApply = snapshotForDsl(baseDsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+
+    const pendingDsl = `${baseDsl}\ngain = *~ 0.5`;
+    transport.failureAfterApply = new Error("original acknowledgement lost");
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: pendingDsl,
+    })).rejects.toThrow("original acknowledgement lost");
+
+    const liveDsl = `${baseDsl}\nmeter = meter~`;
+    const liveGraph = compileDslToPatchGraph(liveDsl, database, "voices").graph!;
+    transport.liveRevisions.set("patch-a:voices", liveGraph.revision);
+    transport.snapshot = {
+      ...snapshotForGraph(liveGraph),
+      boxes: snapshotForGraph(liveGraph).boxes.map((box) =>
+        box.varName?.endsWith("obj_meter")
+          ? { ...box, patchingRect: [180, 120, 80, 22] }
+          : box
+      ),
+    };
+
+    transport.failureAfterApply = new Error("recovery acknowledgement lost");
+    const firstRestart = createService(transport, store);
+    const firstInspection = await firstRestart.inspectPendingApply(
+      "patch-a",
+      "voices"
+    );
+    await expect(firstRestart.recoverPendingApply({
+      patcherId: "patch-a",
+      scope: "voices",
+      action: "rebase_live",
+      expectedLiveRevision: firstInspection.liveRevision,
+      expectedStructureToken: firstInspection.structureToken,
+      currentDsl: liveDsl,
+    })).rejects.toThrow("recovery acknowledgement lost");
+
+    const recoveryRevision = transport.liveRevisions.get("patch-a:voices")!;
+    expect(recoveryRevision).not.toBe(liveGraph.revision);
+    expect(store.state?.pendingApplies.get("patch-a:voices")).toMatchObject({
+      baseRevision: liveGraph.revision,
+      nextGraph: { revision: recoveryRevision },
+      recoveryBaseGraph: { revision: liveGraph.revision },
+      superseded: {
+        nextGraph: {
+          revision: compileDslToPatchGraph(
+            pendingDsl,
+            database,
+            "voices"
+          ).graph!.revision,
+        },
+      },
+    });
+
+    const secondRestart = createService(transport, store);
+    expect(() => secondRestart.compilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: `${liveDsl}\nbutton_1 = button`,
+    })).toThrow("requires explicit maxforge_inspect_pending_apply");
+
+    const secondInspection = await secondRestart.inspectPendingApply(
+      "patch-a",
+      "voices"
+    );
+    expect(secondInspection).toMatchObject({
+      baseRevision: liveGraph.revision,
+      targetRevision: recoveryRevision,
+      liveRevision: recoveryRevision,
+      liveState: "target",
+      supersededApply: {
+        targetRevision: compileDslToPatchGraph(
+          pendingDsl,
+          database,
+          "voices"
+        ).graph!.revision,
+      },
+    });
+    expect(secondInspection.targetWorkingDsl).toContain("meter = meter~");
+    expect(secondInspection.supersededApply?.targetWorkingDsl)
+      .toContain("gain = *~ 0.5");
+
+    transport.failureAfterApply = undefined;
+    const recovered = await secondRestart.recoverPendingApply({
+      patcherId: "patch-a",
+      scope: "voices",
+      action: "rebase_live",
+      expectedLiveRevision: secondInspection.liveRevision,
+      expectedStructureToken: secondInspection.structureToken,
+      currentDsl: secondInspection.targetWorkingDsl,
+    });
+    expect(recovered).toMatchObject({
+      managedRevision: recoveryRevision,
+      revisionAdvanced: false,
+    });
+    expect(transport.plans).toHaveLength(3);
+    expect(store.state?.pendingApplies.size).toBe(0);
+  });
+
   it("rejects caller-provided current DSL when its revision differs from Max", async () => {
     const transport = new FakeTransport();
     transport.liveRevisions.set("patch-a:voices", "b".repeat(64));

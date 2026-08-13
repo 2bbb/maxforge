@@ -18,6 +18,12 @@ export interface PendingPatchApply {
   readonly baseRevision: string;
   readonly nextGraph: PatchGraph;
   readonly intentGraph: PatchGraph;
+  readonly recoveryBaseGraph?: PatchGraph;
+  readonly superseded?: {
+    readonly baseRevision: string;
+    readonly nextGraph: PatchGraph;
+    readonly intentGraph: PatchGraph;
+  };
 }
 
 export interface PatchServiceState {
@@ -149,10 +155,40 @@ function parsePendingEntries(
     if (!isRecord(value) || typeof value.baseRevision !== "string") {
       throw new Error(`Invalid pending apply state for ${target}`);
     }
+    const superseded = value.superseded;
+    if (
+      superseded !== undefined &&
+      (!isRecord(superseded) || typeof superseded.baseRevision !== "string")
+    ) {
+      throw new Error(`Invalid superseded pending apply state for ${target}`);
+    }
     return [target, {
       baseRevision: value.baseRevision,
       nextGraph: parseGraph(value.nextGraph, `pending ${target} nextGraph`),
       intentGraph: parseGraph(value.intentGraph, `pending ${target} intentGraph`),
+      ...(value.recoveryBaseGraph !== undefined
+        ? {
+            recoveryBaseGraph: parseGraph(
+              value.recoveryBaseGraph,
+              `pending ${target} recoveryBaseGraph`
+            ),
+          }
+        : {}),
+      ...(isRecord(superseded) && typeof superseded.baseRevision === "string"
+        ? {
+            superseded: {
+              baseRevision: superseded.baseRevision,
+              nextGraph: parseGraph(
+                superseded.nextGraph,
+                `pending ${target} superseded nextGraph`
+              ),
+              intentGraph: parseGraph(
+                superseded.intentGraph,
+                `pending ${target} superseded intentGraph`
+              ),
+            },
+          }
+        : {}),
     }];
   }));
 }

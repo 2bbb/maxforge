@@ -448,12 +448,14 @@ Reads a persisted in-flight apply without invoking the normal base/target
 auto-resolution path. Use it when `maxforge_status.state.pendingScopes` contains
 the target and Max reports a third revision.
 
-The result retains all three persisted identities (`baseRevision`,
+The result retains the active pending identities (`baseRevision`,
 `targetRevision`, and `intentRevision`), their recoverable DSL sources, the
 current `liveRevision`, `liveState`, exact `structureToken`, snapshot, and
-baseline-relative edit evidence. It is read-only and does not clear the pending
-record. A revision hash alone is not enough to recover a graph; retain or locate
-the complete DSL that produced the third live revision.
+baseline-relative edit evidence. If a recovery transition itself lost its
+acknowledgement, `supersededApply` additionally retains the original unresolved
+base, target, intent, and canonical target/intent DSL. It is read-only and does
+not clear the pending record. A revision hash alone is not enough to recover a
+graph; retain or locate the complete DSL that produced the third live revision.
 
 ### `maxforge_recover_pending_apply`
 
@@ -469,10 +471,12 @@ only action is `rebase_live`. It requires:
 Recovery re-inspects Max, rejects either stale guard, reconstructs the actual
 managed snapshot, and verifies lossless DSL serialization before replacing the
 baseline. If snapshot-derived managed state requires a revision change, Maxforge
-sends only a token-bound zero-operation revision transition. The result returns
-both canonical `workingDsl` and the superseded `targetWorkingDsl`; the abandoned
-side is not silently hidden. Do not use guessed DSL or delete the state file as
-a substitute.
+durably records a recovery-in-progress transition before sending a token-bound
+zero-operation revision transition. If Max applies it but its acknowledgement is
+lost, the next inspection exposes the active recovery DSL plus the abandoned
+apply under `supersededApply`; ordinary compile/review/reconcile calls stay
+blocked until explicit recovery finishes. Do not use guessed DSL or delete the
+state file as a substitute.
 
 ### `maxforge_review_live_changes`
 

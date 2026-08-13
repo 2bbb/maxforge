@@ -166,7 +166,10 @@ and target revisions.
 
 If Max reports a third revision, stop ordinary compile/review/reconcile calls.
 Call `maxforge_inspect_pending_apply` and preserve its base, target, intent, and
-live DSL evidence. Call `maxforge_recover_pending_apply` with `rebase_live` only
+live DSL evidence. If it returns `supersededApply`, preserve that original
+unresolved target/intent evidence as well; the active target is a durable
+recovery transition and ordinary tools must remain blocked. Call
+`maxforge_recover_pending_apply` with `rebase_live` only
 when trusted complete `currentDsl` compiles to the exact returned live revision,
 and pass the unchanged structure token. A stale token, guessed DSL, state-file
 deletion, or fabricated empty graph is not recovery.

@@ -160,6 +160,10 @@ describe("maxforge MCP protocol surface", () => {
         definitions.find((tool) => tool.name === "maxforge_recover_pending_apply")
           ?.description
       ).toContain("third live revision");
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_recover_pending_apply")
+          ?.annotations?.idempotentHint
+      ).toBe(false);
 
       const help = await client.request(3, "tools/call", {
         name: "maxforge_help",
@@ -766,6 +770,7 @@ function toolDefinitions(message: JSONRPCMessage): Array<{
   name: string;
   description?: string;
   outputSchema?: { type?: unknown };
+  annotations?: { idempotentHint?: unknown };
 }> {
   if (!("result" in message)) return [];
   const result = message.result as {
@@ -773,6 +778,7 @@ function toolDefinitions(message: JSONRPCMessage): Array<{
       name?: unknown;
       description?: unknown;
       outputSchema?: { type?: unknown };
+      annotations?: { idempotentHint?: unknown };
     }>;
   };
   return result.tools
@@ -780,6 +786,7 @@ function toolDefinitions(message: JSONRPCMessage): Array<{
       name: string;
       description?: string;
       outputSchema?: { type?: unknown };
+      annotations?: { idempotentHint?: unknown };
     } => typeof tool.name === "string") ?? [];
 }
 

@@ -323,6 +323,13 @@ const pendingApplyInspectionSchema = z.object({
   baseWorkingDsl: z.string().optional(),
   targetWorkingDsl: z.string(),
   intentWorkingDsl: z.string(),
+  supersededApply: z.object({
+    baseRevision: revisionSchema,
+    targetRevision: revisionSchema,
+    intentRevision: revisionSchema,
+    targetWorkingDsl: z.string(),
+    intentWorkingDsl: z.string(),
+  }).optional(),
   snapshot: snapshotEventSchema,
 });
 
@@ -989,7 +996,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Rebase an unresolved apply onto live Max state",
       description:
-        "Explicitly replace an ambiguous pending apply with the exact inspected third live revision. Requires complete current DSL whose revision equals Max plus the immediately preceding revision and structure token. Reconstructs and losslessly serializes live managed state before changing the baseline, and returns the superseded target DSL.",
+        "Explicitly replace an ambiguous pending apply with the exact inspected third live revision. Requires complete current DSL whose revision equals Max plus the immediately preceding revision and structure token. Reconstructs and losslessly serializes live managed state before changing the baseline, and preserves superseded apply evidence across acknowledgement loss.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope with a pending apply"),
@@ -1017,7 +1024,7 @@ export function createMaxforgeMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
-        idempotentHint: true,
+        idempotentHint: false,
       },
     },
     async (request) => {
