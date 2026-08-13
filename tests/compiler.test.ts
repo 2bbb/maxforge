@@ -1048,6 +1048,24 @@ describe("attributes", () => {
     );
   });
 
+  it("quotes numeric-looking attribute symbols to preserve their type", () => {
+    const parsed = parse(
+      "view = bpatcher @name f.maxpat @args speed /speed 0."
+    );
+    const compiled = compile(parsed.ast, db);
+    expect(compiled.success).toBe(true);
+    const box = compiled.output!.patcher.boxes[0].box as Record<string, unknown>;
+    box.args = ["speed", "/speed", "0", "4"];
+
+    const dsl = decompile(compiled.output!);
+    expect(dsl).toContain('@args speed "/speed" "0" "4"');
+    const reparsed = parse(dsl);
+    expect(reparsed.errors).toEqual([]);
+    expect(reparsed.ast.statements[0]).toMatchObject({
+      attrs: { args: ["speed", "/speed", "0", "4"] },
+    });
+  });
+
   it.each([
     ["empty attribute name", "n = number @ 1", "Invalid attribute name"],
     ["missing attribute value", "n = number @minimum", "requires at least one value"],

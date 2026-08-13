@@ -61,7 +61,11 @@ function isAttrValue(value: unknown): value is AttrValue {
 function formatAttrValue(value: unknown): string {
   if (typeof value === "number") return String(value);
   if (typeof value === "string") {
-    if (/^[\w.-]+$/.test(value)) return value;
+    // Attribute parsing distinguishes numeric atoms from symbol atoms. Keep
+    // numeric-looking symbols quoted when Max normalizes abstraction args.
+    if (/^[\w.-]+$/.test(value) && !/^-?\d+(?:\.\d+)?$/.test(value)) {
+      return value;
+    }
     return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
   return String(value);
