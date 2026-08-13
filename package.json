@@ -15,6 +15,7 @@
     "pretest": "npm run build",
     "pretest:coverage": "npm run build",
     "dev": "tsc --watch",
+    "docs:check": "python3 scripts/verify-markdown-links.py",
     "mcp": "node dist/mcp/bin.js",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/vitest run --coverage",

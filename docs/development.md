@@ -7,6 +7,7 @@ This document covers local repository work. End-user CLI and MCP setup live in
 
 - Node.js 20 or newer
 - npm
+- Python 3 for repository validation scripts
 - CMake and a C++17 compiler for the native external
 - Git submodules for min-api, `bbb.agent`, and IXWebSocket
 
@@ -20,6 +21,7 @@ npm install
 npm run build
 npm test
 npm run test:coverage
+npm run docs:check
 npm run pack:dry-run
 ```
 
