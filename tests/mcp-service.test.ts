@@ -211,6 +211,8 @@ describe("MaxforgePatchService", () => {
         title: "Patch A",
         filename: "patch-a.maxpat",
         filepath: "/project/patch-a.maxpat",
+        externalVersion: "0.4.0",
+        versionCompatible: true,
         capabilities: ["edit_observation_v1", "session_baseline_v1"],
       };
       transport.patches = [patch];
@@ -263,6 +265,8 @@ describe("MaxforgePatchService", () => {
         title: "Patch A",
         filename: "patch-a.maxpat",
         filepath: "/project/patch-a.maxpat",
+        externalVersion: "0.4.0",
+        versionCompatible: true,
         capabilities: ["edit_observation_v1", "session_baseline_v1"],
       }, {
         structureToken: "0".repeat(16),
@@ -365,6 +369,35 @@ describe("MaxforgePatchService", () => {
       "patch-a:voices": second.plan.targetRevision,
     });
     expect(second.workingDsl).toContain("osc_1 = cycle~ 660");
+  });
+
+  it("rejects an incompatible native external before recording a pending apply", async () => {
+    const transport = new FakeTransport();
+    transport.patches = [{
+      patcherId: "patch-a",
+      scope: "voices",
+      instanceId: "instance-a",
+      sessionId: "session-a",
+      revision: null,
+      controller: false,
+      title: "Patch A",
+      filename: "patch-a.maxpat",
+      filepath: "/project/patch-a.maxpat",
+      externalVersion: "0.3.0",
+      versionCompatible: false,
+      capabilities: [],
+    }];
+    const service = createService(transport);
+
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+    })).rejects.toThrow(
+      'loaded maxforge.sync version "0.3.0", but this MCP runtime requires "0.4.0"'
+    );
+    expect(transport.plans).toEqual([]);
+    expect(service.getStateStatus().pendingScopes).toEqual([]);
   });
 
   it("preserves compact authored DSL after an ordinary apply and restart", async () => {
@@ -1807,6 +1840,8 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+      externalVersion: "0.4.0",
+      versionCompatible: true,
       capabilities: ["edit_observation_v1"],
     };
   }
@@ -1820,6 +1855,8 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "opened.maxpat",
       filepath: request.path,
+      externalVersion: "0.4.0",
+      versionCompatible: true,
       capabilities: ["edit_observation_v1"],
     };
   }
@@ -1865,6 +1902,7 @@ class FakeTransport implements PatchPlanTransport {
     return {
       host: "127.0.0.1",
       port: 8766,
+      expectedExternalVersion: "0.4.0",
       connectedClients: this.connectedClients,
       registeredPatches: [],
       liveRevisions: Object.fromEntries(this.liveRevisions),

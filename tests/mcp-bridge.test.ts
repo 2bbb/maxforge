@@ -645,6 +645,33 @@ describe("MaxforgeWebSocketBridge", () => {
         observations: [],
       });
   });
+
+  it("reports external version mismatches and blocks mutation", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+    await register(bridge, client, {
+      ...registration("patch-a", "voices", true),
+      externalVersion: "0.3.0",
+    });
+
+    expect(bridge.getStatus()).toMatchObject({
+      expectedExternalVersion: "0.4.0",
+      registeredPatches: [{
+        patcherId: "patch-a",
+        externalVersion: "0.3.0",
+        versionCompatible: false,
+      }],
+    });
+
+    const plan = diffPatchGraphs(
+      createEmptyPatchGraph("voices"),
+      createEmptyPatchGraph("voices")
+    );
+    await expect(bridge.apply("patch-a", plan)).rejects.toThrow(
+      'loaded maxforge.sync version "0.3.0", but this MCP runtime requires "0.4.0"'
+    );
+  });
 });
 
 describe("parseBridgeEvent", () => {
@@ -751,6 +778,18 @@ describe("parseBridgeEvent", () => {
     });
   });
 
+  it("registers legacy externals as unknown and incompatible", () => {
+    const { externalVersion: _externalVersion, ...legacy } = registration(
+      "patch-a",
+      "voices",
+      false
+    );
+    expect(parseBridgeEvent(JSON.stringify(legacy))).toMatchObject({
+      type: "maxforge.registered",
+      externalVersion: "unknown",
+    });
+  });
+
   it("assigns a new session while preserving the native instance identity", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
@@ -775,6 +814,7 @@ function createBridge(
   const bridge = new MaxforgeWebSocketBridge({
     port: 0,
     applyTimeoutMs: 1000,
+    expectedExternalVersion: "0.4.0",
   }, editHistoryStore);
   bridges.push(bridge);
   return bridge;
@@ -825,6 +865,7 @@ function registration(
     title,
     filename: "",
     filepath: "",
+    externalVersion: "0.4.0",
     capabilities: ["edit_observation_v1"],
     observationBaseline: {
       structureToken: "0".repeat(16),

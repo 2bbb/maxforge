@@ -41,6 +41,12 @@ const patchInfoSchema = z.object({
   title: z.string().describe("Display-only Max window title"),
   filename: z.string().describe("Display-only Max document filename"),
   filepath: z.string().describe("Saved document path, or an empty string for an unsaved patch"),
+  externalVersion: z.string().describe(
+    "Version embedded in the maxforge.sync binary actually loaded by Max"
+  ),
+  versionCompatible: z.boolean().describe(
+    "Whether the loaded maxforge.sync version exactly matches this MCP runtime"
+  ),
   capabilities: z.array(z.string()),
 });
 
@@ -459,6 +465,7 @@ const HELP_CONTENT = {
       "Before using a project external or abstraction, call maxforge_catalog and confirm the loaded definition.",
       "After editing configured catalog files, call maxforge_reload_catalog and verify the replacement digest before compiling.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
+      "Before any mutation, require the target's versionCompatible field to be true. externalVersion is reported by the maxforge.sync binary loaded in Max and must exactly match bridge.expectedExternalVersion.",
       "Call maxforge_inspect_patch before mutation; start with summary detail and request full only when complete surrounding topology is needed. Copy its structureToken into apply so the same full snapshot is not requested twice. Do not infer patch state from the screen or title.",
       "When edit observation is supported, call maxforge_get_live_edit_history to inspect ordered snapshot evidence before interpreting the current aggregate diff.",
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
@@ -478,6 +485,7 @@ const HELP_CONTENT = {
       "Ordinary compile/apply is rejected while the acknowledged graph still differs from the agent's last desired DSL due to preserved human edits.",
       "Apply binds the inspected live structure token; Max rejects the plan if the patch changes before native mutation.",
       "Never mutate an unlisted patcherId or a scope different from the registration.",
+      "Do not mutate when versionCompatible is false. Install the matching external in an explicit Max package or project search path, remove stale duplicate binaries, restart Max, and list patches again.",
       "Never retry a timeout or baseline warning blindly; inspect live state first.",
     ],
     relatedTools: [
@@ -515,6 +523,7 @@ const HELP_CONTENT = {
       "New patch creation requires exactly one registered controller.",
       "maxforge_open_patch loads a .maxpat on the Max host and injects maxforge.sync; use it only for patches that do not already contain maxforge.sync.",
       "Saved file paths are locators and metadata, not patch identities; always route by listed patcherId and scope.",
+      "A patch filepath does not identify the external binary Max loaded. Use externalVersion and versionCompatible; colocating an external beside a patch is not proof that Max resolved it.",
     ],
     relatedTools: [
       "maxforge_status",
@@ -573,6 +582,7 @@ const HELP_CONTENT = {
     summary: "Ownership, identity, and mutation boundaries enforced by maxforge.",
     steps: [
       "Select targets only from maxforge_list_patches.",
+      "Require versionCompatible=true before every mutation; version mismatch is diagnostic-only until Max is restarted with the matching external.",
       "Preview every nontrivial change with maxforge_compile_plan.",
       "Inspect after apply and separate managed from unmanaged changes.",
       "Review live changes before attributing intent or accepting them as desired state.",
@@ -623,6 +633,7 @@ export function createMaxforgeMcpServer(
         "Before using a project external or abstraction, confirm it with " +
         "maxforge_catalog; membership is metadata, not a Max runtime probe. " +
         "Always select patcherId and scope from maxforge_list_patches, inspect the " +
+        "reported externalVersion, require versionCompatible=true, inspect the " +
         "live patch, and review live differences before attributing human intent. " +
         "Adopt an accepted managed baseline only with the exact reviewed structure " +
         "token, or reconcile it with a concrete next complete DSL. After adoption, " +
@@ -700,6 +711,7 @@ export function createMaxforgeMcpServer(
         bridge: z.object({
           host: z.string(),
           port: z.number().int().nonnegative(),
+          expectedExternalVersion: z.string(),
           connectedClients: z.number().int().nonnegative(),
           registeredPatches: z.array(patchInfoSchema),
           liveRevisions: z.record(z.string(), revisionSchema.nullable()),
@@ -827,7 +839,7 @@ export function createMaxforgeMcpServer(
     {
       title: "List live Max patches",
       description:
-        "List registered Max patches. Always copy patcherId and scope from this result before inspect, compile, or apply; never target a patch by title or filename.",
+        "List registered Max patches and the loaded native external version. Always copy patcherId and scope from this result and require versionCompatible=true before mutation; never target a patch by title or filename.",
       inputSchema: z.object({}),
       outputSchema: z.object({ patches: z.array(patchInfoSchema) }),
       annotations: {

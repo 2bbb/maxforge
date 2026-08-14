@@ -256,6 +256,7 @@ export class MaxforgePatchService {
   }
 
   async applyDsl(request: ApplyDslRequest): Promise<ApplyDslResult> {
+    this.assertMutationCompatible(request.patcherId, request.scope);
     const totalStartedAt = performance.now();
     let plan: PatchPlan;
     let nextGraph: PatchGraph;
@@ -677,6 +678,7 @@ export class MaxforgePatchService {
     request: AdoptLiveChangesRequest
   ): Promise<AdoptLiveChangesResult> {
     const { patcherId, scope, expectedStructureToken } = request;
+    this.assertMutationCompatible(patcherId, scope);
     const key = targetKey(patcherId, scope);
     this.resolvePendingApply(key);
     const acknowledged = this.managedGraphs.get(key);
@@ -882,6 +884,7 @@ export class MaxforgePatchService {
   async recoverPendingApply(
     request: RecoverPendingApplyRequest
   ): Promise<RecoverPendingApplyResult> {
+    this.assertMutationCompatible(request.patcherId, request.scope);
     const inspection = await this.inspectPendingApply(
       request.patcherId,
       request.scope
@@ -1250,6 +1253,19 @@ export class MaxforgePatchService {
         `"${patcherId}" scope "${scope}"`
       );
     }
+  }
+
+  private assertMutationCompatible(patcherId: string, scope: string): void {
+    const patch = this.transport.listPatches().find((candidate) =>
+      candidate.patcherId === patcherId && candidate.scope === scope
+    );
+    if (!patch || patch.versionCompatible) return;
+    throw new Error(
+      `Max patch "${patcherId}" loaded maxforge.sync version ` +
+      `"${patch.externalVersion}", but this MCP runtime requires ` +
+      `"${this.transport.getStatus().expectedExternalVersion}". Mutation is ` +
+      "blocked until Max is restarted with the matching external."
+    );
   }
 
   private requireEditHistoryStore(): EditHistoryStore {

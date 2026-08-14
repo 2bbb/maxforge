@@ -489,6 +489,8 @@ function patchInfo(): MaxforgePatchInfo {
     title: "Patch A",
     filename: "patch-a.maxpat",
     filepath: "/project/patch-a.maxpat",
+    externalVersion: "0.4.0",
+    versionCompatible: true,
     capabilities: ["edit_observation_v1", "session_baseline_v1"],
   };
 }

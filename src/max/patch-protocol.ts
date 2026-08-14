@@ -10,11 +10,13 @@ export interface MaxforgePatchInfo {
   readonly title: string;
   readonly filename: string;
   readonly filepath: string;
+  readonly externalVersion: string;
+  readonly versionCompatible: boolean;
   readonly capabilities: readonly string[];
 }
 
 export interface MaxforgePatchRegistration
-  extends Omit<MaxforgePatchInfo, "sessionId"> {
+  extends Omit<MaxforgePatchInfo, "sessionId" | "versionCompatible"> {
   readonly type: "maxforge.registered";
   readonly observationBaseline: MaxforgeObservationBaseline;
 }
@@ -254,6 +256,7 @@ export type MaxforgeBridgeEvent =
 export interface MaxforgeBridgeStatus {
   readonly host: string;
   readonly port: number;
+  readonly expectedExternalVersion: string;
   readonly connectedClients: number;
   readonly registeredPatches: readonly MaxforgePatchInfo[];
   readonly liveRevisions: Readonly<Record<string, string | null>>;
@@ -314,4 +317,5 @@ export interface MaxforgeBridgeOptions {
   readonly port?: number;
   readonly token?: string;
   readonly applyTimeoutMs?: number;
+  readonly expectedExternalVersion?: string;
 }

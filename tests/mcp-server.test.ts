@@ -645,6 +645,8 @@ describe("maxforge MCP protocol surface", () => {
       title: "Patch A",
       filename: "patch-a.maxpat",
       filepath: "/project/patch-a.maxpat",
+      externalVersion: "0.4.0",
+      versionCompatible: true,
       capabilities: ["edit_observation_v1", "session_baseline_v1"],
     }, {
       structureToken: snapshot.structureToken,
@@ -884,6 +886,8 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: "",
       filepath: "",
+      externalVersion: "0.4.0",
+      versionCompatible: true,
       capabilities: ["edit_observation_v1"],
     };
   }
@@ -897,6 +901,8 @@ class FakeTransport implements PatchPlanTransport {
       controller: false,
       filename: request.path.split(/[\\/]/).at(-1) ?? "",
       filepath: request.path,
+      externalVersion: "0.4.0",
+      versionCompatible: true,
       capabilities: ["edit_observation_v1"],
     };
   }
@@ -940,6 +946,7 @@ class FakeTransport implements PatchPlanTransport {
     return {
       host: "127.0.0.1",
       port: 8766,
+      expectedExternalVersion: "0.4.0",
       connectedClients: 0,
       registeredPatches: [],
       liveRevisions: {},

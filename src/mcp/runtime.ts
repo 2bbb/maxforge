@@ -58,7 +58,10 @@ export async function createMaxforgeMcpRuntime(
   const catalogOptions = catalogOptionsFromEnvironment(environment);
   let catalog = await loadObjectCatalog(catalogOptions);
   const version = await packageVersion();
-  const bridgeOptions = bridgeOptionsFromEnvironment(environment);
+  const bridgeOptions = {
+    ...bridgeOptionsFromEnvironment(environment),
+    expectedExternalVersion: version,
+  };
   const editHistoryDirectory = editHistoryDirectoryFromEnvironment(
     environment,
     catalog.project

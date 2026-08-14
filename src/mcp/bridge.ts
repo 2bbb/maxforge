@@ -125,6 +125,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   private readonly requestedPort: number;
   private readonly token: string | undefined;
   private readonly applyTimeoutMs: number;
+  private readonly expectedExternalVersion: string;
   private readonly clients = new Set<WebSocket>();
   private readonly authenticatedClients = new Set<WebSocket>();
   private readonly registrations = new Map<string, RegisteredClient>();
@@ -153,6 +154,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     this.requestedPort = options.port ?? 8766;
     this.token = options.token;
     this.applyTimeoutMs = options.applyTimeoutMs ?? 5000;
+    this.expectedExternalVersion = options.expectedExternalVersion ?? "unknown";
 
     if (this.token !== undefined && !TOKEN_PATTERN.test(this.token)) {
       throw new Error(
@@ -276,6 +278,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     plan: PatchPlan
   ): Promise<MaxforgeAppliedEvent> {
     const registration = this.getRegisteredClient(patcherId, plan.scope);
+    this.assertVersionCompatible(registration);
     this.assertPatchIsIdle(patcherId);
     const requestId = randomUUID();
 
@@ -426,6 +429,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
   async createPatch(request: CreateMaxPatchRequest): Promise<MaxforgePatchInfo> {
     this.validateNewPatchRequest(request, "Creation");
     const controller = this.getSingleController();
+    this.assertVersionCompatible(controller);
     const requestId = randomUUID();
 
     return new Promise<MaxforgePatchInfo>((resolve, reject) => {
@@ -469,6 +473,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     this.validateNewPatchRequest(request, "Opening");
     validatePatchPath(request.path);
     const controller = this.getSingleController();
+    this.assertVersionCompatible(controller);
     const requestId = randomUUID();
 
     return new Promise<MaxforgePatchInfo>((resolve, reject) => {
@@ -517,6 +522,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       request.patcherId,
       request.scope
     );
+    this.assertVersionCompatible(registration);
     this.assertPatchIsIdle(request.patcherId);
     if (request.path !== undefined) validatePatchPath(request.path);
     const requestId = randomUUID();
@@ -561,6 +567,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
       request.patcherId,
       request.scope
     );
+    this.assertVersionCompatible(registration);
     this.assertPatchIsIdle(request.patcherId);
     const requestId = randomUUID();
 
@@ -617,6 +624,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     return {
       host: this.host,
       port: this.listeningPort ?? this.requestedPort,
+      expectedExternalVersion: this.expectedExternalVersion,
       connectedClients: [...this.clients].filter(
         (client) => client.readyState === WebSocket.OPEN
       ).length,
@@ -754,7 +762,7 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
     const sessionId = randomUUID();
     const sessionStartedAt = new Date().toISOString();
-    const info = patchInfo(event, sessionId);
+    const info = patchInfo(event, sessionId, this.expectedExternalVersion);
     this.clientPatcherIds.set(client, event.patcherId);
     this.registrations.set(event.patcherId, {
       client,
@@ -1149,6 +1157,17 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     }
   }
 
+  private assertVersionCompatible(registration: RegisteredClient): void {
+    if (registration.info.versionCompatible) return;
+    throw new Error(
+      `Max patch "${registration.info.patcherId}" loaded maxforge.sync ` +
+      `version "${registration.info.externalVersion}", but this MCP runtime ` +
+      `requires "${this.expectedExternalVersion}". Install the matching Max ` +
+      "external, remove stale duplicates from Max search paths, then restart " +
+      "Max and reopen the patch before mutating it."
+    );
+  }
+
   private validateNewPatchRequest(
     request: CreateMaxPatchRequest,
     operation: string
@@ -1326,6 +1345,8 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
     typeof value.filename === "string" &&
     typeof value.filepath === "string" &&
     isIdentifier(value.instanceId) &&
+    (value.externalVersion === undefined ||
+      typeof value.externalVersion === "string") &&
     isPatchCapabilities(value.capabilities)
   ) {
     const observationBaseline = parseObservationBaseline(
@@ -1342,6 +1363,7 @@ export function parseBridgeEvent(raw: string): MaxforgeBridgeEvent | undefined {
       title: value.title,
       filename: value.filename,
       filepath: value.filepath,
+      externalVersion: value.externalVersion ?? "unknown",
       capabilities: value.capabilities,
       observationBaseline,
     };
@@ -1543,7 +1565,8 @@ function isAbsoluteHostPath(path: string): boolean {
 
 function patchInfo(
   event: MaxforgePatchRegistration,
-  sessionId: string
+  sessionId: string,
+  expectedExternalVersion: string
 ): MaxforgePatchInfo {
   return {
     patcherId: event.patcherId,
@@ -1555,6 +1578,11 @@ function patchInfo(
     title: event.title,
     filename: event.filename,
     filepath: event.filepath,
+    externalVersion: event.externalVersion,
+    versionCompatible:
+      event.externalVersion !== "unknown" &&
+      expectedExternalVersion !== "unknown" &&
+      event.externalVersion === expectedExternalVersion,
     capabilities: event.capabilities,
   };
 }

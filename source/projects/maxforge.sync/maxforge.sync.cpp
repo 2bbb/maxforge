@@ -15,6 +15,10 @@
 #include <unordered_set>
 #include <vector>
 
+#ifndef MAXFORGE_PACKAGE_VERSION
+#define MAXFORGE_PACKAGE_VERSION "unknown"
+#endif
+
 namespace {
 
 namespace sync_protocol = maxforge::sync_protocol;
@@ -2737,6 +2741,8 @@ private:
 				json_string(filename) +
 				",\"filepath\":" +
 				json_string(symbol_string(c74::max::jpatcher_get_filepath(root_patcher))) +
+				",\"externalVersion\":" +
+				json_string(MAXFORGE_PACKAGE_VERSION) +
 				",\"capabilities\":[\"edit_observation_v1\",\"session_baseline_v1\"]" +
 				",\"observationBaseline\":{\"structureToken\":" +
 				json_string(observation_baseline_token) +
