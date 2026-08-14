@@ -201,6 +201,8 @@ export interface RecoverPendingApplyResult extends PendingApplyInspection {
 export class MaxforgePatchService {
   private readonly managedGraphs: Map<string, PatchGraph>;
   private readonly intentGraphs: Map<string, PatchGraph>;
+  private readonly workingSources: Map<string, string>;
+  private readonly intentSources: Map<string, string>;
   private readonly baselineSnapshots: Map<string, MaxforgePatcherSnapshot>;
   private readonly pendingApplies: Map<string, PendingPatchApply>;
 
@@ -213,6 +215,8 @@ export class MaxforgePatchService {
     const state = stateStore?.load();
     this.managedGraphs = new Map(state?.managedGraphs);
     this.intentGraphs = new Map(state?.intentGraphs);
+    this.workingSources = new Map(state?.workingSources);
+    this.intentSources = new Map(state?.intentSources);
     this.baselineSnapshots = new Map(state?.baselineSnapshots);
     this.pendingApplies = new Map(state?.pendingApplies);
   }
@@ -268,14 +272,19 @@ export class MaxforgePatchService {
       warnings = [...current.warnings, ...desired.warnings];
     }
 
-    const workingDsl = this.patchAdapter.serialize(nextGraph);
     const workingDslRequiredAsCurrent =
       nextGraph.revision !== intentGraph.revision;
+    const workingDsl = workingDslRequiredAsCurrent
+      ? this.patchAdapter.serialize(nextGraph)
+      : request.desiredDsl;
+    const intentDsl = request.desiredDsl;
     const key = targetKey(request.patcherId, request.scope);
     this.pendingApplies.set(key, {
       baseRevision: plan.baseRevision,
       nextGraph,
       intentGraph,
+      nextSource: workingDsl,
+      intentSource: intentDsl,
     });
     this.persistState();
 
@@ -288,6 +297,8 @@ export class MaxforgePatchService {
       key,
       intentGraph
     );
+    this.workingSources.set(key, workingDsl);
+    this.intentSources.set(key, intentDsl);
     this.pendingApplies.delete(key);
     const baseline = await this.captureBaseline(
       request.patcherId,
@@ -657,6 +668,8 @@ export class MaxforgePatchService {
         baseRevision: acknowledged.revision,
         nextGraph: observed.graph,
         intentGraph: observed.graph,
+        nextSource: workingDsl,
+        intentSource: workingDsl,
       });
       this.persistState();
       acknowledgement = await this.transport.apply(patcherId, plan);
@@ -664,6 +677,8 @@ export class MaxforgePatchService {
 
     this.managedGraphs.set(key, observed.graph);
     this.intentGraphs.set(key, observed.graph);
+    this.workingSources.set(key, workingDsl);
+    this.intentSources.set(key, workingDsl);
     this.baselineSnapshots.set(key, snapshot.patcher);
     this.pendingApplies.delete(key);
     const persistence = this.tryPersistState();
@@ -700,6 +715,13 @@ export class MaxforgePatchService {
 
   getBaselineScopes(): readonly string[] {
     return [...this.baselineSnapshots.keys()].sort();
+  }
+
+  getWorkingSources(): Readonly<Record<string, string>> {
+    return Object.fromEntries(
+      [...this.workingSources.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+    );
   }
 
   getStateStatus(): {
@@ -770,22 +792,23 @@ export class MaxforgePatchService {
       unmanagedChangeCount: changes.filter((change) => !change.managed).length,
       review: reviewPatchEdits(changes, scope),
       ...(baseGraph
-        ? { baseWorkingDsl: this.patchAdapter.serialize(baseGraph) }
+        ? {
+            baseWorkingDsl:
+              pending.recoveryBaseSource ??
+              this.workingSources.get(key) ??
+              this.patchAdapter.serialize(baseGraph),
+          }
         : {}),
-      targetWorkingDsl: this.patchAdapter.serialize(pending.nextGraph),
-      intentWorkingDsl: this.patchAdapter.serialize(pending.intentGraph),
+      targetWorkingDsl: pending.nextSource,
+      intentWorkingDsl: pending.intentSource,
       ...(pending.superseded
         ? {
             supersededApply: {
               baseRevision: pending.superseded.baseRevision,
               targetRevision: pending.superseded.nextGraph.revision,
               intentRevision: pending.superseded.intentGraph.revision,
-              targetWorkingDsl: this.patchAdapter.serialize(
-                pending.superseded.nextGraph
-              ),
-              intentWorkingDsl: this.patchAdapter.serialize(
-                pending.superseded.intentGraph
-              ),
+              targetWorkingDsl: pending.superseded.nextSource,
+              intentWorkingDsl: pending.superseded.intentSource,
             },
           }
         : {}),
@@ -845,11 +868,16 @@ export class MaxforgePatchService {
         baseRevision: inspection.liveRevision,
         nextGraph: observed.graph,
         intentGraph: observed.graph,
+        nextSource: workingDsl,
+        intentSource: workingDsl,
         recoveryBaseGraph: current.graph,
+        recoveryBaseSource: request.currentDsl,
         superseded: pending.superseded ?? {
           baseRevision: pending.baseRevision,
           nextGraph: pending.nextGraph,
           intentGraph: pending.intentGraph,
+          nextSource: pending.nextSource,
+          intentSource: pending.intentSource,
         },
       });
       this.persistState();
@@ -867,6 +895,8 @@ export class MaxforgePatchService {
     const key = targetKey(request.patcherId, request.scope);
     this.managedGraphs.set(key, observed.graph);
     this.intentGraphs.set(key, observed.graph);
+    this.workingSources.set(key, workingDsl);
+    this.intentSources.set(key, workingDsl);
     this.baselineSnapshots.set(key, inspection.snapshot.patcher);
     this.pendingApplies.delete(key);
     const persistence = this.tryPersistState();
@@ -1027,6 +1057,8 @@ export class MaxforgePatchService {
     if (observedRevision === pending.nextGraph.revision) {
       this.managedGraphs.set(key, pending.nextGraph);
       this.intentGraphs.set(key, pending.intentGraph);
+      this.workingSources.set(key, pending.nextSource);
+      this.intentSources.set(key, pending.intentSource);
       this.baselineSnapshots.delete(key);
       this.pendingApplies.delete(key);
       this.persistState();
@@ -1048,6 +1080,8 @@ export class MaxforgePatchService {
     this.stateStore?.save({
       managedGraphs: this.managedGraphs,
       intentGraphs: this.intentGraphs,
+      workingSources: this.workingSources,
+      intentSources: this.intentSources,
       baselineSnapshots: this.baselineSnapshots,
       pendingApplies: this.pendingApplies,
     });

@@ -63,12 +63,12 @@ describe("maxforge MCP environment", () => {
 
   it("uses project-scoped state when identified and per-port fallback otherwise", () => {
     expect(stateFileFromEnvironment({}, 8766)).toMatch(
-      /\.maxforge\/mcp-state-8766-v1\.json$/
+      /\.maxforge\/mcp-state-8766-v2\.json$/
     );
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766))
       .toBeUndefined();
     expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
-      /\.maxforge\/projects\/studio_patchset\/mcp-state-v1\.json$/
+      /\.maxforge\/projects\/studio_patchset\/mcp-state-v2\.json$/
     );
   });
 

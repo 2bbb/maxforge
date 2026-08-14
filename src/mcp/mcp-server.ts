@@ -436,7 +436,7 @@ const HELP_CONTENT = {
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
       "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
-      "After every apply, retain returned workingDsl as the next complete source. While workingDslRequiredAsCurrent is true, include it as currentDsl in every preview and apply request until a successful apply realigns intent state.",
+      "After every apply, retain returned workingDsl as the next complete source. Ordinary no-merge apply preserves the submitted authored DSL, including for/if structure; adoption and merge may return explicit graph-derived DSL. While workingDslRequiredAsCurrent is true, include it as currentDsl in every preview and apply request until a successful apply realigns intent state.",
       "Use maxforge_save_patch explicitly after successful mutation; apply changes live state but does not save the document.",
     ],
     rules: [

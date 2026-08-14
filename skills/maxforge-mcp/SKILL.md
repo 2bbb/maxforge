@@ -122,6 +122,9 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 15. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
     that no unexplained managed change remains.
 16. After every apply, retain returned `workingDsl` as the next complete source.
+    Ordinary no-merge apply preserves the submitted authored DSL and its
+    `for`/`if` structure. Adoption and merge may return explicit graph-derived
+    DSL because direct Max edits cannot be mapped safely back into source macros.
     This is mandatory after a merge because it includes preserved human edits
     that may not exist in submitted `desiredDsl`. If
     `workingDslRequiredAsCurrent` is true, pass the exact returned source as

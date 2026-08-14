@@ -255,6 +255,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    場合だけ`manualChanges: "merge"`を指定する。
 10. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いし、返された`workingDsl`を次の完全なsourceとして保持する。
+   通常applyでは送信した`for`/`if`を含むauthoring sourceがそのまま保持される。
+   Max上の人手編集をadopt/mergeした場合だけ、sourceへ安全に逆写像できないため
+   graph由来の明示DSLへ展開される。
    `workingDslRequiredAsCurrent: true`なら、成功したapplyがflagをfalseにするまで、
    previewとapplyの両方でそのsourceを`currentDsl`として渡す。read-only previewは
    alignmentを永続化しない。

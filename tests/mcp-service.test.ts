@@ -356,6 +356,32 @@ describe("MaxforgePatchService", () => {
     expect(second.workingDsl).toContain("osc_1 = cycle~ 660");
   });
 
+  it("preserves compact authored DSL after an ordinary apply and restart", async () => {
+    const transport = new FakeTransport();
+    const store = new MemoryStateStore();
+    const authoredDsl = [
+      "for i in 0..63 {",
+      "  voice_${i} = cycle~ ${110 + i * 2}",
+      "}",
+    ].join("\n");
+
+    const applied = await createService(transport, store).applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: authoredDsl,
+    });
+
+    expect(applied.workingDsl).toBe(authoredDsl);
+    expect(applied.workingDsl).toContain("for i in 0..63");
+    expect(store.state?.workingSources.get("patch-a:voices")).toBe(authoredDsl);
+    expect(store.state?.intentSources.get("patch-a:voices")).toBe(authoredDsl);
+
+    const restarted = createService(transport, store);
+    expect(restarted.getWorkingSources()).toEqual({
+      "patch-a:voices": authoredDsl,
+    });
+  });
+
   it("compiles read-only plans against the same remembered state used by apply", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);
@@ -1772,6 +1798,8 @@ function cloneServiceState(state: PatchServiceState): PatchServiceState {
   return {
     managedGraphs: new Map(state.managedGraphs),
     intentGraphs: new Map(state.intentGraphs),
+    workingSources: new Map(state.workingSources),
+    intentSources: new Map(state.intentSources),
     baselineSnapshots: new Map(state.baselineSnapshots),
     pendingApplies: new Map(state.pendingApplies),
   };

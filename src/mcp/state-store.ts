@@ -18,17 +18,24 @@ export interface PendingPatchApply {
   readonly baseRevision: string;
   readonly nextGraph: PatchGraph;
   readonly intentGraph: PatchGraph;
+  readonly nextSource: string;
+  readonly intentSource: string;
   readonly recoveryBaseGraph?: PatchGraph;
+  readonly recoveryBaseSource?: string;
   readonly superseded?: {
     readonly baseRevision: string;
     readonly nextGraph: PatchGraph;
     readonly intentGraph: PatchGraph;
+    readonly nextSource: string;
+    readonly intentSource: string;
   };
 }
 
 export interface PatchServiceState {
   readonly managedGraphs: ReadonlyMap<string, PatchGraph>;
   readonly intentGraphs: ReadonlyMap<string, PatchGraph>;
+  readonly workingSources: ReadonlyMap<string, string>;
+  readonly intentSources: ReadonlyMap<string, string>;
   readonly baselineSnapshots: ReadonlyMap<string, MaxforgePatcherSnapshot>;
   readonly pendingApplies: ReadonlyMap<string, PendingPatchApply>;
 }
@@ -40,9 +47,11 @@ export interface PatchStateStore {
 }
 
 interface StateDocument {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly managedGraphs: readonly StateEntry<PatchGraph>[];
   readonly intentGraphs: readonly StateEntry<PatchGraph>[];
+  readonly workingSources: readonly StateEntry<string>[];
+  readonly intentSources: readonly StateEntry<string>[];
   readonly baselineSnapshots: readonly StateEntry<MaxforgePatcherSnapshot>[];
   readonly pendingApplies: readonly StateEntry<PendingPatchApply>[];
 }
@@ -80,9 +89,11 @@ export class JsonFilePatchStateStore implements PatchStateStore {
 
   save(state: PatchServiceState): void {
     const document: StateDocument = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       managedGraphs: mapEntries(state.managedGraphs),
       intentGraphs: mapEntries(state.intentGraphs),
+      workingSources: mapEntries(state.workingSources),
+      intentSources: mapEntries(state.intentSources),
       baselineSnapshots: mapEntries(state.baselineSnapshots),
       pendingApplies: mapEntries(state.pendingApplies),
     };
@@ -116,18 +127,20 @@ export function stateFileFromEnvironment(
       ".maxforge",
       "projects",
       projectId,
-      "mcp-state-v1.json"
+      "mcp-state-v2.json"
     )
-    : join(homedir(), ".maxforge", `mcp-state-${port}-v1.json`);
+    : join(homedir(), ".maxforge", `mcp-state-${port}-v2.json`);
 }
 
 function parseStateDocument(raw: unknown, path: string): PatchServiceState {
-  if (!isRecord(raw) || raw.schemaVersion !== 1) {
-    throw new Error(`Invalid maxforge state ${path}: expected schemaVersion 1`);
+  if (!isRecord(raw) || raw.schemaVersion !== 2) {
+    throw new Error(`Invalid maxforge state ${path}: expected schemaVersion 2`);
   }
   return {
     managedGraphs: parseGraphEntries(raw.managedGraphs, "managedGraphs", path),
     intentGraphs: parseGraphEntries(raw.intentGraphs, "intentGraphs", path),
+    workingSources: parseSourceEntries(raw.workingSources, "workingSources", path),
+    intentSources: parseSourceEntries(raw.intentSources, "intentSources", path),
     baselineSnapshots: parseSnapshotEntries(
       raw.baselineSnapshots,
       "baselineSnapshots",
@@ -135,6 +148,20 @@ function parseStateDocument(raw: unknown, path: string): PatchServiceState {
     ),
     pendingApplies: parsePendingEntries(raw.pendingApplies, path),
   };
+}
+
+function parseSourceEntries(
+  raw: unknown,
+  field: string,
+  path: string
+): Map<string, string> {
+  const entries = parseEntries(raw, field, path);
+  return new Map(entries.map(({ target, value }) => {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error(`Invalid maxforge state ${path}: ${field} source for ${target}`);
+    }
+    return [target, value];
+  }));
 }
 
 function parseGraphEntries(
@@ -152,13 +179,21 @@ function parsePendingEntries(
 ): Map<string, PendingPatchApply> {
   const entries = parseEntries(raw, "pendingApplies", path);
   return new Map(entries.map(({ target, value }) => {
-    if (!isRecord(value) || typeof value.baseRevision !== "string") {
+    if (
+      !isRecord(value) ||
+      typeof value.baseRevision !== "string" ||
+      typeof value.nextSource !== "string" ||
+      typeof value.intentSource !== "string"
+    ) {
       throw new Error(`Invalid pending apply state for ${target}`);
     }
     const superseded = value.superseded;
     if (
       superseded !== undefined &&
-      (!isRecord(superseded) || typeof superseded.baseRevision !== "string")
+      (!isRecord(superseded) ||
+        typeof superseded.baseRevision !== "string" ||
+        typeof superseded.nextSource !== "string" ||
+        typeof superseded.intentSource !== "string")
     ) {
       throw new Error(`Invalid superseded pending apply state for ${target}`);
     }
@@ -166,6 +201,8 @@ function parsePendingEntries(
       baseRevision: value.baseRevision,
       nextGraph: parseGraph(value.nextGraph, `pending ${target} nextGraph`),
       intentGraph: parseGraph(value.intentGraph, `pending ${target} intentGraph`),
+      nextSource: value.nextSource,
+      intentSource: value.intentSource,
       ...(value.recoveryBaseGraph !== undefined
         ? {
             recoveryBaseGraph: parseGraph(
@@ -174,7 +211,13 @@ function parsePendingEntries(
             ),
           }
         : {}),
-      ...(isRecord(superseded) && typeof superseded.baseRevision === "string"
+      ...(typeof value.recoveryBaseSource === "string"
+        ? { recoveryBaseSource: value.recoveryBaseSource }
+        : {}),
+      ...(isRecord(superseded) &&
+          typeof superseded.baseRevision === "string" &&
+          typeof superseded.nextSource === "string" &&
+          typeof superseded.intentSource === "string"
         ? {
             superseded: {
               baseRevision: superseded.baseRevision,
@@ -186,6 +229,8 @@ function parsePendingEntries(
                 superseded.intentGraph,
                 `pending ${target} superseded intentGraph`
               ),
+              nextSource: superseded.nextSource,
+              intentSource: superseded.intentSource,
             },
           }
         : {}),

@@ -36,6 +36,8 @@ describe("JsonFilePatchStateStore", () => {
     store.save({
       managedGraphs: new Map([["patch-a:voices", graph]]),
       intentGraphs: new Map([["patch-a:voices", graph]]),
+      workingSources: new Map([["patch-a:voices", "osc = cycle~ 440"]]),
+      intentSources: new Map([["patch-a:voices", "osc = cycle~ 440"]]),
       baselineSnapshots: new Map([["patch-a:voices", snapshot]]),
       pendingApplies: new Map([[
         "patch-b:voices",
@@ -43,11 +45,16 @@ describe("JsonFilePatchStateStore", () => {
           baseRevision: graph.revision,
           nextGraph: graph,
           intentGraph: graph,
+          nextSource: "osc = cycle~ 440",
+          intentSource: "osc = cycle~ 440",
           recoveryBaseGraph: graph,
+          recoveryBaseSource: "osc = cycle~ 440",
           superseded: {
             baseRevision: graph.revision,
             nextGraph: graph,
             intentGraph: graph,
+            nextSource: "osc = cycle~ 440",
+            intentSource: "osc = cycle~ 440",
           },
         },
       ]]),
@@ -55,13 +62,14 @@ describe("JsonFilePatchStateStore", () => {
 
     const restored = store.load()!;
     expect(restored.managedGraphs.get("patch-a:voices")).toEqual(graph);
+    expect(restored.workingSources.get("patch-a:voices")).toBe("osc = cycle~ 440");
     expect(restored.baselineSnapshots.get("patch-a:voices")).toEqual(snapshot);
     expect(restored.pendingApplies.get("patch-b:voices")?.nextGraph).toEqual(graph);
     expect(restored.pendingApplies.get("patch-b:voices")?.recoveryBaseGraph)
       .toEqual(graph);
     expect(restored.pendingApplies.get("patch-b:voices")?.superseded?.nextGraph)
       .toEqual(graph);
-    expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 1 });
+    expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 2 });
   });
 
   it("rejects state whose graph revision was tampered with", () => {
@@ -69,9 +77,11 @@ describe("JsonFilePatchStateStore", () => {
     const path = join(directory, "state.json");
     const graph = compileDslToPatchGraph("n = number", database, "main").graph!;
     writeFileSync(path, JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       managedGraphs: [{ target: "patch:main", value: { ...graph, revision: "0".repeat(64) } }],
       intentGraphs: [],
+      workingSources: [],
+      intentSources: [],
       baselineSnapshots: [],
       pendingApplies: [],
     }));
@@ -85,9 +95,11 @@ describe("JsonFilePatchStateStore", () => {
     const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
     const path = join(directory, "state.json");
     writeFileSync(path, JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       managedGraphs: [],
       intentGraphs: [],
+      workingSources: [],
+      intentSources: [],
       baselineSnapshots: [{
         target: "patch:main",
         value: {
@@ -117,9 +129,9 @@ describe("JsonFilePatchStateStore", () => {
   });
 
   it("uses project identity when available and supports disable or override", () => {
-    expect(stateFileFromEnvironment({}, 8766)).toMatch(/mcp-state-8766-v1\.json$/);
+    expect(stateFileFromEnvironment({}, 8766)).toMatch(/mcp-state-8766-v2\.json$/);
     expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
-      /projects\/studio_patchset\/mcp-state-v1\.json$/
+      /projects\/studio_patchset\/mcp-state-v2\.json$/
     );
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766)).toBeUndefined();
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "/tmp/custom.json" }, 8766))

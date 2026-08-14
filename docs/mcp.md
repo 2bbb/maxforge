@@ -75,7 +75,7 @@ Environment variables:
 | `MAXFORGE_WS_PORT` | `8766` | WebSocket port used by `maxforge.sync` |
 | `MAXFORGE_APPLY_TIMEOUT_MS` | `5000` | Max apply, inspection, or patch creation response timeout |
 | `MAXFORGE_CONFIG` | unset | Explicit project config; no MCP working-directory discovery |
-| `MAXFORGE_STATE_FILE` | project-scoped with `project.id`, otherwise `~/.maxforge/mcp-state-<port>-v1.json` | Atomic graph/baseline state file; `off` disables restart recovery |
+| `MAXFORGE_STATE_FILE` | project-scoped with `project.id`, otherwise `~/.maxforge/mcp-state-<port>-v2.json` | Atomic graph/source/baseline state file; `off` disables restart recovery |
 | `MAXFORGE_EDIT_HISTORY` | enabled only with `project.id` | Set to `off` to disable persistent edit evidence |
 | `MAXFORGE_EDIT_HISTORY_DIR` | `~/.maxforge/projects/<project.id>/edit-history-v1` | Override the project edit-history directory |
 | `MAXFORGE_EDIT_HISTORY_MAX_BYTES` | `268435456` | Maximum retained NDJSON bytes |
@@ -467,7 +467,7 @@ files in a custom history directory. The result includes `filesDeleted`,
 `bytesDeleted`, and `retainedObservationsCleared`.
 
 This is deliberately narrower than “erase the project.” It does not delete Max
-patches, DSL sources, catalog config, npm files, or `mcp-state-v1.json`. It also
+patches, DSL sources, catalog config, npm files, or `mcp-state-v2.json`. It also
 returns `secureOverwriteGuaranteed: false`; filesystem deletion does not prove
 that SSD blocks, backups, or filesystem snapshots were overwritten.
 
@@ -595,11 +595,13 @@ updates persisted PatchGraph state but cannot rewrite an agent's source file or
 chat state itself. If the returned DSL is ignored, a later complete apply can
 request the human's accepted changes be removed.
 
-`workingDsl` is canonical for the managed graph, not a reproduction of the
-original authoring text. It expands `for`/`if` macros into explicit objects and
-omits patch-level title/description/size because protocol v1 does not manage
-those fields. Preserve a separate authored DSL when macro structure matters;
-use returned `workingDsl` as the revision-safe baseline or `currentDsl`.
+Adoption has no reliable source-level representation of edits made directly in
+Max. Its `workingDsl` is therefore canonical explicit managed state rather than
+a reproduction of the original authoring text: `for`/`if` macros are expanded,
+and patch-level title/description/size are omitted because protocol v1 does not
+manage those fields. Ordinary no-drift apply does preserve the submitted authored
+DSL exactly. Use returned `workingDsl` as the revision-safe next source in both
+cases.
 
 Use adoption when the human's current managed patch should become the baseline
 before the agent plans the next step. Use `maxforge_reconcile_patch` instead when
@@ -679,11 +681,13 @@ it does not trust a stale preview. The resulting plan carries the inspected
 validation and rejects the request if any box or cord changed in the interval.
 `manualChangesMerged` reports the managed change count used by that apply.
 
-Every successful apply returns `workingDsl`, an explicit source generated from
-the acknowledged graph and verified to compile to the exact target revision.
-Use it as the next complete source. This is mandatory after merge mode because
-it contains human edits preserved in the merged graph even when they were not
-present in the submitted `desiredDsl`. When
+Every successful apply returns a complete, revision-aligned `workingDsl`.
+Ordinary no-merge apply returns the submitted authored DSL unchanged, preserving
+compact `for`/`if` structure. Merge mode returns explicit graph-derived DSL
+because direct Max edits cannot be mapped safely back into arbitrary source
+macros. Use it as the next complete source. This is mandatory after merge mode
+because it contains human edits preserved in the merged graph even when they
+were not present in the submitted `desiredDsl`. When
 `workingDslRequiredAsCurrent: true`, include that exact source as `currentDsl`
 in every subsequent preview and apply request until a successful apply returns
 the flag as false. Read-only compile/reconcile calls do not persist alignment;
@@ -774,7 +778,7 @@ successful `maxforge_apply_dsl` result has this top-level shape:
     "operations": 3
   },
   "baselineCaptured": true,
-  "workingDsl": "<complete explicit DSL for the acknowledged graph>",
+  "workingDsl": "<complete authored or reconciled DSL for the acknowledged graph>",
   "workingDslRequiredAsCurrent": false,
   "manualChangesMerged": 0,
   "warnings": []
