@@ -14,7 +14,10 @@ import { lookupObject } from "./object-db.js";
 import { autoLayout } from "./layout.js";
 import { isReservedAttributeKey } from "./attributes.js";
 import { CompiledBox, CompiledLine } from "./compiled-model.js";
-import { compileConnectionPair } from "./connection-compiler.js";
+import {
+  compiledLineKey,
+  compileConnectionPair,
+} from "./connection-compiler.js";
 import { buildPatcherJSON } from "./patcher-json.js";
 import {
   firstObjectToken,
@@ -35,6 +38,7 @@ export function compile(
   const warnings: CompileWarning[] = [];
   const boxes: CompiledBox[] = [];
   const lines: CompiledLine[] = [];
+  const lineKeys = new Set<string>();
   const nameMap = new Map<string, CompiledBox>();
 
   function boxId(name: string): string {
@@ -119,11 +123,14 @@ export function compile(
         stmt.refs[i + 1],
         stmt.line,
         nameMap,
-        lines
+        lineKeys
       );
       errors.push(...result.errors);
       if (result.warning) warnings.push(result.warning);
-      if (result.line) lines.push(result.line);
+      if (result.line) {
+        lines.push(result.line);
+        lineKeys.add(compiledLineKey(result.line));
+      }
     }
   }
 

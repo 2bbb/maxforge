@@ -18,7 +18,7 @@ export function compileConnectionPair(
   dst: PortRef,
   sourceLine: number,
   nameMap: Map<string, CompiledBox>,
-  existingLines: CompiledLine[]
+  existingLineKeys: ReadonlySet<string>
 ): ConnectionPairResult {
   const srcBox = nameMap.get(src.name);
   const dstBox = nameMap.get(dst.name);
@@ -71,7 +71,7 @@ export function compileConnectionPair(
     destInlet: inletIdx,
   };
 
-  if (existingLines.some((existing) => sameCompiledLine(existing, line))) {
+  if (existingLineKeys.has(compiledLineKey(line))) {
     return {
       errors: [],
       warning: {
@@ -85,11 +85,11 @@ export function compileConnectionPair(
   return { errors: [], line };
 }
 
-function sameCompiledLine(a: CompiledLine, b: CompiledLine): boolean {
-  return (
-    a.sourceId === b.sourceId &&
-    a.sourceOutlet === b.sourceOutlet &&
-    a.destId === b.destId &&
-    a.destInlet === b.destInlet
-  );
+export function compiledLineKey(line: CompiledLine): string {
+  return JSON.stringify([
+    line.sourceId,
+    line.sourceOutlet,
+    line.destId,
+    line.destInlet,
+  ]);
 }

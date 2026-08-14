@@ -25,15 +25,17 @@ export function autoLayout(
 
   const adj = new Map<string, string[]>();
   const inDegree = new Map<string, number>();
+  const boxesById = new Map<string, Layoutable>();
 
   for (const box of boxes) {
     adj.set(box.name, []);
     inDegree.set(box.name, 0);
+    boxesById.set(box.id, box);
   }
 
   for (const line of lines) {
-    const src = boxes.find((b) => b.id === line.sourceId);
-    const dst = boxes.find((b) => b.id === line.destId);
+    const src = boxesById.get(line.sourceId);
+    const dst = boxesById.get(line.destId);
     if (src && dst) {
       adj.get(src.name)!.push(dst.name);
       inDegree.set(dst.name, (inDegree.get(dst.name) ?? 0) + 1);

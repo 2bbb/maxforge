@@ -402,6 +402,31 @@ a -> b
     expect(result.warnings[0].code).toBe("W001");
   });
 
+  it("deduplicates connections in a large generated graph", () => {
+    const objectCount = 2_000;
+    const objects = Array.from(
+      { length: objectCount },
+      (_, index) => `node${index} = toggle`
+    );
+    const connections = Array.from(
+      { length: objectCount - 1 },
+      (_, index) => `node${index} -> node${index + 1}`
+    );
+    const duplicate = `node${objectCount - 2} -> node${objectCount - 1}`;
+    const { ast, errors } = parse(
+      [...objects, ...connections, duplicate].join("\n")
+    );
+
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines).toHaveLength(objectCount - 1);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({ code: "W001" }),
+    ]);
+  });
+
   it("sets correct patching_rect from auto-layout", () => {
     const source = `
 a = cycle~ 440
