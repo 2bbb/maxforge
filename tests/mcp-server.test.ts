@@ -402,13 +402,20 @@ describe("maxforge MCP protocol surface", () => {
           structuredContent: {
             comparisonAvailable: false,
             managedChangeCount: 0,
-            snapshot: {
-              type: "maxforge.snapshot",
-              patcherId: "patch_a",
-              scope: "voices",
-            },
+            revision: null,
+            structureToken: "0000000000000000",
+            patch: { boxCount: 0, connectionCount: 0 },
           },
         },
+      });
+      expect(inspection.result.structuredContent).not.toHaveProperty("snapshot");
+
+      const fullInspection = await client.request(50, "tools/call", {
+        name: "maxforge_inspect_patch",
+        arguments: { patcherId: "patch_a", scope: "voices", detail: "full" },
+      });
+      expect(fullInspection).toMatchObject({
+        result: { structuredContent: { snapshot: { type: "maxforge.snapshot" } } },
       });
 
       const liveChangeReview = await client.request(51, "tools/call", {
@@ -469,6 +476,7 @@ describe("maxforge MCP protocol surface", () => {
           patcherId: "patch_a",
           scope: "voices",
           desiredDsl: "osc = cycle~ 440",
+          expectedStructureToken: "0000000000000000",
         },
       });
       expect(reconciliation).toMatchObject({

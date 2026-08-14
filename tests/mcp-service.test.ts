@@ -382,6 +382,37 @@ describe("MaxforgePatchService", () => {
     });
   });
 
+  it("reuses an explicitly inspected structure token and returns post-apply verification", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    const inspection = await service.inspectPatch("patch-a", "voices");
+    const inspectionsBeforeApply = transport.inspectionCount;
+    transport.snapshotAfterApply = snapshotForDsl(
+      "osc = cycle~ 660 at(50, 50)",
+      "voices"
+    );
+
+    const applied = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 660 at(50, 50)",
+      expectedStructureToken: inspection.snapshot.structureToken,
+    });
+
+    expect(transport.inspectionCount).toBe(inspectionsBeforeApply + 1);
+    expect(applied.verification).toEqual({
+      revision: applied.plan.targetRevision,
+      structureToken: "0".repeat(16),
+      boxCount: 1,
+      connectionCount: 0,
+    });
+  });
+
   it("compiles read-only plans against the same remembered state used by apply", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);
@@ -1637,6 +1668,7 @@ class FakeTransport implements PatchPlanTransport {
   postApplyInspectionFailure: Error | undefined;
   snapshotAfterApply: MaxforgePatcherSnapshot | undefined;
   snapshot: MaxforgePatcherSnapshot = patcherSnapshot();
+  inspectionCount = 0;
   patches: readonly MaxforgePatchInfo[] = [];
   connectedClients = 1;
   retainedHistoryCount = 0;
@@ -1675,6 +1707,7 @@ class FakeTransport implements PatchPlanTransport {
     patcherId: string,
     scope: string
   ): Promise<MaxforgeSnapshotEvent> {
+    this.inspectionCount++;
     if (this.inspectionFailure) throw this.inspectionFailure;
     if (
       this.postApplyInspectionFailure &&

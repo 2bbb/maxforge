@@ -206,6 +206,29 @@ const applyDslRequestSchema = dslRequestSchema.extend({
     .describe(
       "How to handle managed live edits. Defaults to reject. Use merge only after maxforge_reconcile_patch reports canApply=true for the same desired DSL."
     ),
+  expectedStructureToken: structureTokenSchema
+    .optional()
+    .describe(
+      "Exact token from the latest maxforge_inspect_patch or maxforge_reconcile_patch result for this target. Reuses that observation instead of requesting the same full snapshot again; Max still recomputes and validates the token immediately before mutation."
+    ),
+});
+
+const patchInspectionSummarySchema = z.object({
+  title: z.string(),
+  filename: z.string(),
+  filepath: z.string(),
+  dirty: z.boolean(),
+  locked: z.boolean(),
+  presentation: z.boolean(),
+  boxCount: z.number().int().nonnegative(),
+  connectionCount: z.number().int().nonnegative(),
+});
+
+const postApplyVerificationSchema = z.object({
+  revision: revisionSchema,
+  structureToken: structureTokenSchema,
+  boxCount: z.number().int().nonnegative(),
+  connectionCount: z.number().int().nonnegative(),
 });
 
 const reconciliationConflictSchema = z.object({
@@ -427,7 +450,7 @@ const HELP_CONTENT = {
       "Before using a project external or abstraction, call maxforge_catalog and confirm the loaded definition.",
       "After editing configured catalog files, call maxforge_reload_catalog and verify the replacement digest before compiling.",
       "Call maxforge_list_patches and copy the target patcherId and scope exactly.",
-      "Call maxforge_inspect_patch before mutation; do not infer patch state from the screen or title.",
+      "Call maxforge_inspect_patch before mutation; start with summary detail and request full only when complete surrounding topology is needed. Copy its structureToken into apply so the same full snapshot is not requested twice. Do not infer patch state from the screen or title.",
       "When edit observation is supported, call maxforge_get_live_edit_history to inspect ordered snapshot evidence before interpreting the current aggregate diff.",
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
       "Interpret related changes together using review.editClusters. Treat interpretationRisks as prompts for reasoning, and use interpretationGuidance.clarificationRecommendedFor to identify clusters that may require a human question.",
@@ -435,7 +458,7 @@ const HELP_CONTENT = {
       "After adoption, replace the working source with the returned workingDsl before compiling the next desired state.",
       "Send the complete desired DSL to maxforge_compile_plan and review every operation and warning.",
       "Send the same target and complete desired DSL to maxforge_apply_dsl. Set manualChanges to merge only after reconciliation succeeds.",
-      "Treat the apply as successful only when acknowledgement.revision equals targetRevision, then inspect again.",
+      "Treat native mutation as acknowledged only when acknowledgement.revision equals targetRevision. When verification is present, require verification.revision to match; when it is absent or baselineCaptured is false, inspect before further mutation instead of retrying the apply.",
       "After every apply, retain returned workingDsl as the next complete source. Ordinary no-merge apply preserves the submitted authored DSL, including for/if structure; adoption and merge may return explicit graph-derived DSL. While workingDslRequiredAsCurrent is true, include it as currentDsl in every preview and apply request until a successful apply realigns intent state.",
       "Use maxforge_save_patch explicitly after successful mutation; apply changes live state but does not save the document.",
     ],
@@ -954,19 +977,28 @@ export function createMaxforgeMcpServer(
     {
       title: "Inspect live Max patch",
       description:
-        "Read the complete live patch graph without using the screen. Reports managed and unmanaged structural drift from the last acknowledged apply; inspection does not accept or reset that baseline.",
+        "Read live Max patch state without using the screen. Summary detail returns revision, structure token, counts, and drift; full detail additionally returns every box and connection. Inspection does not accept or reset the baseline.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Managed patch scope to inspect"),
+        detail: z.enum(["summary", "full"])
+          .optional()
+          .default("summary")
+          .describe(
+            "summary omits the complete snapshot while retaining revision, token, counts, and changes; full includes every live box and connection"
+          ),
       }),
       outputSchema: z.object({
         patcherId: patcherIdSchema,
         scope: scopeSchema,
+        revision: revisionSchema.nullable(),
+        structureToken: structureTokenSchema,
+        patch: patchInspectionSummarySchema,
         comparisonAvailable: z.boolean(),
         managedChangeCount: z.number().int().nonnegative(),
         unmanagedChangeCount: z.number().int().nonnegative(),
         changes: z.array(snapshotChangeSchema),
-        snapshot: snapshotEventSchema,
+        snapshot: snapshotEventSchema.optional(),
       }),
       annotations: {
         readOnlyHint: true,
@@ -974,18 +1006,32 @@ export function createMaxforgeMcpServer(
         idempotentHint: true,
       },
     },
-    async ({ patcherId, scope }) => {
+    async ({ patcherId, scope, detail }) => {
       try {
         const result = await options.service.inspectPatch(patcherId, scope);
-        return toolResult({
+        const patch = result.snapshot.patcher;
+        const response = {
           patcherId,
           scope,
+          revision: result.snapshot.revision,
+          structureToken: result.snapshot.structureToken,
+          patch: {
+            title: patch.title,
+            filename: patch.filename,
+            filepath: patch.filepath,
+            dirty: patch.dirty,
+            locked: patch.locked,
+            presentation: patch.presentation,
+            boxCount: patch.boxes.length,
+            connectionCount: patch.connections.length,
+          },
           comparisonAvailable: result.comparisonAvailable,
           managedChangeCount: result.managedChangeCount,
           unmanagedChangeCount: result.unmanagedChangeCount,
           changes: result.changes,
-          snapshot: result.snapshot,
-        });
+          ...(detail === "full" ? { snapshot: result.snapshot } : {}),
+        };
+        return toolResult(response, responseWithout(response, ["snapshot"]));
       } catch (error) {
         return toolError(error);
       }
@@ -1322,6 +1368,7 @@ export function createMaxforgeMcpServer(
         plan: patchPlanSchema.optional(),
         operationCount: z.number().int().nonnegative(),
         warnings: z.array(warningSchema),
+        structureToken: structureTokenSchema,
       }),
       annotations: {
         readOnlyHint: true,
@@ -1332,7 +1379,7 @@ export function createMaxforgeMcpServer(
     async (request) => {
       try {
         const result = await options.service.reconcilePlan(request);
-        return toolResult({
+        const response = {
           patcherId: request.patcherId,
           scope: request.scope,
           canApply: result.canApply,
@@ -1343,7 +1390,9 @@ export function createMaxforgeMcpServer(
           ...(result.plan ? { plan: result.plan } : {}),
           operationCount: result.plan?.operations.length ?? 0,
           warnings: result.warnings,
-        });
+          structureToken: result.structureToken,
+        };
+        return toolResult(response, responseWithout(response, ["plan"]));
       } catch (error) {
         return toolError(error);
       }
@@ -1371,11 +1420,12 @@ export function createMaxforgeMcpServer(
     async (request) => {
       try {
         const result = options.service.compilePlan(request);
-        return toolResult({
+        const response = {
           plan: result.plan,
           operationCount: result.plan.operations.length,
           warnings: result.warnings,
-        });
+        };
+        return toolResult(response, responseWithout(response, ["plan"]));
       } catch (error) {
         return toolError(error);
       }
@@ -1397,6 +1447,7 @@ export function createMaxforgeMcpServer(
         operationCount: z.number().int().nonnegative(),
         acknowledgement: acknowledgementSchema,
         baselineCaptured: z.boolean(),
+        verification: postApplyVerificationSchema.optional(),
         baselineWarning: z.string().optional(),
         manualChangesMerged: z.number().int().nonnegative(),
         statePersisted: z.boolean(),
@@ -1414,7 +1465,7 @@ export function createMaxforgeMcpServer(
     async (request) => {
       try {
         const result = await options.service.applyDsl(request);
-        return toolResult({
+        const response = {
           patcherId: request.patcherId,
           scope: result.plan.scope,
           baseRevision: result.plan.baseRevision,
@@ -1422,6 +1473,7 @@ export function createMaxforgeMcpServer(
           operationCount: result.plan.operations.length,
           acknowledgement: result.acknowledgement,
           baselineCaptured: result.baselineCaptured,
+          ...(result.verification ? { verification: result.verification } : {}),
           manualChangesMerged: result.manualChangesMerged,
           statePersisted: result.statePersisted,
           workingDsl: result.workingDsl,
@@ -1433,7 +1485,14 @@ export function createMaxforgeMcpServer(
             ? { stateWarning: result.stateWarning }
             : {}),
           warnings: result.warnings,
-        });
+        };
+        return toolResult(
+          response,
+          {
+            ...responseWithout(response, ["workingDsl"]),
+            workingDslCharacters: result.workingDsl.length,
+          }
+        );
       } catch (error) {
         return toolError(error);
       }
@@ -1460,16 +1519,28 @@ function catalogStatus(catalog: LoadedObjectCatalog) {
   };
 }
 
-function toolResult(value: Record<string, unknown>) {
+function toolResult(
+  value: Record<string, unknown>,
+  textValue: Record<string, unknown> = value
+) {
   return {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(value, null, 2),
+        text: JSON.stringify(textValue),
       },
     ],
     structuredContent: value,
   };
+}
+
+function responseWithout(
+  value: Record<string, unknown>,
+  keys: readonly string[]
+): Record<string, unknown> {
+  const result = { ...value };
+  for (const key of keys) delete result[key];
+  return result;
 }
 
 function toolError(error: unknown) {

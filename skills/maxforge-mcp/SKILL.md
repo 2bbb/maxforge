@@ -57,8 +57,10 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    `maxforge_open_patch` with an absolute path on the Max host. Opening injects
    one bridge object and refuses files that already contain `maxforge.sync`.
    Both operations require exactly one controller.
-6. Call `maxforge_inspect_patch` for the selected target. Read the snapshot;
-   never infer patch state from the screen.
+6. Call `maxforge_inspect_patch` for the selected target with summary detail.
+   Read its revision, structure token, counts, and changes. Request full detail
+   only when complete surrounding topology is needed; never infer state from the
+   screen.
 7. If the order of recent edits could change the interpretation, call
    `maxforge_get_live_edit_history`. Check `supported`, `droppedEvents`, and
    `comparisonBasis`; treat `latestSequence` only as an `afterSequence` polling
@@ -111,6 +113,8 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 12. State the target, operation count, destructive operations, and stop
    condition before mutation.
 13. Call `maxforge_apply_dsl` with the same target and complete desired DSL.
+   Pass the exact `structureToken` from the latest inspection or reconciliation
+   as `expectedStructureToken` so the service can reuse that observation.
    Set `manualChanges: "merge"` only when reconciliation of that exact target
    and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
    Apply repeats inspection and binds its structure token; if the human edits
@@ -119,8 +123,9 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
 14. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
-15. Call `maxforge_inspect_patch` again. Confirm expected box/cord counts and
-    that no unexplained managed change remains.
+15. Require `verification.revision` to equal `targetRevision` and check its
+    box/cord counts. Inspect again only when verification is absent, baseline
+    capture failed, or complete post-apply topology is needed.
 16. After every apply, retain returned `workingDsl` as the next complete source.
     Ordinary no-merge apply preserves the submitted authored DSL and its
     `for`/`if` structure. Adoption and merge may return explicit graph-derived

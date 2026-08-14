@@ -218,7 +218,8 @@ The safe live sequence is fixed:
 4. `maxforge_list_patches`
 5. create a blank target with `maxforge_create_patch`, or open an existing file
    with `maxforge_open_patch`, only when a separate target is required
-6. `maxforge_inspect_patch`
+6. `maxforge_inspect_patch` with summary detail; request full detail only when
+   complete surrounding topology is needed
 7. when edit order matters, call `maxforge_get_live_edit_history` before
    interpreting the current snapshot; check `supported`, `droppedEvents`, and
    every entry's `comparisonBasis`
@@ -231,9 +232,11 @@ The safe live sequence is fixed:
 10. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
    and destructive operations
 11. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
-12. `maxforge_apply_dsl` with the same target and desired DSL; set
-   `manualChanges: "merge"` only after successful reconciliation
-13. verify acknowledgement revision, inspect again, and call
+12. `maxforge_apply_dsl` with the same target, desired DSL, and the exact
+    structure token from inspect/reconcile; set `manualChanges: "merge"` only
+    after successful reconciliation
+13. verify acknowledgement and post-apply verification revisions; inspect again
+    only when verification is unavailable or full topology is needed, and call
     `maxforge_save_patch` only when persistence is intended
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
@@ -354,8 +357,11 @@ Arguments:
 
 - `patcherId` — registered target patch.
 - `scope` — the scope advertised by that patch.
+- `detail` — `summary` by default; `full` includes the complete snapshot.
 
-The result includes:
+Both detail levels include revision, structure token, patch metadata, total box
+and connection counts, exact changes since the last baseline, and separate
+managed/unmanaged counts. `detail: "full"` additionally includes:
 
 - patcher title, file path, dirty/locked/presentation state;
 - every box's nested path, runtime ID, scripting name, Max class, text/comment,
@@ -368,8 +374,9 @@ The result includes:
 The comparison baseline is captured immediately after a successful apply or
 adoption. Inspection is read-only and does not advance that baseline. Before
 the first baseline, or when persistence was disabled/unavailable,
-`comparisonAvailable` is `false`: the full live snapshot remains available,
-but the server cannot honestly claim which prior action caused its state.
+`comparisonAvailable` is `false`: request `detail: "full"` when the complete live
+state is required, but the server still cannot honestly claim which prior action
+caused it.
 
 ### `maxforge_get_live_edit_history`
 
@@ -610,6 +617,10 @@ with that desired change in one preview/apply cycle.
 
 ### `maxforge_reconcile_patch`
 
+The result includes the exact `structureToken` used for the preview. Pass it to
+`maxforge_apply_dsl.expectedStructureToken` with the same desired DSL so apply
+can reuse the reconciled snapshot while native validation still catches races.
+
 Performs a read-only three-way merge between:
 
 1. the agent's previous desired managed graph;
@@ -662,12 +673,20 @@ Compiles a diff, sends the raw plan to Max, and returns only after
 are keyed by both values, so two windows may use the same scope without sharing
 state.
 
+Pass `expectedStructureToken` from the latest inspection or reconciliation for
+the same target. The service reuses that exact observed snapshot instead of
+requesting it again. This does not weaken race protection: the native external
+still recomputes the live structure token immediately before mutation and rejects
+any intervening box or cord change.
+
 The remembered graph advances only after that acknowledgement. A timeout,
 disconnect, parse error, validation error, or Max mutation error leaves the
 MCP graph state unchanged.
 
-After acknowledgement, the service requests another live snapshot and records
-it as the next comparison baseline. If that second read fails, the apply still
+After acknowledgement, the service requests another live snapshot, verifies the
+managed revision, returns its token/counts as `verification`, and records it as
+the next comparison baseline. A successful verification replaces the routine
+extra post-apply inspect. If that second read fails, the apply still
 returns success with `baselineCaptured: false` and `baselineWarning`; reporting
 the already-applied mutation as a failure would invite an unsafe retry.
 
@@ -778,6 +797,12 @@ successful `maxforge_apply_dsl` result has this top-level shape:
     "operations": 3
   },
   "baselineCaptured": true,
+  "verification": {
+    "revision": "<same value as targetRevision>",
+    "structureToken": "<16 lowercase hex characters>",
+    "boxCount": 12,
+    "connectionCount": 8
+  },
   "workingDsl": "<complete authored or reconciled DSL for the acknowledged graph>",
   "workingDslRequiredAsCurrent": false,
   "manualChangesMerged": 0,
@@ -790,7 +815,7 @@ Treat success as all of the following:
 - the tool result is not an MCP error;
 - `acknowledgement.revision` equals `targetRevision`;
 - the acknowledgement operation count matches `operationCount`;
-- post-apply inspection reports the expected graph.
+- `verification.revision` equals `targetRevision`.
 
 If `baselineCaptured` is `false`, the acknowledged apply still succeeded. Read
 `baselineWarning`, inspect explicitly, and do not repeat the apply merely to

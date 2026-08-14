@@ -230,7 +230,8 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 4. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
    scope、titleを指定し、既存`.maxpat`を対象にするなら
    `maxforge_open_patch`へMax host上の絶対pathを指定して登録完了まで待つ。
-5. `maxforge_inspect_patch`で対象`patcherId`のlive状態を読む。
+5. `maxforge_inspect_patch`のsummaryで対象`patcherId`のrevision、structure token、
+   box/cord数、差分を読む。周辺topology全体が必要な場合だけfullを要求する。
    `maxforge_status`にpending scopeがあり、base/target以外の第三revisionで通常操作が
    拒否された場合は`maxforge_inspect_pending_apply`を使う。返されたrevisionと
    structure token、およびそのrevisionを生成した完全な`currentDsl`が揃う場合だけ
@@ -252,7 +253,8 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    `maxforge_compile_plan`、手動変更の統合経路ではreconcileが
    返したplanを確認する。
 9. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
-   場合だけ`manualChanges: "merge"`を指定する。
+   場合だけ`manualChanges: "merge"`を指定する。直前のinspectまたはreconcileが返した
+   `structureToken`を`expectedStructureToken`として渡し、同じ全snapshotを再取得させない。
 10. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
    結果だけを成功扱いし、返された`workingDsl`を次の完全なsourceとして保持する。
    通常applyでは送信した`for`/`if`を含むauthoring sourceがそのまま保持される。
@@ -261,7 +263,8 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    `workingDslRequiredAsCurrent: true`なら、成功したapplyがflagをfalseにするまで、
    previewとapplyの両方でそのsourceを`currentDsl`として渡す。read-only previewは
    alignmentを永続化しない。
-11. 再度inspectし、期待したbox/cord数とmanaged差分を確認する。
+11. `verification.revision`とtargetRevision、box/cord数を確認する。verificationが無い、
+   baseline取得に失敗した、または完全な事後topologyが必要な場合だけ再度inspectする。
 12. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
     dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
     `discard: true`を渡すまで拒否される。

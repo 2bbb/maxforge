@@ -48,6 +48,14 @@ export interface CompilePlanRequest {
 
 export interface ApplyDslRequest extends CompilePlanRequest {
   readonly manualChanges?: "reject" | "merge";
+  readonly expectedStructureToken?: string;
+}
+
+export interface PostApplyVerification {
+  readonly revision: string;
+  readonly structureToken: string;
+  readonly boxCount: number;
+  readonly connectionCount: number;
 }
 
 export interface CompilePlanResult {
@@ -62,6 +70,7 @@ export interface ApplyDslResult {
   readonly warnings: readonly CompileWarning[];
   readonly baselineCaptured: boolean;
   readonly baselineWarning?: string;
+  readonly verification?: PostApplyVerification;
   readonly manualChangesMerged: number;
   readonly statePersisted: boolean;
   readonly stateWarning?: string;
@@ -79,6 +88,7 @@ export interface ReconcilePlanResult {
   readonly managedChangeCount: number;
   readonly unmanagedChangeCount: number;
   readonly warnings: readonly CompileWarning[];
+  readonly structureToken: string;
 }
 
 export interface InspectPatchResult {
@@ -205,6 +215,7 @@ export class MaxforgePatchService {
   private readonly intentSources: Map<string, string>;
   private readonly baselineSnapshots: Map<string, MaxforgePatcherSnapshot>;
   private readonly pendingApplies: Map<string, PendingPatchApply>;
+  private readonly latestInspections = new Map<string, MaxforgeSnapshotEvent>();
 
   constructor(
     private readonly patchAdapter: PatchGraphAdapter,
@@ -240,7 +251,10 @@ export class MaxforgePatchService {
     let intentGraph: PatchGraph;
     let manualChangesMerged = 0;
     if (request.manualChanges === "merge") {
-      const reconciliation = await this.reconcilePlan(request);
+      const reconciliation = await this.reconcilePlan(
+        request,
+        request.expectedStructureToken
+      );
       if (
         !reconciliation.canApply ||
         !reconciliation.plan ||
@@ -261,7 +275,8 @@ export class MaxforgePatchService {
       const baseStructureToken = await this.assertNoManagedDrift(
         request.patcherId,
         request.scope,
-        current.graph
+        current.graph,
+        request.expectedStructureToken
       );
       plan = {
         ...diffPatchGraphs(current.graph, desired.graph),
@@ -312,6 +327,7 @@ export class MaxforgePatchService {
       acknowledgement,
       warnings,
       baselineCaptured: baseline.captured,
+      ...(baseline.verification ? { verification: baseline.verification } : {}),
       manualChangesMerged,
       statePersisted: persistence.persisted,
       workingDsl,
@@ -322,7 +338,8 @@ export class MaxforgePatchService {
   }
 
   async reconcilePlan(
-    request: CompilePlanRequest
+    request: CompilePlanRequest,
+    expectedStructureToken?: string
   ): Promise<ReconcilePlanResult> {
     const desired = this.patchAdapter.compile(request.desiredDsl, request.scope);
     const current = this.resolveCurrentGraph(request);
@@ -334,9 +351,10 @@ export class MaxforgePatchService {
 
     const key = targetKey(request.patcherId, request.scope);
     const baseline = this.baselineSnapshots.get(key);
-    const snapshot = await this.transport.inspect(
+    const snapshot = await this.inspectOrReuse(
       request.patcherId,
-      request.scope
+      request.scope,
+      expectedStructureToken
     );
     this.assertInspectionRevision(
       request.patcherId,
@@ -397,6 +415,7 @@ export class MaxforgePatchService {
       managedChangeCount,
       unmanagedChangeCount: changes.filter((change) => !change.managed).length,
       warnings: [...current.warnings, ...desired.warnings],
+      structureToken: snapshot.structureToken,
     };
   }
 
@@ -405,6 +424,7 @@ export class MaxforgePatchService {
     scope: string
   ): Promise<InspectPatchResult> {
     const snapshot = await this.transport.inspect(patcherId, scope);
+    this.latestInspections.set(targetKey(patcherId, scope), snapshot);
     const baseline = this.baselineSnapshots.get(targetKey(patcherId, scope));
     const changes = baseline
       ? diffPatcherSnapshots(baseline, snapshot.patcher)
@@ -916,11 +936,16 @@ export class MaxforgePatchService {
   private async assertNoManagedDrift(
     patcherId: string,
     scope: string,
-    current: PatchGraph
+    current: PatchGraph,
+    expectedStructureToken?: string
   ): Promise<string> {
     const key = targetKey(patcherId, scope);
     const baseline = this.baselineSnapshots.get(key);
-    const snapshot = await this.transport.inspect(patcherId, scope);
+    const snapshot = await this.inspectOrReuse(
+      patcherId,
+      scope,
+      expectedStructureToken
+    );
     this.assertInspectionRevision(patcherId, scope, current, snapshot);
 
     let managedChangeCount = 0;
@@ -961,11 +986,13 @@ export class MaxforgePatchService {
     expectedGraph: PatchGraph
   ): Promise<{
     captured: boolean;
+    verification?: PostApplyVerification;
     warning?: string;
   }> {
     const key = targetKey(patcherId, scope);
     try {
       const snapshot = await this.transport.inspect(patcherId, scope);
+      this.latestInspections.set(key, snapshot);
       if (snapshot.revision !== expectedGraph.revision) {
         throw new Error(
           `inspection revision ${snapshot.revision ?? "uninitialized"} does ` +
@@ -987,7 +1014,15 @@ export class MaxforgePatchService {
         );
       }
       this.baselineSnapshots.set(key, snapshot.patcher);
-      return { captured: true };
+      return {
+        captured: true,
+        verification: {
+          revision: expectedGraph.revision,
+          structureToken: snapshot.structureToken,
+          boxCount: snapshot.patcher.boxes.length,
+          connectionCount: snapshot.patcher.connections.length,
+        },
+      };
     } catch (error) {
       this.baselineSnapshots.delete(key);
       const message = error instanceof Error ? error.message : String(error);
@@ -998,6 +1033,27 @@ export class MaxforgePatchService {
           `post-apply inspection baseline: ${message}`,
       };
     }
+  }
+
+  private async inspectOrReuse(
+    patcherId: string,
+    scope: string,
+    expectedStructureToken?: string
+  ): Promise<MaxforgeSnapshotEvent> {
+    const key = targetKey(patcherId, scope);
+    if (expectedStructureToken !== undefined) {
+      const cached = this.latestInspections.get(key);
+      if (!cached || cached.structureToken !== expectedStructureToken) {
+        throw new Error(
+          `No cached inspection matches structure token ${expectedStructureToken} ` +
+          `for Max patch "${patcherId}" scope "${scope}". Inspect the patch again.`
+        );
+      }
+      return cached;
+    }
+    const snapshot = await this.transport.inspect(patcherId, scope);
+    this.latestInspections.set(key, snapshot);
+    return snapshot;
   }
 
   private resolveCurrentGraph(request: CompilePlanRequest): {
