@@ -1363,6 +1363,55 @@ describe("MaxforgePatchService", () => {
     expect(aligned.baselineCaptured).toBe(true);
   });
 
+  it("recovers an exact managed live addition from complete desired DSL", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const baseDsl = "osc = cycle~ 440 at(50, 50)";
+    transport.snapshotAfterApply = snapshotForDsl(baseDsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+
+    const desiredDsl =
+      `${baseDsl}\nbase_r = flonum @format 6 @maximum 1 ` +
+      "@minimum 0 @parameter_enable 0 at(104.5, 458, 50, 22)";
+    transport.snapshot = snapshotForDsl(desiredDsl, "voices");
+    transport.snapshotAfterApply = snapshotForDsl(desiredDsl, "voices");
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+    });
+
+    expect(preview).toMatchObject({
+      canApply: true,
+      conflicts: [],
+      managedChangeCount: 1,
+      plan: {
+        baseRevision: transport.plans[0].targetRevision,
+        operations: [],
+      },
+    });
+
+    const applied = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+      manualChanges: "merge",
+      expectedStructureToken: preview.structureToken,
+    });
+
+    expect(applied.plan.operations).toEqual([]);
+    expect(applied.acknowledgement.revision).toBe(
+      preview.plan?.targetRevision
+    );
+    expect(applied.baselineCaptured).toBe(true);
+    expect(applied.workingDsl).toContain("base_r = flonum");
+  });
+
   it("ignores runtime bpatcher port metadata during lossless reconciliation", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);

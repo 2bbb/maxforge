@@ -209,6 +209,11 @@ If the agent already has a next desired DSL, call `maxforge_reconcile_patch`
 instead. It performs a three-way merge of the previous agent intent, current
 Max graph, and next desired graph while retaining the acknowledged graph for
 native revision safety.
+An added reserved managed identity can be recovered only when complete desired
+DSL explicitly defines the exact live box and all managed cords involving it.
+Expect a zero-operation revision acknowledgement when the structure is already
+live. Duplicate identity, field/layout/configuration mismatch, cord mismatch,
+unmanaged cord, and unrepresentable graph cases remain fail-closed conflicts.
 When `canApply` is true, apply the same DSL with `manualChanges: "merge"`.
 Resolve same-field, change-vs-delete, new-managed-identity, and unmanaged-cord
 conflicts explicitly. Do not force a winner or fall back to ordinary apply.

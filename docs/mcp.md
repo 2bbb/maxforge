@@ -634,6 +634,15 @@ while the agent adds an unrelated `gain` box. A different live and desired
 change to the same field is a conflict. Deleting a box on one side while the
 other side changes it is also a conflict.
 
+A live reserved managed identity missing from the acknowledged graph can be
+recovered only when complete `desiredDsl` explicitly declares that identity.
+The resolved live box and every managed cord touching recovered identities must
+exactly match desired DSL. Duplicate identities, box/configuration/layout
+mismatches, non-matching managed cords, cords to unmanaged boxes, and graphs
+that cannot round-trip remain conflicts. A successful recovery normally emits
+a zero-operation plan because the structure already exists in Max; the native
+acknowledgement advances it to the desired revision.
+
 The result contains `canApply`, a structured `conflicts` array, and an ordered
 plan only when the merge is safe. This tool never mutates Max. Do not convert
 `canApply: false` into an overwrite: inspect the conflict and make the intended
@@ -966,8 +975,10 @@ optimistic concurrency.
   identity-preserving edit. Represent the intended reparenting in complete DSL
   and resolve the resulting delete/add conflict explicitly.
 - A box manually given a new reserved `maxforge_<scope>_obj_...` identity is
-  reported as `managed_box_added`, not silently adopted. Define it in DSL or
-  remove the reserved scripting name first.
+  reported as `managed_box_added`, not silently adopted. Reconciliation accepts
+  it only when complete desired DSL explicitly defines the exact live box and
+  all managed cords involving it; otherwise remove the reserved scripting name
+  or resolve the reported mismatch.
 - Inspection and apply are separate requests, but MCP apply plans bind them with
   `baseStructureToken`. A human edit after apply-side inspection changes the
   token, so the native external rejects the stale plan before mutation.

@@ -56,6 +56,7 @@ export interface ReconstructedManagedState {
   readonly graph: PatchGraph;
   readonly conflicts: readonly PatchReconciliationConflict[];
   readonly externalConnections: readonly ExternalManagedConnection[];
+  readonly recoveredManagedKeys: ReadonlySet<string>;
 }
 
 export interface ReconciledPatchPlan {
@@ -105,12 +106,24 @@ export function reconcilePatchGraphs(
     acknowledged,
     currentSnapshot,
     baselineSnapshot,
-    resolveBox
+    resolveBox,
+    desired
   );
   if (reconstructed.conflicts.length > 0) {
     return {
       liveGraph: reconstructed.graph,
       conflicts: reconstructed.conflicts,
+    };
+  }
+
+  const recoveryConflicts = validateRecoveredManagedAdditions(
+    reconstructed,
+    desired
+  );
+  if (recoveryConflicts.length > 0) {
+    return {
+      liveGraph: reconstructed.graph,
+      conflicts: recoveryConflicts,
     };
   }
 
@@ -152,9 +165,13 @@ export function reconstructManagedGraph(
   base: PatchGraph,
   current: MaxforgePatcherSnapshot,
   baseline?: MaxforgePatcherSnapshot,
-  resolveBox: LiveSnapshotBoxResolver = defaultLiveBox
+  resolveBox: LiveSnapshotBoxResolver = defaultLiveBox,
+  recovery?: PatchGraph
 ): ReconstructedManagedState {
   const baseBoxes = flattenBaseBoxes(base.patcher);
+  const recoveryBoxes = recovery
+    ? flattenBaseBoxes(recovery.patcher)
+    : new Map<string, PatchBox>();
   const baselineByRuntime = new Map(
     (baseline?.boxes ?? [])
       .filter((box) => box.managed)
@@ -164,6 +181,7 @@ export function reconstructManagedGraph(
   const conflicts: PatchReconciliationConflict[] = [];
   const managedBoxes = new Map<string, ManagedSnapshotBox>();
   const runtimeEndpoints = new Map<string, ManagedSnapshotEndpoint>();
+  const recoveredManagedKeys = new Set<string>();
 
   for (const box of current.boxes) {
     const baselineBox = baselineByRuntime.get(
@@ -187,7 +205,9 @@ export function reconstructManagedGraph(
     if (!id) continue;
     const key = boxKey(box.targetPath, id);
     const baseBox = baseBoxes.get(key);
-    if (!baseBox) {
+    const recoveryBox = recoveryBoxes.get(key);
+    const referenceBox = baseBox ?? recoveryBox;
+    if (!referenceBox) {
       conflicts.push({
         kind: "managed_box_added",
         targetPath: box.targetPath,
@@ -209,11 +229,12 @@ export function reconstructManagedGraph(
     }
 
     consumed.add(key);
+    if (!baseBox) recoveredManagedKeys.add(key);
     managedBoxes.set(key, {
       snapshot: box,
       id,
       targetPath: box.targetPath,
-      box: resolveBox(box, baseBox, baselineBox),
+      box: resolveBox(box, referenceBox, baselineBox),
     });
     runtimeEndpoints.set(runtimeKey(box.targetPath, box.runtimeId), {
       id,
@@ -232,6 +253,21 @@ export function reconstructManagedGraph(
       runtimeKey(connection.targetPath, connection.destination.runtimeId)
     );
     if (source && destination) {
+      if (
+        (
+          recoveredManagedKeys.has(boxKey(source.targetPath, source.id)) ||
+          recoveredManagedKeys.has(boxKey(destination.targetPath, destination.id))
+        ) &&
+        Object.keys(connection.attributes).length > 0
+      ) {
+        conflicts.push({
+          kind: "unrepresentable_graph",
+          targetPath: connection.targetPath,
+          message:
+            "A live cord involving a recovered managed box has metadata that " +
+            "protocol version 1 cannot represent",
+        });
+      }
       const key = pathKey(connection.targetPath);
       const connections = connectionsByPath.get(key) ?? [];
       connections.push({
@@ -258,11 +294,172 @@ export function reconstructManagedGraph(
   return {
     graph: createPatchGraph(
       base.scope,
-      rebuildNode(base.patcher, [], managedBoxes, connectionsByPath)
+      rebuildNode(
+        reconstructionTemplate(base.patcher, recovery?.patcher),
+        [],
+        managedBoxes,
+        connectionsByPath
+      )
     ),
     conflicts,
     externalConnections,
+    recoveredManagedKeys,
   };
+}
+
+function validateRecoveredManagedAdditions(
+  reconstructed: ReconstructedManagedState,
+  desired: PatchGraph
+): readonly PatchReconciliationConflict[] {
+  if (reconstructed.recoveredManagedKeys.size === 0) return [];
+
+  const conflicts: PatchReconciliationConflict[] = [];
+  const liveBoxes = flattenBaseBoxes(reconstructed.graph.patcher);
+  const desiredBoxes = flattenBaseBoxes(desired.patcher);
+  for (const key of reconstructed.recoveredManagedKeys) {
+    const liveBox = liveBoxes.get(key);
+    const desiredBox = desiredBoxes.get(key);
+    if (
+      liveBox &&
+      desiredBox &&
+      samePatchBox(desired.scope, liveBox, desiredBox)
+    ) continue;
+    const separator = key.lastIndexOf("\u0000");
+    conflicts.push({
+      kind: "box_concurrent_add",
+      targetPath: pathFromKey(key.slice(0, separator)),
+      id: key.slice(separator + 1),
+      message:
+        `Managed box "${key.slice(separator + 1)}" was added differently ` +
+        "in Max and complete desired DSL",
+    });
+  }
+  for (const external of reconstructed.externalConnections) {
+    const key = boxKey(external.managed.targetPath, external.managed.id);
+    if (!reconstructed.recoveredManagedKeys.has(key)) continue;
+    conflicts.push({
+      kind: "external_connection_at_risk",
+      targetPath: external.managed.targetPath,
+      id: external.managed.id,
+      connection: external.connection,
+      message:
+        `Managed box "${external.managed.id}" cannot be recovered from ` +
+        "desired DSL while it has a live cord to an unmanaged box",
+    });
+  }
+
+  const liveConnections = recoveredConnectionKeys(
+    reconstructed.graph,
+    reconstructed.recoveredManagedKeys
+  );
+  const desiredConnections = recoveredConnectionKeys(
+    desired,
+    reconstructed.recoveredManagedKeys
+  );
+  if (!equalStringSets(liveConnections, desiredConnections)) {
+    const firstKey = [...reconstructed.recoveredManagedKeys].sort()[0];
+    const separator = firstKey.lastIndexOf("\u0000");
+    conflicts.push({
+      kind: "box_concurrent_add",
+      targetPath: pathFromKey(firstKey.slice(0, separator)),
+      id: firstKey.slice(separator + 1),
+      message:
+        "Live connections involving recovered managed boxes do not exactly " +
+        "match complete desired DSL",
+    });
+  }
+  return conflicts;
+}
+
+function samePatchBox(
+  scope: string,
+  left: PatchBox,
+  right: PatchBox
+): boolean {
+  return createPatchGraph(scope, {
+    boxes: [left],
+    connections: [],
+  }).revision === createPatchGraph(scope, {
+    boxes: [right],
+    connections: [],
+  }).revision;
+}
+
+function reconstructionTemplate(
+  base: PatchGraphNode,
+  recovery?: PatchGraphNode
+): PatchGraphNode {
+  if (!recovery) return base;
+  const recoveryById = new Map(recovery.boxes.map((box) => [box.id, box]));
+  const boxes = base.boxes.map((box) => {
+    const recovered = recoveryById.get(box.id);
+    recoveryById.delete(box.id);
+    if (!box.patcher && !recovered?.patcher) return box;
+    return {
+      ...box,
+      patcher: reconstructionTemplate(
+        box.patcher ?? { boxes: [], connections: [] },
+        recovered?.patcher
+      ),
+    };
+  });
+  boxes.push(...recovery.boxes.filter((box) => recoveryById.has(box.id)));
+  return { boxes, connections: base.connections };
+}
+
+function recoveredConnectionKeys(
+  graph: PatchGraph,
+  recoveredManagedKeys: ReadonlySet<string>
+): Set<string> {
+  const result = new Set<string>();
+  collectRecoveredConnectionKeys(
+    graph.patcher,
+    [],
+    recoveredManagedKeys,
+    result
+  );
+  return result;
+}
+
+function collectRecoveredConnectionKeys(
+  node: PatchGraphNode,
+  targetPath: readonly string[],
+  recoveredManagedKeys: ReadonlySet<string>,
+  result: Set<string>
+): void {
+  for (const connection of node.connections) {
+    const sourceKey = boxKey(targetPath, connection.source.id);
+    const destinationKey = boxKey(targetPath, connection.destination.id);
+    if (
+      !recoveredManagedKeys.has(sourceKey) &&
+      !recoveredManagedKeys.has(destinationKey)
+    ) continue;
+    result.add([
+      pathKey(targetPath),
+      connection.source.id,
+      connection.source.port,
+      connection.destination.id,
+      connection.destination.port,
+    ].join("\u0000"));
+  }
+  for (const box of node.boxes) {
+    if (!box.patcher) continue;
+    collectRecoveredConnectionKeys(
+      box.patcher,
+      [...targetPath, box.varName],
+      recoveredManagedKeys,
+      result
+    );
+  }
+}
+
+function equalStringSets(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) return false;
+  return [...left].every((value) => right.has(value));
+}
+
+function pathFromKey(key: string): readonly string[] {
+  return key === "" ? [] : key.split("/");
 }
 
 function rebuildNode(

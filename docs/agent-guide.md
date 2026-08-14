@@ -248,6 +248,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    structure tokenで`maxforge_adopt_live_changes`を呼ぶ。次の完全なdesired DSLが
    既にあるなら`maxforge_reconcile_patch`へ渡す。`canAdopt: true`または
    `canApply: true`でなければ進めない。unmanaged追加を暗黙に所有しない。
+   acknowledged graphに無いreserved managed identityは、完全なdesired DSLに同一boxと
+   関連managed cordが明示され、liveと完全一致する場合だけzero-operation recovery
+   できる。duplicate、field/cord不一致、unmanaged cordを上書きで回避しない。
 8. adopt後は返された`workingDsl`でworking sourceを置き換える。要約から再構築
    しない。通常経路では
    `maxforge_compile_plan`、手動変更の統合経路ではreconcileが

@@ -151,6 +151,154 @@ describe("live patch reconciliation", () => {
     ]);
   });
 
+  it("recovers an exact live managed addition declared in complete desired DSL", () => {
+    const base = graph("osc = cycle~ 440 at(10, 20)");
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = cycle~ 220 at(180, 20)"
+    );
+
+    const result = reconcilePatchGraphs(
+      base,
+      base,
+      desired,
+      snapshot(desired),
+      snapshot(base)
+    );
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.graph?.revision).toBe(desired.revision);
+    expect(result.plan).toMatchObject({
+      baseRevision: base.revision,
+      targetRevision: desired.revision,
+      operations: [],
+    });
+  });
+
+  it("rejects a recovered managed addition whose live box differs from desired DSL", () => {
+    const base = graph("osc = cycle~ 440 at(10, 20)");
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = cycle~ 220 at(180, 20)"
+    );
+    const live = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = cycle~ 330 at(180, 20)"
+    );
+
+    const result = reconcilePatchGraphs(
+      base,
+      base,
+      desired,
+      snapshot(live),
+      snapshot(base)
+    );
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: "box_concurrent_add",
+        id: "obj-extra",
+      }),
+    ]);
+  });
+
+  it("rejects recovered managed additions with non-matching live connections", () => {
+    const base = graph("osc = cycle~ 440 at(10, 20)");
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = *~ 0.5 at(180, 20)"
+    );
+    const live = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = *~ 0.5 at(180, 20)\n" +
+      "osc -> extra"
+    );
+
+    const result = reconcilePatchGraphs(
+      base,
+      base,
+      desired,
+      snapshot(live),
+      snapshot(base)
+    );
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: "box_concurrent_add",
+        id: "obj-extra",
+        message: expect.stringContaining("do not exactly match"),
+      }),
+    ]);
+  });
+
+  it("rejects recovered managed additions connected to unmanaged live boxes", () => {
+    const base = graph("osc = cycle~ 440 at(10, 20)");
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = *~ 0.5 at(180, 20)"
+    );
+    const current = snapshot(desired);
+    current.boxes.push({
+      targetPath: [],
+      runtimeId: "runtime-manual",
+      varName: "manual_meter",
+      maxclass: "meter~",
+      patchingRect: [300, 20, 80, 22],
+      managed: false,
+    });
+    current.connections.push({
+      targetPath: [],
+      source: {
+        runtimeId: "runtime-extra",
+        varName: "maxforge_voices_obj_extra",
+        port: 0,
+      },
+      destination: {
+        runtimeId: "runtime-manual",
+        varName: "manual_meter",
+        port: 0,
+      },
+      attributes: {},
+    });
+
+    const result = reconcilePatchGraphs(
+      base,
+      base,
+      desired,
+      current,
+      snapshot(base)
+    );
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: "external_connection_at_risk",
+        id: "obj-extra",
+      }),
+    ]);
+  });
+
+  it("rejects patch-cord metadata on recovered managed additions", () => {
+    const base = graph("osc = cycle~ 440 at(10, 20)");
+    const desired = graph(
+      "osc = cycle~ 440 at(10, 20)\nextra = *~ 0.5 at(180, 20)\n" +
+      "osc -> extra"
+    );
+    const current = snapshot(desired);
+    current.connections[0] = {
+      ...current.connections[0],
+      attributes: { hidden: 1 },
+    };
+
+    const result = reconcilePatchGraphs(
+      base,
+      base,
+      desired,
+      current,
+      snapshot(base)
+    );
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        kind: "unrepresentable_graph",
+        message: expect.stringContaining("protocol version 1"),
+      }),
+    ]);
+  });
+
   it("preserves an earlier merged human edit across later agent changes", () => {
     const intent = graph(
       "osc = cycle~ 440 at(10, 20)\ngain = *~ 0.25 at(10, 80)"
