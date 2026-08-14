@@ -7,7 +7,8 @@
   "types": "dist/index.d.ts",
   "bin": {
     "maxforge": "dist/cli/index.js",
-    "maxforge-mcp": "dist/mcp/bin.js"
+    "maxforge-mcp": "dist/mcp/bin.js",
+    "maxforge-broker": "dist/mcp/broker-bin.js"
   },
   "scripts": {
     "build": "tsc",

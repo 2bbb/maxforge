@@ -6,6 +6,7 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmdirSync,
   rmSync,
   statSync,
@@ -41,6 +42,7 @@ export interface EditHistoryStoreOptions {
   readonly maxBytes?: number;
   readonly maxAgeDays?: number;
   readonly chunkBytes?: number;
+  readonly recoverStaleWriterLease?: boolean;
 }
 
 export interface LoadedEditHistory {
@@ -163,6 +165,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
   private readonly maxBytes: number;
   private readonly maxAgeMilliseconds: number;
   private readonly chunkBytes: number;
+  private readonly recoverStaleWriterLease: boolean;
   private readonly identityLedger: PatchHistoryIdentityLedger;
   private readonly sessions = new Map<string, SessionState>();
   private readonly metadata = new Map<string, PersistedPatchMetadata[]>();
@@ -193,6 +196,7 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     if (this.maxBytes < this.chunkBytes) {
       throw new Error("edit history chunkBytes cannot exceed maxBytes");
     }
+    this.recoverStaleWriterLease = options.recoverStaleWriterLease ?? false;
   }
 
   acquireWriterLease(): void {
@@ -200,33 +204,40 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       throw new Error(`Edit-history writer lease is already held by this store`);
     }
     this.ensureDirectory();
-    const token = randomUUID();
-    const source = `${JSON.stringify({
-      schemaVersion: 1,
-      projectId: this.project.id,
-      pid: process.pid,
-      token,
-      acquiredAt: new Date().toISOString(),
-    })}\n`;
     const path = this.writerLeasePath();
-    let created = false;
-    try {
-      const descriptor = openSync(path, "wx", 0o600);
-      created = true;
+    for (;;) {
+      const token = randomUUID();
+      const source = `${JSON.stringify({
+        schemaVersion: 1,
+        projectId: this.project.id,
+        pid: process.pid,
+        token,
+        acquiredAt: new Date().toISOString(),
+      })}\n`;
+      let created = false;
       try {
-        writeFileSync(descriptor, source, "utf8");
-      } finally {
-        closeSync(descriptor);
+        const descriptor = openSync(path, "wx", 0o600);
+        created = true;
+        try {
+          writeFileSync(descriptor, source, "utf8");
+        } finally {
+          closeSync(descriptor);
+        }
+        this.writerLeaseToken = token;
+        return;
+      } catch (error) {
+        if (created) rmSync(path, { force: true });
+        if (!isAlreadyExistsError(error)) throw error;
+        if (
+          this.recoverStaleWriterLease &&
+          this.quarantineDeadWriterLease(path)
+        ) continue;
+        throw new Error(
+          `Edit history ${this.directory} already has an active writer lease. ` +
+          "Use one maxforge broker per project; if the recorded process is still " +
+          `running, stop that broker before removing ${path}.`
+        );
       }
-      this.writerLeaseToken = token;
-    } catch (error) {
-      if (created) rmSync(path, { force: true });
-      if (!isAlreadyExistsError(error)) throw error;
-      throw new Error(
-        `Edit history ${this.directory} already has an active writer lease. ` +
-        "Use one maxforge-mcp process per project; if the prior process crashed, " +
-        `verify it is stopped before removing ${path}.`
-      );
     }
   }
 
@@ -242,6 +253,28 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
       if (!isMissingFileError(error)) throw error;
     }
     removeEmptyDirectory(this.directory);
+  }
+
+  private quarantineDeadWriterLease(path: string): boolean {
+    let lease: WriterLease | undefined;
+    try {
+      lease = parseWriterLease(readFileSync(path, "utf8"));
+    } catch (error) {
+      if (isMissingFileError(error)) return true;
+      throw error;
+    }
+    if (!lease || lease.projectId !== this.project.id || processIsAlive(lease.pid)) {
+      return false;
+    }
+    const quarantine = `${path}.stale-${randomUUID()}`;
+    try {
+      renameSync(path, quarantine);
+    } catch (error) {
+      if (isMissingFileError(error)) return true;
+      throw error;
+    }
+    rmSync(quarantine, { force: true });
+    return true;
   }
 
   load(): LoadedEditHistory {
@@ -1045,6 +1078,15 @@ function parseWriterLease(source: string): WriterLease | undefined {
     !Number.isFinite(Date.parse(raw.acquiredAt))
   ) return undefined;
   return raw as unknown as WriterLease;
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !isRecord(error) || error.code !== "ESRCH";
+  }
 }
 
 function removeEmptyDirectory(path: string): boolean {

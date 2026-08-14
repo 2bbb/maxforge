@@ -7,6 +7,7 @@ import {
 import type { ObjectDatabase } from "../core/types.js";
 import { MaxforgePatchService } from "./service.js";
 import { PatchPlanTransport } from "../max/patch-protocol.js";
+import type { BrokerStatus } from "./broker-protocol.js";
 
 const scopeSchema = z
   .string()
@@ -567,15 +568,16 @@ export interface CreateMcpServerOptions {
   readonly service: MaxforgePatchService;
   readonly transport: PatchPlanTransport;
   readonly version: string;
-  readonly catalog: LoadedObjectCatalog;
+  readonly getCatalog: () => LoadedObjectCatalog;
+  readonly setCatalog: (catalog: LoadedObjectCatalog) => void;
   readonly replaceObjectDatabase: (database: ObjectDatabase) => void;
   readonly reloadCatalog: () => Promise<LoadedObjectCatalog>;
+  readonly getBrokerStatus?: () => BrokerStatus;
 }
 
 export function createMaxforgeMcpServer(
   options: CreateMcpServerOptions
 ): McpServer {
-  let currentCatalog = options.catalog;
   const server = new McpServer(
     {
       name: "maxforge",
@@ -637,6 +639,16 @@ export function createMaxforgeMcpServer(
         "Diagnose transport, persistent state, and unresolved applies. Use when no patch is listed, after restart, or after a timeout; connected clients are not usable targets until registered.",
       inputSchema: z.object({}),
       outputSchema: z.object({
+        broker: z.object({
+          state: z.enum(["starting", "ready", "failed", "draining"]),
+          brokerVersion: z.string(),
+          pid: z.number().int().positive(),
+          mcpClients: z.number().int().nonnegative(),
+          maxClients: z.number().int().nonnegative(),
+          pendingOperations: z.number().int().nonnegative(),
+          idleTimeoutMs: z.number().int().nonnegative(),
+          error: z.string().optional(),
+        }).nullable(),
         bridge: z.object({
           host: z.string(),
           port: z.number().int().nonnegative(),
@@ -666,11 +678,12 @@ export function createMaxforgeMcpServer(
     },
     async () => {
       const result = {
+        broker: options.getBrokerStatus?.() ?? null,
         bridge: options.transport.getStatus(),
         managedRevisions: options.service.getManagedRevisions(),
         inspectionBaselineScopes: options.service.getBaselineScopes(),
         state: options.service.getStateStatus(),
-        catalog: catalogStatus(currentCatalog),
+        catalog: catalogStatus(options.getCatalog()),
       };
       return toolResult(result);
     }
@@ -708,12 +721,12 @@ export function createMaxforgeMcpServer(
     async ({ query, includeBuiltins, limit }) => {
       const maximum = limit ?? 50;
       const matches = searchObjectCatalog(
-        currentCatalog,
+        options.getCatalog(),
         query,
         includeBuiltins ?? false
       );
       return toolResult({
-        catalog: catalogStatus(currentCatalog),
+        catalog: catalogStatus(options.getCatalog()),
         totalMatches: matches.length,
         truncated: maximum < matches.length,
         objects: matches.slice(0, maximum),
@@ -741,7 +754,7 @@ export function createMaxforgeMcpServer(
     },
     async () => {
       try {
-        const previous = currentCatalog;
+        const previous = options.getCatalog();
         const replacement = await options.reloadCatalog();
         if (previous.project?.id !== replacement.project?.id) {
           throw new Error(
@@ -749,7 +762,7 @@ export function createMaxforgeMcpServer(
           );
         }
         options.replaceObjectDatabase(replacement.database);
-        currentCatalog = replacement;
+        options.setCatalog(replacement);
         return toolResult({
           previous: catalogStatus(previous),
           catalog: catalogStatus(replacement),

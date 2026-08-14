@@ -93,11 +93,15 @@ describe("maxforge MCP protocol surface", () => {
     const service = new MaxforgePatchService(patchAdapter, transport);
     let reloadShouldFail = false;
     let reloadProjectId = "studio_patchset";
+    let currentCatalog = catalog;
     const server = createMaxforgeMcpServer({
       service,
       transport,
       version: "test",
-      catalog,
+      getCatalog: () => currentCatalog,
+      setCatalog: (replacement) => {
+        currentCatalog = replacement;
+      },
       replaceObjectDatabase: (database) =>
         patchAdapter.replaceDatabase(database),
       reloadCatalog: async () => {
@@ -637,11 +641,15 @@ describe("maxforge MCP protocol surface", () => {
       undefined,
       store
     );
+    let currentCatalog = catalog;
     const server = createMaxforgeMcpServer({
       service,
       transport,
       version: "test",
-      catalog,
+      getCatalog: () => currentCatalog,
+      setCatalog: (replacement) => {
+        currentCatalog = replacement;
+      },
       replaceObjectDatabase: (database) =>
         patchAdapter.replaceDatabase(database),
       reloadCatalog: async () => catalog,

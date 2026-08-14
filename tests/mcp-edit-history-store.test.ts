@@ -1,6 +1,7 @@
 import {
   appendFileSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
@@ -381,7 +382,35 @@ describe("JsonLinesEditHistoryStore", () => {
     expect(() => new JsonLinesEditHistoryStore({
       directory,
       project: { id: "studio_patchset" },
+      recoverStaleWriterLease: true,
     }).acquireWriterLease()).toThrow("active writer lease");
+    store.releaseWriterLease();
+  });
+
+  it("atomically replaces a valid lease whose recorded process is dead", () => {
+    const directory = temporaryDirectory();
+    const leasePath = join(directory, "writer-v1.lock");
+    writeFileSync(leasePath, `${JSON.stringify({
+      schemaVersion: 1,
+      projectId: "studio_patchset",
+      pid: 2_147_483_647,
+      token: "dead-writer",
+      acquiredAt: "2026-08-14T00:00:00.000Z",
+    })}\n`);
+    const store = new JsonLinesEditHistoryStore({
+      directory,
+      project: { id: "studio_patchset" },
+      recoverStaleWriterLease: true,
+    });
+
+    store.acquireWriterLease();
+
+    expect(JSON.parse(readFileSync(leasePath, "utf8"))).toMatchObject({
+      projectId: "studio_patchset",
+      pid: process.pid,
+    });
+    expect(readdirSync(directory).filter((name) => name.includes(".stale-")))
+      .toEqual([]);
     store.releaseWriterLease();
   });
 

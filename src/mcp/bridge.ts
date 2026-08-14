@@ -631,6 +631,15 @@ export class MaxforgeWebSocketBridge implements PatchPlanTransport {
     };
   }
 
+  getPendingOperationCount(): number {
+    return this.pendingApplies.size +
+      this.pendingInspections.size +
+      this.pendingCreates.size +
+      this.pendingOpens.size +
+      this.pendingSaves.size +
+      this.pendingCloses.size;
+  }
+
   private editHistoryPersistenceStatus() {
     if (!this.editHistoryStore) {
       return {

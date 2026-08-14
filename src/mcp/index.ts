@@ -5,3 +5,5 @@ export * from "./service.js";
 export * from "./state-store.js";
 export * from "./edit-history-store.js";
 export * from "./reconcile.js";
+export * from "./broker-protocol.js";
+export * from "./broker-client.js";
