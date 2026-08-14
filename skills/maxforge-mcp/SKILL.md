@@ -117,15 +117,18 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    as `expectedStructureToken` so the service can reuse that observation.
    Set `manualChanges: "merge"` only when reconciliation of that exact target
    and DSL returned `canApply: true`. Otherwise omit it so drift is rejected.
-   Apply repeats inspection and binds its structure token; if the human edits
-   the patch before native mutation, treat the resulting rejection as fresh
-   drift and inspect again.
+   Apply reuses that exact cached inspection and binds its structure token;
+   Max still recomputes the token immediately before mutation. If the human
+   edits the patch before native mutation, treat the resulting rejection as
+   fresh drift and inspect again.
 14. Count success only when `acknowledgement.revision` equals `targetRevision`.
     `baselineCaptured: false` is a warning after a successful apply, not an
     apply failure.
-15. Require `verification.revision` to equal `targetRevision` and check its
-    box/cord counts. Inspect again only when verification is absent, baseline
-    capture failed, or complete post-apply topology is needed.
+15. When `verification` is present, require its revision to equal
+    `targetRevision` and check its box/cord counts. Inspect again when
+    verification is absent, baseline capture failed, or complete post-apply
+    topology is needed. If the workflow is slow, compare the returned `timings`
+    stages rather than guessing which component is responsible.
 16. After every apply, retain returned `workingDsl` as the next complete source.
     Ordinary no-merge apply preserves the submitted authored DSL and its
     `for`/`if` structure. Adoption and merge may return explicit graph-derived

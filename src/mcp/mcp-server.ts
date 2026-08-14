@@ -231,6 +231,15 @@ const postApplyVerificationSchema = z.object({
   connectionCount: z.number().int().nonnegative(),
 });
 
+const applyDslTimingsSchema = z.object({
+  preflightMs: z.number().nonnegative(),
+  pendingStatePersistenceMs: z.number().nonnegative(),
+  nativeApplyMs: z.number().nonnegative(),
+  postApplyInspectionMs: z.number().nonnegative(),
+  finalStatePersistenceMs: z.number().nonnegative(),
+  totalMs: z.number().nonnegative(),
+});
+
 const reconciliationConflictSchema = z.object({
   kind: z.string(),
   targetPath: z.array(z.string()),
@@ -1454,6 +1463,7 @@ export function createMaxforgeMcpServer(
         stateWarning: z.string().optional(),
         workingDsl: z.string(),
         workingDslRequiredAsCurrent: z.boolean(),
+        timings: applyDslTimingsSchema,
         warnings: z.array(warningSchema),
       }),
       annotations: {
@@ -1478,6 +1488,7 @@ export function createMaxforgeMcpServer(
           statePersisted: result.statePersisted,
           workingDsl: result.workingDsl,
           workingDslRequiredAsCurrent: result.workingDslRequiredAsCurrent,
+          timings: result.timings,
           ...(result.baselineWarning
             ? { baselineWarning: result.baselineWarning }
             : {}),

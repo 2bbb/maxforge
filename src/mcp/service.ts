@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import type { CompileWarning } from "../core/types.js";
 import {
   createEmptyPatchGraph,
@@ -39,6 +40,15 @@ import {
 import type { PatchGraphAdapter } from "./patch-adapter.js";
 import type { EditHistoryStore } from "./edit-history-store.js";
 
+export interface ApplyDslTimings {
+  readonly preflightMs: number;
+  readonly pendingStatePersistenceMs: number;
+  readonly nativeApplyMs: number;
+  readonly postApplyInspectionMs: number;
+  readonly finalStatePersistenceMs: number;
+  readonly totalMs: number;
+}
+
 export interface CompilePlanRequest {
   readonly patcherId: string;
   readonly desiredDsl: string;
@@ -76,6 +86,7 @@ export interface ApplyDslResult {
   readonly stateWarning?: string;
   readonly workingDsl: string;
   readonly workingDslRequiredAsCurrent: boolean;
+  readonly timings: ApplyDslTimings;
 }
 
 export interface ReconcilePlanResult {
@@ -245,6 +256,7 @@ export class MaxforgePatchService {
   }
 
   async applyDsl(request: ApplyDslRequest): Promise<ApplyDslResult> {
+    const totalStartedAt = performance.now();
     let plan: PatchPlan;
     let nextGraph: PatchGraph;
     let warnings: readonly CompileWarning[];
@@ -301,8 +313,18 @@ export class MaxforgePatchService {
       nextSource: workingDsl,
       intentSource: intentDsl,
     });
+    const pendingStatePersistenceStartedAt = performance.now();
+    const preflightMs = elapsedMilliseconds(
+      totalStartedAt,
+      pendingStatePersistenceStartedAt
+    );
     this.persistState();
 
+    const nativeApplyStartedAt = performance.now();
+    const pendingStatePersistenceMs = elapsedMilliseconds(
+      pendingStatePersistenceStartedAt,
+      nativeApplyStartedAt
+    );
     const acknowledgement = await this.transport.apply(request.patcherId, plan);
     this.managedGraphs.set(
       key,
@@ -315,12 +337,23 @@ export class MaxforgePatchService {
     this.workingSources.set(key, workingDsl);
     this.intentSources.set(key, intentDsl);
     this.pendingApplies.delete(key);
+    const postApplyInspectionStartedAt = performance.now();
+    const nativeApplyMs = elapsedMilliseconds(
+      nativeApplyStartedAt,
+      postApplyInspectionStartedAt
+    );
     const baseline = await this.captureBaseline(
       request.patcherId,
       request.scope,
       nextGraph
     );
+    const finalStatePersistenceStartedAt = performance.now();
+    const postApplyInspectionMs = elapsedMilliseconds(
+      postApplyInspectionStartedAt,
+      finalStatePersistenceStartedAt
+    );
     const persistence = this.tryPersistState();
+    const completedAt = performance.now();
 
     return {
       plan,
@@ -334,6 +367,17 @@ export class MaxforgePatchService {
       workingDslRequiredAsCurrent,
       ...(baseline.warning ? { baselineWarning: baseline.warning } : {}),
       ...(persistence.warning ? { stateWarning: persistence.warning } : {}),
+      timings: {
+        preflightMs,
+        pendingStatePersistenceMs,
+        nativeApplyMs,
+        postApplyInspectionMs,
+        finalStatePersistenceMs: elapsedMilliseconds(
+          finalStatePersistenceStartedAt,
+          completedAt
+        ),
+        totalMs: elapsedMilliseconds(totalStartedAt, completedAt),
+      },
     };
   }
 
@@ -1253,4 +1297,8 @@ export class PatchReconciliationError extends Error {
 
 function targetKey(patcherId: string, scope: string): string {
   return `${patcherId}:${scope}`;
+}
+
+function elapsedMilliseconds(startedAt: number, endedAt: number): number {
+  return Math.round(Math.max(0, endedAt - startedAt) * 100) / 100;
 }

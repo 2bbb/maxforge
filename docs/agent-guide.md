@@ -265,6 +265,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
    alignmentを永続化しない。
 11. `verification.revision`とtargetRevision、box/cord数を確認する。verificationが無い、
    baseline取得に失敗した、または完全な事後topologyが必要な場合だけ再度inspectする。
+   遅い場合は感覚で原因を決めず、`timings`の`preflightMs`、
+   `pendingStatePersistenceMs`、`nativeApplyMs`、`postApplyInspectionMs`、
+   `finalStatePersistenceMs`を比較する。
 12. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
     dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
     `discard: true`を渡すまで拒否される。

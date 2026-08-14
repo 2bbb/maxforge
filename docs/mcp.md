@@ -690,12 +690,21 @@ extra post-apply inspect. If that second read fails, the apply still
 returns success with `baselineCaptured: false` and `baselineWarning`; reporting
 the already-applied mutation as a failure would invite an unsafe retry.
 
+The result also includes `timings` in milliseconds. `preflightMs` covers DSL
+compilation, diff/reconciliation, and drift checks;
+`pendingStatePersistenceMs` is the crash-recovery write before mutation;
+`nativeApplyMs` is the Max round trip; `postApplyInspectionMs` covers the
+verification snapshot and graph check; `finalStatePersistenceMs` is the final
+state write. `totalMs` covers the complete service call. Use these fields to
+identify the slow stage instead of guessing from the agent's wall-clock time.
+
 `manualChanges` defaults to `"reject"`, retaining the strict behavior: any
 manual structural change touching a managed box or one of its patch cords
 rejects mutation. After `maxforge_reconcile_patch` returns `canApply: true` for
 the exact same target and DSL, pass `manualChanges: "merge"` to preserve the
-non-conflicting live changes. The apply repeats inspection and reconciliation;
-it does not trust a stale preview. The resulting plan carries the inspected
+non-conflicting live changes. The apply reuses the exact cached inspection when
+its token is supplied and repeats reconciliation against that snapshot; it does
+not trust an unbound preview. The resulting plan carries the inspected
 `baseStructureToken`; `maxforge.sync` recomputes it immediately before native
 validation and rejects the request if any box or cord changed in the interval.
 `manualChangesMerged` reports the managed change count used by that apply.

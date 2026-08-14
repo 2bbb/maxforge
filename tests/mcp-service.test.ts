@@ -343,6 +343,17 @@ describe("MaxforgePatchService", () => {
       "create",
     ]);
     expect(first.plan.baseStructureToken).toBe("0".repeat(16));
+    expect(first.timings).toEqual({
+      preflightMs: expect.any(Number),
+      pendingStatePersistenceMs: expect.any(Number),
+      nativeApplyMs: expect.any(Number),
+      postApplyInspectionMs: expect.any(Number),
+      finalStatePersistenceMs: expect.any(Number),
+      totalMs: expect.any(Number),
+    });
+    expect(first.timings.totalMs).toBeGreaterThanOrEqual(
+      first.timings.nativeApplyMs
+    );
     expect(second.plan.operations.map((operation) => operation.op)).toEqual([
       "create",
     ]);
