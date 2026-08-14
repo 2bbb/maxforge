@@ -158,6 +158,18 @@ for i in 0..7 {
 - Use `npx maxforge@latest bundle input.maxdsl -o package-directory` only when
   every referenced custom dependency has a declared package path.
 
+## Report reproducible defects
+
+When evidence shows a maxforge defect rather than invalid DSL, missing catalog
+metadata, an expected safety rejection, or a Max limitation, search existing
+issues first. If no duplicate exists and authenticated GitHub issue creation is
+available, open an issue at `2bbb/maxforge`. Include maxforge/Node/OS/Max
+versions as relevant, the exact invocation, a minimal reproduction, actual and
+expected behavior, and bounded logs or generated evidence with secrets removed.
+Link the created issue in the response. Do not file conjecture without a
+reproduction. If write access is unavailable, return a ready-to-file issue body
+and the repository issue URL instead of claiming it was created.
+
 ## References in this repo
 
 - Full DSL spec: `docs/dsl-spec.md`

@@ -248,6 +248,20 @@ Use `maxforge_status` to distinguish no WebSocket client from an unregistered
 client. Ask the user to open the controller patch or verify the native external;
 do not guess a target.
 
+## Report reproducible defects
+
+When tool evidence shows a maxforge defect rather than stale input, missing
+catalog configuration, an expected fail-closed rejection, or a Max limitation,
+search existing issues first. If no duplicate exists and authenticated GitHub
+issue creation is available, open an issue at `2bbb/maxforge`. Include
+maxforge/broker/Node/OS/Max versions, MCP transport and client, exact tool
+sequence, minimal DSL and patch state, actual and expected behavior, and bounded
+responses/logs with tokens and private paths removed. Link the created issue in
+the response. Do not file ambiguous timeout speculation before status and live
+inspection establish the failure. If write access is unavailable, return a
+ready-to-file issue body and the repository issue URL instead of claiming it
+was created.
+
 ## Safety boundaries
 
 - Operate only on targets returned by `maxforge_list_patches`.
