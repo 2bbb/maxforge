@@ -41,9 +41,13 @@ The rules are:
 6. `src/mcp/runtime.ts` composes the `DslPatchAdapter`, state store, edit
    history, WebSocket bridge, service, and MCP server factory. One detached
    broker owns that runtime; stdio frontend termination does not own it.
-7. Broker endpoint binding elects one project owner before any persistent or
-   WebSocket resource is acquired. Multiple frontends share the same service
-   instance rather than copying graph state or writing the same files.
+7. Each broker first binds its stdio control endpoint, then a separate
+   deterministic loopback ownership endpoint derived from the project key. The
+   OS releases that endpoint on process death. Only its holder acquires the
+   project-owner lease and persistent/WebSocket resources, so control-port
+   overrides cannot create a second state writer. Multiple frontends share the
+   same service instance rather than copying graph state or writing the same
+   files.
 
 ## Source boundaries
 

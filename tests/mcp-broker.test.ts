@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { brokerDescriptorFromEnvironment } from "../src/mcp/broker-protocol.js";
-import { requestBroker } from "../src/mcp/broker-client.js";
+import {
+  ensureBrokerConnection,
+  requestBroker,
+} from "../src/mcp/broker-client.js";
 
 const children: McpChild[] = [];
 const temporaryDirectories: string[] = [];
@@ -98,6 +101,46 @@ describe("maxforge project broker", () => {
     expect((await second.status()).broker.pid).toBe(recoveredStatus.broker.pid);
   });
 
+  it("keeps one project owner even when a frontend selects another broker port", async () => {
+    const environment = await brokerEnvironment(5000);
+    const owner = startMcp(environment);
+    await owner.initialize();
+    const ownerPid = (await owner.status()).broker.pid;
+    const alternate = {
+      ...environment,
+      MAXFORGE_BROKER_PORT: String(await freePort()),
+    };
+    brokerEnvironments.push(alternate);
+
+    const contender = startMcp(alternate);
+    await contender.initialize();
+    const unavailable = await contender.status();
+    expect(unavailable.broker).toMatchObject({ state: "unavailable" });
+    expect(unavailable.broker.error).toContain("Project ownership endpoint");
+    expect(unavailable.broker.code).toBe("UNAVAILABLE");
+    expect(unavailable.broker.brokerStatus.ownership).toMatchObject({
+      state: "held_by_other_process",
+      pid: ownerPid,
+    });
+    expect((await owner.status()).broker.pid).toBe(ownerPid);
+  });
+
+  it("rejects an MCP frontend from a different package version", async () => {
+    const environment = await brokerEnvironment(5000);
+    const owner = startMcp(environment);
+    await owner.initialize();
+    const descriptor = await brokerDescriptorFromEnvironment(environment);
+
+    await expect(ensureBrokerConnection({
+      ...descriptor,
+      clientVersion: "99.0.0-test",
+    }, environment)).rejects.toMatchObject({ code: "VERSION_MISMATCH" });
+    expect((await owner.status()).broker).toMatchObject({
+      pid: expect.any(Number),
+      brokerVersion: descriptor.clientVersion,
+    });
+  });
+
   it("still initializes MCP and reports a degraded status when bridge startup fails", async () => {
     const environment = await brokerEnvironment(5000);
     const blockedPort = Number(environment.MAXFORGE_WS_PORT);
@@ -116,6 +159,7 @@ describe("maxforge project broker", () => {
       expect(status.broker).toMatchObject({
         state: "unavailable",
         port: Number(environment.MAXFORGE_BROKER_PORT),
+        code: "UNAVAILABLE",
       });
       expect(status.broker.error).toMatch(/EADDRINUSE|address already in use/i);
     } finally {
@@ -167,6 +211,7 @@ async function brokerEnvironment(idleTimeoutMs: number): Promise<NodeJS.ProcessE
     MAXFORGE_WS_PORT: String(await freePort()),
     MAXFORGE_BROKER_IDLE_MS: String(idleTimeoutMs),
     MAXFORGE_BROKER_START_TIMEOUT_MS: "5000",
+    MAXFORGE_BROKER_DIR: join(directory, "broker"),
     MAXFORGE_EDIT_HISTORY_DIR: join(directory, "history"),
     MAXFORGE_STATE_FILE: join(directory, "state.json"),
   };

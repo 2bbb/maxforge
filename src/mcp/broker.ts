@@ -8,6 +8,7 @@ import {
   parseBrokerRequest,
 } from "./broker-protocol.js";
 import { createMaxforgeMcpRuntime, MaxforgeMcpRuntime } from "./runtime.js";
+import { ProcessLease } from "./process-lease.js";
 
 const MAX_HANDSHAKE_BYTES = 64 * 1024;
 const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -25,14 +26,18 @@ export class MaxforgeBroker {
   private readonly environment: NodeJS.ProcessEnv;
   private readonly idleTimeoutMs: number;
   private readonly createRuntime: () => Promise<MaxforgeMcpRuntime>;
+  private readonly ownerLease: ProcessLease;
+  private readonly sockets = new Set<Socket>();
   private readonly mcpSockets = new Set<Socket>();
   private readonly mcpHandles = new Map<Socket, StdioServerHandle>();
   private server: Server | undefined;
+  private ownerServer: Server | undefined;
   private runtime: MaxforgeMcpRuntime | undefined;
   private runtimeError: string | undefined;
   private state: BrokerStatus["state"] = "starting";
   private idleSince = Date.now();
   private idleTimer: NodeJS.Timeout | undefined;
+  private initialization: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
 
   constructor(options: MaxforgeBrokerOptions) {
@@ -46,33 +51,66 @@ export class MaxforgeBroker {
     }
     this.createRuntime = options.createRuntime ?? (() =>
       createMaxforgeMcpRuntime(this.environment, () => this.getStatus()));
+    this.ownerLease = new ProcessLease(
+      this.descriptor.ownerLeasePath,
+      this.descriptor.key
+    );
   }
 
   async start(): Promise<void> {
     if (this.server) throw new Error("Broker is already started");
-    const server = createServer((socket) => this.accept(socket));
-    this.server = server;
-    await new Promise<void>((resolve, reject) => {
-      const handleListening = () => {
-        server.off("error", handleError);
-        resolve();
-      };
-      const handleError = (error: Error) => {
-        server.off("listening", handleListening);
-        this.server = undefined;
-        reject(error);
-      };
-      server.once("listening", handleListening);
-      server.once("error", handleError);
-      server.listen(this.descriptor.port, this.descriptor.host);
-    });
+    let server: Server;
+    try {
+      server = createServer((socket) => this.accept(socket));
+      this.server = server;
+      await new Promise<void>((resolve, reject) => {
+        const handleListening = () => {
+          server.off("error", handleError);
+          resolve();
+        };
+        const handleError = (error: Error) => {
+          server.off("listening", handleListening);
+          this.server = undefined;
+          reject(error);
+        };
+        server.once("listening", handleListening);
+        server.once("error", handleError);
+        server.listen(this.descriptor.port, this.descriptor.host);
+      });
+    } catch (error) {
+      throw error;
+    }
     server.on("error", (error) => {
       this.runtimeError = error.message;
       this.state = "failed";
     });
     this.idleTimer = setInterval(() => this.checkIdle(), IDLE_POLL_INTERVAL_MS);
     this.idleTimer.unref();
-    void this.initializeRuntime();
+    try {
+      const ownerServer = createServer((socket) => socket.destroy());
+      this.ownerServer = ownerServer;
+      await listen(ownerServer, this.descriptor.ownerPort, this.descriptor.host);
+      ownerServer.on("error", (error) => {
+        this.runtimeError = error.message;
+        this.state = "failed";
+      });
+    } catch (error) {
+      this.ownerServer = undefined;
+      this.runtimeError =
+        `Project ownership endpoint ${this.descriptor.host}:` +
+        `${this.descriptor.ownerPort} is unavailable: ` +
+        (error instanceof Error ? error.message : String(error));
+      this.state = "failed";
+      return;
+    }
+    try {
+      this.ownerLease.acquire();
+    } catch (error) {
+      this.runtimeError = error instanceof Error ? error.message : String(error);
+      this.state = "failed";
+      return;
+    }
+    this.initialization = this.initializeRuntime();
   }
 
   getStatus(): BrokerStatus {
@@ -85,6 +123,8 @@ export class MaxforgeBroker {
       maxClients: bridgeStatus?.connectedClients ?? 0,
       pendingOperations: this.runtime?.bridge.getPendingOperationCount() ?? 0,
       idleTimeoutMs: this.idleTimeoutMs,
+      ownerPort: this.descriptor.ownerPort,
+      ownership: this.ownerLease.status(),
       ...(this.runtimeError ? { error: this.runtimeError } : {}),
     };
   }
@@ -113,6 +153,8 @@ export class MaxforgeBroker {
   }
 
   private accept(socket: Socket): void {
+    this.sockets.add(socket);
+    socket.once("close", () => this.sockets.delete(socket));
     let source = "";
     const handleData = (chunk: Buffer) => {
       source += chunk.toString("utf8");
@@ -148,15 +190,12 @@ export class MaxforgeBroker {
       this.reject(socket, "WRONG_BROKER", "Broker project identity does not match");
       return;
     }
-    if (
-      request.configurationFingerprint !==
-        this.descriptor.configurationFingerprint
-    ) {
-      this.reject(
-        socket,
-        "CONFIGURATION_MISMATCH",
-        "Broker is already running with different Maxforge runtime settings"
-      );
+    if (request.ownerLeasePath !== this.descriptor.ownerLeasePath) {
+      this.reject(socket, "CONFIGURATION_MISMATCH", "Broker owner lease path does not match");
+      return;
+    }
+    if (request.ownerPort !== this.descriptor.ownerPort) {
+      this.reject(socket, "CONFIGURATION_MISMATCH", "Broker owner endpoint does not match");
       return;
     }
     if (request.action === "status") {
@@ -170,6 +209,27 @@ export class MaxforgeBroker {
     }
     if (request.action === "stop") {
       this.handleStop(socket, request.force ?? false);
+      return;
+    }
+    if (
+      request.clientVersion !== this.descriptor.clientVersion
+    ) {
+      this.reject(
+        socket,
+        "VERSION_MISMATCH",
+        `Frontend ${request.clientVersion} cannot attach to broker ${this.descriptor.clientVersion}; restart the broker with the frontend package version`
+      );
+      return;
+    }
+    if (
+      request.configurationFingerprint !==
+        this.descriptor.configurationFingerprint
+    ) {
+      this.reject(
+        socket,
+        "CONFIGURATION_MISMATCH",
+        "Broker is already running with different Maxforge runtime settings"
+      );
       return;
     }
     if (this.state === "starting") {
@@ -289,16 +349,76 @@ export class MaxforgeBroker {
     const handles = [...this.mcpHandles.values()];
     this.mcpHandles.clear();
     await Promise.allSettled(handles.map((handle) => handle.close()));
-    for (const socket of this.mcpSockets) socket.destroy();
+    for (const socket of this.sockets) socket.destroy();
+    this.sockets.clear();
     this.mcpSockets.clear();
-    if (this.runtime) await this.runtime.close();
+    const errors: unknown[] = [];
+    if (this.initialization) {
+      try {
+        await this.initialization;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    this.initialization = undefined;
+    if (this.runtime) {
+      try {
+        await this.runtime.close();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
     this.runtime = undefined;
+    try {
+      this.ownerLease.release();
+    } catch (error) {
+      errors.push(error);
+    }
+    const ownerServer = this.ownerServer;
+    this.ownerServer = undefined;
+    if (ownerServer) {
+      try {
+        await closeServer(ownerServer);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
     const server = this.server;
     this.server = undefined;
     if (server) {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      try {
+        await closeServer(server);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "Broker shutdown did not complete cleanly");
     }
   }
+}
+
+function listen(server: Server, port: number, host: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const handleListening = () => {
+      server.off("error", handleError);
+      resolve();
+    };
+    const handleError = (error: Error) => {
+      server.off("listening", handleListening);
+      reject(error);
+    };
+    server.once("listening", handleListening);
+    server.once("error", handleError);
+    server.listen(port, host);
+  });
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => server.close((error) => {
+    if (error) reject(error);
+    else resolve();
+  }));
 }
 
 export function idleTimeoutFromEnvironment(

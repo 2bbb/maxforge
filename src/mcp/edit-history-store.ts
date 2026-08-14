@@ -266,6 +266,8 @@ export class JsonLinesEditHistoryStore implements EditHistoryStore {
     if (!lease || lease.projectId !== this.project.id || processIsAlive(lease.pid)) {
       return false;
     }
+    const current = parseWriterLease(readFileSync(path, "utf8"));
+    if (current?.token !== lease.token) return false;
     const quarantine = `${path}.stale-${randomUUID()}`;
     try {
       renameSync(path, quarantine);

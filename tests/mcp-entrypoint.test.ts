@@ -1,5 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +14,7 @@ import {
   bridgeOptionsFromEnvironment,
   catalogOptionsFromEnvironment,
 } from "../src/mcp/server.js";
+import { brokerDescriptorFromEnvironment } from "../src/mcp/broker-protocol.js";
 import { stateFileFromEnvironment } from "../src/mcp/state-store.js";
 
 describe("maxforge MCP environment", () => {
@@ -63,6 +70,53 @@ describe("maxforge MCP environment", () => {
     expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
       /\.maxforge\/projects\/studio_patchset\/mcp-state-v1\.json$/
     );
+  });
+
+  it("fingerprints startup-owned settings without changing project ownership", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-fingerprint-"));
+    const configPath = join(directory, "maxforge.config.json");
+    writeFileSync(configPath, JSON.stringify({
+      schemaVersion: 1,
+      project: { id: "fingerprint_test" },
+    }));
+    const base = {
+      MAXFORGE_CONFIG: configPath,
+      MAXFORGE_BROKER_DIR: join(directory, "broker"),
+      MAXFORGE_EDIT_HISTORY_DIR: join(directory, "history"),
+      MAXFORGE_STATE_FILE: join(directory, "state.json"),
+    };
+
+    try {
+      const first = await brokerDescriptorFromEnvironment({
+        ...base,
+        MAXFORGE_EDIT_HISTORY_MAX_BYTES: "1048576",
+      });
+      const equivalent = await brokerDescriptorFromEnvironment({
+        ...base,
+        MAXFORGE_EDIT_HISTORY_MAX_BYTES: "01048576",
+      });
+      const changed = await brokerDescriptorFromEnvironment({
+        ...base,
+        MAXFORGE_EDIT_HISTORY_MAX_BYTES: "2097152",
+      });
+      const alternateLeaseDirectory = await brokerDescriptorFromEnvironment({
+        ...base,
+        MAXFORGE_BROKER_DIR: join(directory, "alternate-broker"),
+        MAXFORGE_EDIT_HISTORY_MAX_BYTES: "1048576",
+      });
+      expect(equivalent.configurationFingerprint).toBe(
+        first.configurationFingerprint
+      );
+      expect(changed.configurationFingerprint).not.toBe(
+        first.configurationFingerprint
+      );
+      expect(alternateLeaseDirectory.ownerPort).toBe(first.ownerPort);
+      expect(alternateLeaseDirectory.configurationFingerprint).not.toBe(
+        first.configurationFingerprint
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

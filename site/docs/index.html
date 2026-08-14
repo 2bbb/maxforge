@@ -504,9 +504,11 @@ source[1] -&gt; destination[2]</code></pre>
           guarantee secure overwrite on SSDs, backups, or filesystem snapshots.
         </p>
         <p>
-          Persistent history is single-writer and owned by the broker. Startup
-          creates <code>writer-v1.lock</code>; all stdio frontends share that
-          owner. Clean shutdown releases it. After a crash, a replacement
+          Persistent state and history are single-writer and owned by the broker.
+          A deterministic loopback ownership endpoint is bound before bridge and
+          persistence startup; its holder acquires the project-owner lease, then
+          history creates <code>writer-v1.lock</code>. All stdio frontends share
+          that owner. Clean shutdown releases both leases and the endpoint. After a crash, a replacement
           atomically recovers a valid lease only when its recorded process is
           dead. Live or malformed leases are never displaced. This is exclusion,
           not multi-writer merging.
@@ -515,7 +517,10 @@ source[1] -&gt; destination[2]</code></pre>
           Use <code>maxforge broker status|start|stop|restart</code> for explicit
           lifecycle and package upgrades. Stop/restart refuse connected clients;
           <code>--force</code> may disconnect them but never interrupts a pending
-          native operation.
+          native operation. MCP frontends attach only to a broker from the exact
+          same Maxforge package version. On mismatch, the frontend exposes a
+          diagnostic <code>maxforge_status</code> response with the running broker
+          status; restart the broker explicitly with the intended package.
         </p>
       </section>
 

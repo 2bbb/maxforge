@@ -649,7 +649,21 @@ export function createMaxforgeMcpServer(
           maxClients: z.number().int().nonnegative(),
           pendingOperations: z.number().int().nonnegative(),
           idleTimeoutMs: z.number().int().nonnegative(),
+          ownerPort: z.number().int().min(1024).max(65535),
           error: z.string().optional(),
+          ownership: z.object({
+            state: z.enum([
+              "unlocked",
+              "owned",
+              "held_by_other_process",
+              "stale",
+              "malformed",
+            ]),
+            path: z.string(),
+            identity: z.string().nullable(),
+            pid: z.number().int().positive().nullable(),
+            acquiredAt: z.string().nullable(),
+          }),
         }).nullable(),
         bridge: z.object({
           host: z.string(),

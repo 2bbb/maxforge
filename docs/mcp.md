@@ -81,6 +81,7 @@ Environment variables:
 | `MAXFORGE_EDIT_HISTORY_MAX_BYTES` | `268435456` | Maximum retained NDJSON bytes |
 | `MAXFORGE_EDIT_HISTORY_MAX_AGE_DAYS` | `7` | Maximum retained chunk age in days |
 | `MAXFORGE_BROKER_PORT` | deterministic project-local port | Override the loopback broker endpoint; mainly for collision recovery and tests |
+| `MAXFORGE_BROKER_DIR` | `~/.maxforge/brokers` | Directory containing the project-owner lease; every frontend for one project must use the same value |
 | `MAXFORGE_BROKER_IDLE_MS` | `300000` | Stop the broker after this many milliseconds with zero MCP clients, zero Max clients, and zero pending operations |
 | `MAXFORGE_BROKER_START_TIMEOUT_MS` | `5000` | How long a stdio frontend waits for a starting broker |
 
@@ -106,10 +107,14 @@ npx -y --package=maxforge@latest maxforge broker restart --config /absolute/path
 those clients first for a non-disruptive package upgrade. `--force` explicitly
 disconnects connected clients, but still refuses while a native operation is
 pending. Existing MCP sessions must reconnect after a forced restart; open
-`maxforge.sync` objects reconnect through their native retry behavior. Broker
-protocol compatibility is independent of the npm frontend version, so a newer
-frontend may continue using an older compatible broker until restart is
-explicitly requested.
+`maxforge.sync` objects reconnect through their native retry behavior. MCP
+attachment requires the frontend and broker to report the same Maxforge package
+version. A mismatched frontend still initializes a diagnostic MCP server, but
+`maxforge_status` reports `VERSION_MISMATCH` and the running broker status
+instead of exposing mutation tools. Use `broker status` and then an explicit
+`broker restart` with the intended package version; lifecycle commands remain
+available across package-version mismatch so an old broker is not stranded
+during upgrades.
 
 When custom externals or reusable abstractions appear in desired DSL, set
 `MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
@@ -468,17 +473,24 @@ that SSD blocks, backups, or filesystem snapshots were overwritten.
 
 ### Single-writer lease
 
-Persistent edit history supports one broker writer per history directory.
-Broker endpoint binding elects one project owner before bridge startup, and the
-owner atomically creates `writer-v1.lock`. Clean shutdown removes the lock only
-when its random token still matches.
+Persistent edit history supports one broker writer per history directory. A
+deterministic loopback ownership endpoint is bound after the local control
+endpoint but before bridge or persistence startup, so changing the local broker
+port cannot create another state writer. Its holder then acquires the
+project-owner lease and
+atomically creates `writer-v1.lock`. Clean shutdown removes both leases only
+when their random tokens still match.
 
 After an abnormal broker termination, the replacement validates the lease,
 checks that its recorded process is dead, atomically quarantines the stale file,
-and creates a new lease. It never replaces a lease whose process is alive or a
-malformed lease it cannot validate. Do not delete `writer-v1.lock` to create a
-concurrent writer. A remaining refusal is evidence that another live owner or
-an untrusted lease still requires diagnosis.
+and creates a new tokenized lease. It never displaces a live lease, a malformed
+lease, or a lease whose owner cannot be proven dead. Two concurrent recovery
+attempts are serialized by a deterministic loopback ownership endpoint that the
+OS releases when its process exits; the stale lease is revalidated by token
+immediately before quarantine. This is crash recovery, not multi-writer
+synchronization. The ownership endpoint is independent of
+`MAXFORGE_BROKER_PORT`, so changing the stdio broker endpoint cannot create a
+second project writer.
 
 ### `maxforge_inspect_pending_apply`
 
@@ -868,6 +880,7 @@ optimistic concurrency.
 | `maxforge_list_patches` returns no targets | Max is closed, the controller patch is closed, the external is missing, or registration has not completed | Call `maxforge_status`; open the controller patch and verify `maxforge.sync` in Max |
 | Raw client count is nonzero but no patch is registered | WebSocket connected before a valid registration event | Check `patcherId`, scope, and Max console errors; do not target the raw connection |
 | `maxforge_status.broker.state` is `unavailable` | Broker runtime could not acquire its configured WebSocket port, state, or history ownership | Read the structured broker error; stop the conflicting legacy process or correct the project settings, then run `maxforge broker restart` |
+| `maxforge_status.broker.code` is `VERSION_MISMATCH` | The stdio frontend package version differs from the detached broker | Inspect `brokerStatus`, close active clients, then run `maxforge broker restart` using the intended package version |
 | Broker command reports `BUSY` | MCP clients, Max clients, or native operations are still active | Close clients and retry; use `--force` only to disconnect clients, never to interrupt a pending operation |
 | Broker endpoint configuration mismatch | Two frontends use the same project identity with different runtime paths, bridge options, or tokens | Make their `MAXFORGE_*` settings identical, or stop the old broker before changing configuration |
 | Patch creation reports no controller | No registered patch has `controller: true` | Open the distributed controller patch and list patches again |

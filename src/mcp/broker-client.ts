@@ -23,6 +23,18 @@ export interface BrokerConnection {
   readonly response: Extract<BrokerResponse, { ok: true }>;
 }
 
+type BrokerFailureResponse = Extract<BrokerResponse, { ok: false }>;
+
+class BrokerRequestError extends Error {
+  readonly code: BrokerFailureResponse["code"];
+
+  constructor(readonly response: BrokerFailureResponse) {
+    super(`${response.code}: ${response.error}`);
+    this.name = "BrokerRequestError";
+    this.code = response.code;
+  }
+}
+
 export async function runMcpFrontend(
   environment: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
@@ -34,7 +46,12 @@ export async function runMcpFrontend(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`maxforge MCP broker unavailable: ${message}`);
-    serveUnavailableMcp(descriptor, message, await packageVersion());
+    serveUnavailableMcp(
+      descriptor,
+      message,
+      await packageVersion(),
+      error instanceof BrokerRequestError ? error.response : undefined
+    );
   }
 }
 
@@ -119,9 +136,7 @@ async function connectToBroker(
   const response = await readHandshake(socket);
   if (!response.ok) {
     socket.destroy();
-    const error = new Error(`${response.code}: ${response.error}`);
-    Object.assign(error, { code: response.code });
-    throw error;
+    throw new BrokerRequestError(response);
   }
   return { socket, response };
 }
@@ -207,8 +222,34 @@ function proxyStdio(connection: BrokerConnection): void {
 function serveUnavailableMcp(
   descriptor: BrokerDescriptor | undefined,
   error: string,
-  version: string
+  version: string,
+  failure?: BrokerFailureResponse
 ): void {
+  const ownershipSchema = z.object({
+    state: z.enum([
+      "unlocked",
+      "owned",
+      "held_by_other_process",
+      "stale",
+      "malformed",
+    ]),
+    path: z.string(),
+    identity: z.string().nullable(),
+    pid: z.number().int().positive().nullable(),
+    acquiredAt: z.string().nullable(),
+  });
+  const brokerStatusSchema = z.object({
+    state: z.enum(["starting", "ready", "failed", "draining"]),
+    brokerVersion: z.string(),
+    pid: z.number().int().positive(),
+    mcpClients: z.number().int().nonnegative(),
+    maxClients: z.number().int().nonnegative(),
+    pendingOperations: z.number().int().nonnegative(),
+    idleTimeoutMs: z.number().int().nonnegative(),
+    ownerPort: z.number().int().min(1024).max(65535),
+    error: z.string().optional(),
+    ownership: ownershipSchema,
+  });
   const server = new McpServer({ name: "maxforge", version });
   server.registerTool(
     "maxforge_status",
@@ -223,6 +264,8 @@ function serveUnavailableMcp(
           host: z.string().nullable(),
           port: z.number().int().nullable(),
           error: z.string(),
+          code: z.string().nullable(),
+          brokerStatus: brokerStatusSchema.nullable(),
         }),
       }),
     },
@@ -236,6 +279,8 @@ function serveUnavailableMcp(
             host: descriptor?.host ?? null,
             port: descriptor?.port ?? null,
             error,
+            code: failure?.code ?? null,
+            brokerStatus: failure?.status ?? null,
           },
         }, null, 2),
       }],
@@ -246,6 +291,8 @@ function serveUnavailableMcp(
           host: descriptor?.host ?? null,
           port: descriptor?.port ?? null,
           error,
+          code: failure?.code ?? null,
+          brokerStatus: failure?.status ?? null,
         },
       },
     })
