@@ -1181,8 +1181,11 @@ auto patch_structure_token(const patch_snapshot &snapshot) -> std::string {
 	return sync_protocol::structure_token(patch_structure_json(snapshot));
 }
 
-auto patch_snapshot_json(const patch_snapshot &snapshot) -> std::string {
-	const auto structure = patch_structure_json(snapshot);
+auto patch_snapshot_json(
+	const patch_snapshot &snapshot,
+	const std::string &structure
+) -> std::string
+{
 	return
 		"{\"title\":" + json_string(snapshot.title) +
 		",\"filename\":" + json_string(snapshot.filename) +
@@ -2187,7 +2190,9 @@ private:
 		const c74::min::symbol revision_symbol = revision_state;
 		const std::string revision{revision_symbol.c_str()};
 		const auto snapshot = make_patch_snapshot(root_patcher, current_scope);
-		const auto current_structure_token = patch_structure_token(snapshot);
+		const auto structure = patch_structure_json(snapshot);
+		const auto current_structure_token =
+			sync_protocol::structure_token(structure);
 		if(current_structure_token == last_observed_structure_token_) {
 			pending_edit_causes_.clear();
 			return;
@@ -2226,7 +2231,7 @@ private:
 			",\"causes\":" +
 			causes +
 			",\"patcher\":" +
-			patch_snapshot_json(snapshot) +
+			patch_snapshot_json(snapshot, structure) +
 			"}"
 		);
 	}
@@ -2648,6 +2653,9 @@ private:
 				root_patcher,
 				current_scope
 			);
+			const auto structure = patch_structure_json(snapshot);
+			const auto structure_token =
+				sync_protocol::structure_token(structure);
 			send_event(
 				"{\"type\":\"maxforge.snapshot\",\"requestId\":" +
 				json_string(request_id) +
@@ -2658,9 +2666,9 @@ private:
 				",\"revision\":" +
 				(revision.empty() ? "null" : json_string(revision)) +
 				",\"structureToken\":" +
-				json_string(patch_structure_token(snapshot)) +
+				json_string(structure_token) +
 				",\"patcher\":" +
-				patch_snapshot_json(snapshot) +
+				patch_snapshot_json(snapshot, structure) +
 				"}"
 			);
 		} catch(const std::exception &exception) {
@@ -2701,9 +2709,10 @@ private:
 				root_patcher,
 				current_scope
 			);
-			const auto observation_baseline_token = patch_structure_token(
-				observation_baseline
-			);
+			const auto observation_baseline_structure =
+				patch_structure_json(observation_baseline);
+			const auto observation_baseline_token =
+				sync_protocol::structure_token(observation_baseline_structure);
 			const auto filename = symbol_string(
 				c74::max::jpatcher_get_filename(root_patcher)
 			);
@@ -2732,7 +2741,10 @@ private:
 				",\"observationBaseline\":{\"structureToken\":" +
 				json_string(observation_baseline_token) +
 				",\"patcher\":" +
-				patch_snapshot_json(observation_baseline) +
+				patch_snapshot_json(
+					observation_baseline,
+					observation_baseline_structure
+				) +
 				"}" +
 				"}"
 			)) {
