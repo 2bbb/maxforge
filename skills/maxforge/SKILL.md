@@ -77,7 +77,11 @@ for i in 0..7 {
    to the native `maxforge.sync` external. Do not invent raw thispatcher commands
    when the target contains nested patchers.
 7. When MCP tools are available, call `maxforge_help` with `topic: "workflow"`
-   first, then list patches, select the explicit `patcherId`, inspect it,
+   first, then list patches, select the explicit `patcherId`, and require its
+   `versionCompatible` field to be true before mutation. The loaded
+   `externalVersion` must exactly match
+   `maxforge_status.bridge.expectedExternalVersion`; a patch path does not prove
+   which external Max loaded. Then inspect it,
    preview with `maxforge_compile_plan`, and apply the complete desired state
    with `maxforge_apply_dsl`. If managed manual edits exist, use
    `maxforge_review_live_changes` to separate observed evidence from inferred

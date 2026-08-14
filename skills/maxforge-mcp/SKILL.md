@@ -51,7 +51,14 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    Confirm `catalog.project.id` when edit history must survive broker restart;
    without it, persistent edit evidence is deliberately disabled.
 4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
-   and filenames are display metadata, not target identities.
+   and filenames are display metadata, not target identities. Before any
+   mutation, require the target's `versionCompatible` to be `true`. Its
+   `externalVersion` is embedded in the binary Max actually loaded and must
+   exactly match `maxforge_status.bridge.expectedExternalVersion`. If it does
+   not, stop: install the matching external in an installed Max package or an
+   explicitly configured project search path, remove stale same-named copies,
+   restart Max, reopen the patch, and list it again. A patch `filepath` and a
+   nearby external do not prove which binary Max resolved.
 5. If a separate window is required, call `maxforge_create_patch` with a unique
    `patcherId`, scope, and title. To manage an existing `.maxpat`, use
    `maxforge_open_patch` with an absolute path on the Max host. Opening injects
@@ -265,6 +272,8 @@ was created.
 ## Safety boundaries
 
 - Operate only on targets returned by `maxforge_list_patches`.
+- Mutate only targets with `versionCompatible: true`; status/list/inspection
+  are diagnostic when the external version is unknown or mismatched.
 - Manage only exact `maxforge_<scope>_obj_...` scripting names.
 - Preview nontrivial changes before apply.
 - Review managed human edits before interpreting them. Adopt an accepted live

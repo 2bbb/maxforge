@@ -147,7 +147,8 @@ cmake --build build
 - `inspect [request-id]` — emit a structural snapshot of the containing
   patcher without mutating it.
 - `register` — advertise the containing patcher's stable MCP identity,
-  scope, revision, metadata, and controller capability.
+  scope, revision, metadata, controller capability, and the version embedded in
+  the loaded external.
 - `revision` — output the consumer's current revision.
 - `@scope <name>` — select the exact managed namespace.
 - `@patcher_id <name>` — select the stable MCP routing identity.
@@ -181,6 +182,14 @@ Human-readable `status`, `applied`, `revision`, and `error` messages remain
 available on the same outlet. Failures are also sent through Max's error API,
 so they use error severity in the Max Console rather than appearing as ordinary
 posts.
+
+`maxforge.registered.externalVersion` comes from `package.json` at native build
+time. The MCP bridge compares it exactly with its own package version, exposes
+`versionCompatible`, and rejects mutation through an incompatible registration.
+Registration, status, listing, and inspection remain available for diagnosis;
+an older external that does not report a version is shown as `unknown` and is
+not mutation-compatible. The containing patch's file path is not the loaded
+external's path and must not be used as a substitute for this runtime check.
 
 The MCP transport sends inspection requests directly to the registered
 external:

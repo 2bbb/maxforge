@@ -216,26 +216,29 @@ The safe live sequence is fixed:
 2. `maxforge_status` when connection/process state is uncertain
 3. `maxforge_catalog` before using a custom external or abstraction
 4. `maxforge_list_patches`
-5. create a blank target with `maxforge_create_patch`, or open an existing file
+5. require the selected target's `versionCompatible` to be `true`; compare its
+   `externalVersion` with `bridge.expectedExternalVersion` when diagnosing a
+   mismatch
+6. create a blank target with `maxforge_create_patch`, or open an existing file
    with `maxforge_open_patch`, only when a separate target is required
-6. `maxforge_inspect_patch` with summary detail; request full detail only when
+7. `maxforge_inspect_patch` with summary detail; request full detail only when
    complete surrounding topology is needed
-7. when edit order matters, call `maxforge_get_live_edit_history` before
+8. when edit order matters, call `maxforge_get_live_edit_history` before
    interpreting the current snapshot; check `supported`, `droppedEvents`, and
    every entry's `comparisonBasis`
-8. if live changes exist, call `maxforge_review_live_changes`; interpret related
+9. if live changes exist, call `maxforge_review_live_changes`; interpret related
    changes together through `review.editClusters`, use `interpretationRisks` to
    locate ambiguity, and treat every result as evidence rather than a claim
    about the human's intent
-9. either adopt accepted managed edits with the exact returned structure token,
+10. either adopt accepted managed edits with the exact returned structure token,
    or reconcile them with the next complete desired DSL; never do both blindly
-10. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
+11. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
    and destructive operations
-11. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
-12. `maxforge_apply_dsl` with the same target, desired DSL, and the exact
+12. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
+13. `maxforge_apply_dsl` with the same target, desired DSL, and the exact
     structure token from inspect/reconcile; set `manualChanges: "merge"` only
     after successful reconciliation
-13. verify acknowledgement and post-apply verification revisions; inspect again
+14. verify acknowledgement and post-apply verification revisions; inspect again
     only when verification is unavailable or full topology is needed, and call
     `maxforge_save_patch` only when persistence is intended
 
@@ -257,8 +260,9 @@ Reports:
 - broker lifecycle state, package version, PID, idle timeout, connected MCP
   frontend count, connected Max count, and pending native operation count;
 - raw connected Max client count;
+- the MCP runtime version expected from native externals;
 - every registered patch's `patcherId`, scope, controller capability, path,
-  and revision;
+  revision, loaded `externalVersion`, and `versionCompatible` result;
 - the last revision received for each `patcherId:scope` target;
 - graph revisions remembered by the current broker runtime;
 - targets with a post-apply structural inspection baseline;
@@ -304,6 +308,16 @@ configured catalog file, reload it and verify the new digest with
 Returns the currently registered patch targets. Use this before inspection or
 mutation instead of guessing a window from its title. `patcherId` is the stable
 transport identity; titles and filenames are display metadata and may collide.
+Before mutation, require `versionCompatible: true`. The comparison is exact
+against `maxforge_status.bridge.expectedExternalVersion`.
+
+`externalVersion` is compiled into the `maxforge.sync` binary that registered
+with the bridge. This is stronger than searching from the patch's `filepath`:
+Max resolves externals through its search paths and can load a stale duplicate
+from somewhere else. Put the matching release external in an installed Max
+package or an explicitly configured project search path, remove obsolete
+same-named copies, restart Max, reopen the patch, and list it again. Merely
+placing a binary beside a `.maxpat` does not prove that Max loaded that copy.
 
 ### `maxforge_create_patch`
 
@@ -928,6 +942,7 @@ optimistic concurrency.
 | Raw client count is nonzero but no patch is registered | WebSocket connected before a valid registration event | Check `patcherId`, scope, and Max console errors; do not target the raw connection |
 | `maxforge_status.broker.state` is `unavailable` | Broker runtime could not acquire its configured WebSocket port, state, or history ownership | Read the structured broker error; stop the conflicting legacy process or correct the project settings, then run `maxforge broker restart` |
 | `maxforge_status.broker.code` is `VERSION_MISMATCH` | The stdio frontend package version differs from the detached broker | Inspect `brokerStatus`, close active clients, then run `maxforge broker restart` using the intended package version |
+| A patch reports `versionCompatible: false` | The loaded `maxforge.sync` version is missing or differs from the MCP/broker package | Do not mutate. Install the matching release external in the intended Max package or project search path, remove stale duplicates, restart Max, reopen the patch, and list it again |
 | Broker command reports `BUSY` | MCP clients, Max clients, or native operations are still active | Close clients and retry; use `--force` only to disconnect clients, never to interrupt a pending operation |
 | Broker endpoint configuration mismatch | Two frontends use the same project identity with different runtime paths, bridge options, or tokens | Make their `MAXFORGE_*` settings identical, or stop the old broker before changing configuration |
 | Patch creation reports no controller | No registered patch has `controller: true` | Open the distributed controller patch and list patches again |

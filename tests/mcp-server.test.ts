@@ -199,12 +199,14 @@ describe("maxforge MCP protocol surface", () => {
           structuredContent: {
             topic: "workflow",
             steps: expect.arrayContaining([
+              expect.stringContaining("versionCompatible"),
               expect.stringContaining("evidence of what changed"),
               expect.stringContaining("review.editClusters"),
               expect.stringContaining("exact reviewed structure token"),
               expect.stringContaining("workingDslRequiredAsCurrent"),
             ]),
             rules: expect.arrayContaining([
+              expect.stringContaining("stale duplicate binaries"),
               expect.stringContaining("diff proves human intent"),
               expect.stringContaining("not silently claimed"),
             ]),
