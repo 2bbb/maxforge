@@ -468,6 +468,7 @@ const HELP_CONTENT = {
     summary: "Runtime prerequisites for MCP-to-Max control.",
     steps: [
       "Run maxforge-mcp as an MCP stdio server with Node.js 20 or newer.",
+      "Each stdio process attaches to one detached project broker. The first frontend starts it; closing that frontend does not stop a broker that still has MCP or Max clients.",
       "Install the native maxforge.sync external separately; the npm package does not install the Max external.",
       "Set MAXFORGE_CONFIG before starting MCP when the project uses third-party externals or reusable abstractions.",
       "Declare a stable project.id in MAXFORGE_CONFIG to scope managed state and persistent edit history. Do not reuse one id for unrelated projects.",
@@ -477,6 +478,7 @@ const HELP_CONTENT = {
     ],
     rules: [
       "Without MAXFORGE_WS_TOKEN the WebSocket bridge stays on 127.0.0.1:8766. Setting a URL-safe token publishes it on 0.0.0.0 and requires the same maxforge.sync @token.",
+      "Use maxforge broker status/stop/restart for explicit lifecycle or package upgrades. Stop and restart refuse connected clients unless --force is explicit, and pending native operations are never interrupted.",
       "Do not write arbitrary output to MCP stdout; it is the protocol channel.",
       "New patch creation requires exactly one registered controller.",
       "maxforge_open_patch loads a .maxpat on the Max host and injects maxforge.sync; use it only for patches that do not already contain maxforge.sync.",
@@ -493,14 +495,14 @@ const HELP_CONTENT = {
   recovery: {
     summary: "Recovery rules for persisted state, manual edits, timeouts, and partial failures.",
     steps: [
-      "After an MCP process restart, call maxforge_status and verify that the expected state file and managed revision were restored, then inspect the target.",
+      "After a broker restart, call maxforge_status and verify that the expected state file and managed revision were restored, then inspect the target. Restarting only a stdio frontend does not restart broker state.",
       "If persistence was disabled or its state file is unavailable, provide the exact previous complete DSL as currentDsl once.",
       "If status reports a pending scope after a timeout, reconnect that Max patch before compiling or applying; maxforge resolves the recorded base/target revisions instead of guessing.",
       "If the pending scope reports a third live revision, call maxforge_inspect_pending_apply. Rebase only with its exact live revision and structure token plus trusted complete current DSL; never delete the state file or guess the source.",
       "If inspect reports live changes, call maxforge_review_live_changes and treat its classified signals as evidence rather than intent.",
       "Use maxforge_get_live_edit_history when operation order or intermediate states could change the interpretation; account for droppedEvents and comparisonBasis.",
       "If saved-path warnings remain ambiguous, inspect both identities with maxforge_get_patch_history_identity. Only after the human confirms the relationship may you close the source and call maxforge_resolve_patch_history_identity.",
-      "If startup reports an active edit-history writer lease after a crash, inspect writer-v1.lock and verify the recorded process is no longer running before removing it. Never delete an active lease to start a second writer.",
+      "If broker startup reports an edit-history writer lease, inspect maxforge_status.broker first. A replacement broker automatically recovers a valid lease whose recorded process is dead, but never replaces a live or malformed lease.",
       "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then replace the working source with its returned workingDsl.",
       "If a concrete next desired DSL is ready, call maxforge_reconcile_patch instead.",
       "If reconciliation reports canApply=true, apply the same DSL with manualChanges set to merge. Resolve reported conflicts explicitly instead of forcing a winner.",
@@ -515,7 +517,7 @@ const HELP_CONTENT = {
       "History rekey changes one closed identity to an unused ID; merge combines a closed source with a known target; forget only hides Agent-facing history and does not physically erase NDJSON.",
       "Use maxforge_erase_project_history only after the human explicitly requests deletion, every Max client is disconnected, and the exact project ID and confirmation phrase have been checked. It deletes retained edit evidence and the identity ledger, not Max files, DSL sources, project config, or the desired-state cache.",
       "History identity decisions never rewrite live maxforge.sync routing, never cross scopes, and must not be inferred from a filepath alone.",
-      "Persistent edit history permits one maxforge-mcp writer per history directory. The writer lease protects sequence allocation and the identity ledger; it is not multi-writer synchronization.",
+      "Persistent edit history permits one project broker writer per history directory. Per-session maxforge-mcp frontends attach to that broker; the writer lease is not multi-writer synchronization.",
       "Protocol v1 attempts generated reverse operations after a runtime mutation failure, but is not transactional; inspect before retrying while the revision remains unchanged.",
     ],
     relatedTools: [

@@ -65,7 +65,7 @@ See [Project website](website.md) for deployment details.
 | `src/dsl/` | Parser, brace blocks, macro expansion, numeric expressions |
 | `src/core/` | Compilation, decompilation, layout, catalogs, serialization |
 | `src/max/` | Patch graph, plans, snapshots, merge, `thispatcher` commands |
-| `src/mcp/` | MCP entrypoint, tools, service, persistence, WebSocket bridge |
+| `src/mcp/` | Stdio frontend, project broker, tools, service, persistence, WebSocket bridge |
 | `source/projects/maxforge.sync/` | Native min-api external |
 | `tests/` | TypeScript, subprocess, package, and native protocol tests |
 | `data/objects.json` | Built-in object metadata used by the compiler |

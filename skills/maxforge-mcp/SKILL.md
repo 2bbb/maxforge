@@ -1,6 +1,6 @@
 ---
 name: maxforge-mcp
-description: Operate and collaboratively edit live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use when an AI agent must inspect the currently registered Max patch, interpret and adopt human edits, create an isolated patch window, preview and apply complete maxforge DSL, verify revision acknowledgements, or recover from MCP restart, timeout, controller, registration, baseline, or managed-drift errors. Do not use for offline .maxpat compilation when no live Max connection is required; use the maxforge skill instead.
+description: Operate and collaboratively edit live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use when an AI agent must inspect the currently registered Max patch, interpret and adopt human edits, create an isolated patch window, preview and apply complete maxforge DSL, verify revision acknowledgements, or recover from broker restart, timeout, controller, registration, baseline, or managed-drift errors. Do not use for offline .maxpat compilation when no live Max connection is required; use the maxforge skill instead.
 ---
 
 # Maxforge MCP
@@ -48,7 +48,7 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    to set `MAXFORGE_CONFIG`. If configured files changed after startup, call
    `maxforge_reload_catalog` and verify the new digest. A rejected reload leaves
    the old catalog active. Do not substitute `--allow-unknown` in a live mutation.
-   Confirm `catalog.project.id` when edit history must survive MCP restart;
+   Confirm `catalog.project.id` when edit history must survive broker restart;
    without it, persistent edit evidence is deliberately disabled.
 4. Call `maxforge_list_patches`. Copy `patcherId` and `scope` exactly; titles
    and filenames are display metadata, not target identities.
@@ -76,13 +76,14 @@ JavaScript, `node.script`, or invented `thispatcher` messages.
    These operations neither rewrite live `maxforge.sync` routing nor physically
    erase append-only evidence.
    If the human explicitly requests physical history deletion, close every Max
-   client, verify `maxforge_status.connectedClients` is zero, and call
+   client, verify `maxforge_status.bridge.connectedClients` is zero, and call
    `maxforge_erase_project_history` with the exact project ID and confirmation
    phrase. Never present it as secure overwrite: it excludes Max/DSL/config
    files and desired-state cache, and SSD/filesystem remnants are not guaranteed.
-   Persistent history allows one `maxforge-mcp` writer per directory. If startup
-   reports `writer-v1.lock`, do not bypass it. After a crash, require human
-   verification that its recorded PID is stopped before manual removal.
+   Persistent history allows one project broker writer per directory. Multiple
+   `maxforge-mcp` stdio frontends attach to that broker. If startup reports
+   `writer-v1.lock`, do not bypass it: dead valid leases recover automatically,
+   while a live or malformed lease requires diagnosis rather than deletion.
 8. Build the complete desired DSL. Omitted managed objects and cords are
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
@@ -155,10 +156,11 @@ should survive. Do not send only the new line.
 Call `maxforge_help` with `topic: "recovery"` before responding to an ambiguous
 failure.
 
-### MCP process restarted
+### Broker restarted
 
-Call `maxforge_status` and verify the persistence path, restored revision, and
-pending scopes. Normal restarts restore state automatically. If persistence was
+Restarting one stdio frontend does not restart shared broker state. After an
+actual broker restart, call `maxforge_status` and verify the persistence path,
+restored revision, and pending scopes. Normal broker restarts restore state automatically. If persistence was
 disabled or its file is unavailable, provide the exact previous complete DSL as
 `currentDsl` once. Never guess it, reset the revision, or claim the scope is
 empty. A pending scope must reconnect so Maxforge can compare its recorded base

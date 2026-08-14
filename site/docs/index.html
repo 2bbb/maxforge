@@ -441,10 +441,10 @@ source[1] -&gt; destination[2]</code></pre>
         <div class="docs-section-label">09 / MCP SETUP</div>
         <h2>Live MCP control</h2>
         <p>
-          Live control requires three pieces: an MCP-capable agent, the Node.js
-          <code>maxforge-mcp</code> server, and one native <code>maxforge.sync</code>
-          object in each target patch. The npm package does not install the Max
-          external.
+          Live control requires an MCP-capable agent, a per-session Node.js
+          <code>maxforge-mcp</code> frontend, its shared project broker, and one
+          native <code>maxforge.sync</code> object in each target patch. The npm
+          package does not install the Max external.
         </p>
         <div class="docs-code-window">
           <div class="panel-bar"><span>mcp.json</span><span class="panel-state">JSON</span></div>
@@ -462,7 +462,10 @@ source[1] -&gt; destination[2]</code></pre>
 }</code></pre>
         </div>
         <p>
-          The stdio server listens for native clients on
+          The first stdio frontend starts a detached broker; later frontends
+          attach to it instead of competing for project state or ports. The
+          broker remains alive while any MCP or Max client is connected and
+          stops after an idle grace period. It listens for native clients on
           <code>ws://127.0.0.1:8766</code> by default. Set
           <code>MAXFORGE_WS_TOKEN</code> to publish an authenticated bridge on
           <code>0.0.0.0</code>, then use the same <code>@token</code> in Max.
@@ -473,12 +476,12 @@ source[1] -&gt; destination[2]</code></pre>
           <code>MAXFORGE_CONFIG</code> path to the server's <code>env</code>.
           After catalog edits, call <code>maxforge_reload_catalog</code> and
           verify the new digest with <code>maxforge_catalog</code>; restarting
-          MCP is unnecessary. MCP intentionally does not discover configuration
+          the broker is unnecessary. The broker intentionally does not discover configuration
           from its working directory.
         </p>
         <p>
           Put a stable <code>project.id</code> in that config when managed state
-          and ordered edit evidence must survive MCP restarts. Maxforge stores
+          and ordered edit evidence must survive broker restarts. Maxforge stores
           atomic state and a separate append-only NDJSON journal under
           <code>~/.maxforge/projects/&lt;project.id&gt;/</code>. Without a project ID,
           persistent edit history is disabled rather than merged into a shared
@@ -501,12 +504,18 @@ source[1] -&gt; destination[2]</code></pre>
           guarantee secure overwrite on SSDs, backups, or filesystem snapshots.
         </p>
         <p>
-          Persistent history is single-writer. Startup creates
-          <code>writer-v1.lock</code> and rejects a second
-          <code>maxforge-mcp</code> process using the same history directory.
-          Clean shutdown releases it. After a crash, verify the recorded PID is
-          stopped before manual removal; automatic stale-lock deletion would
-          race a new writer. This is exclusion, not multi-writer merging.
+          Persistent history is single-writer and owned by the broker. Startup
+          creates <code>writer-v1.lock</code>; all stdio frontends share that
+          owner. Clean shutdown releases it. After a crash, a replacement
+          atomically recovers a valid lease only when its recorded process is
+          dead. Live or malformed leases are never displaced. This is exclusion,
+          not multi-writer merging.
+        </p>
+        <p>
+          Use <code>maxforge broker status|start|stop|restart</code> for explicit
+          lifecycle and package upgrades. Stop/restart refuse connected clients;
+          <code>--force</code> may disconnect them but never interrupts a pending
+          native operation.
         </p>
       </section>
 
@@ -563,7 +572,7 @@ source[1] -&gt; destination[2]</code></pre>
         </div>
         <p>
           Live edit history is bounded and collapses edits inside one debounce
-          window. Project-scoped NDJSON survives MCP restart; reconnect creates
+          window. Project-scoped NDJSON survives broker restart; reconnect creates
           a new session baseline instead of comparing across sessions. Saved
           paths are locators, not patch identities. Selection and gesture
           boundaries remain unavailable. Edit clusters are structural correlations, not recorded gestures or
@@ -621,7 +630,7 @@ source[1] -&gt; destination[2]</code></pre>
             <thead><tr><th>Situation</th><th>Required action</th></tr></thead>
             <tbody>
               <tr><td>Apply timed out</td><td>Do not retry. Call <code>maxforge_help</code> with <code>recovery</code>, inspect the live patch, and determine whether Max applied the revision.</td></tr>
-              <tr><td>MCP process restarted</td><td>Check <code>maxforge_status</code>, restored state path/revision, then inspect. Exact <code>currentDsl</code> is required only when persistence was disabled or unavailable.</td></tr>
+              <tr><td>Broker restarted</td><td>Check <code>maxforge_status</code>, restored state path/revision, then inspect. Restarting only a stdio frontend leaves broker state intact. Exact <code>currentDsl</code> is required only when persistence was disabled or unavailable.</td></tr>
               <tr><td>Max or the patch restarted</td><td>Wait for registration, then status → list → inspect before compiling another plan.</td></tr>
               <tr><td>Managed manual edit detected</td><td>Review first. Adopt the accepted current baseline with its exact token and retain returned <code>workingDsl</code>, or reconcile with a concrete next DSL.</td></tr>
               <tr><td>Unmanaged manual edit detected</td><td>Review it. Unmanaged-only edits are reported but do not block managed mutation.</td></tr>

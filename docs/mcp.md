@@ -6,9 +6,10 @@ from complete desired DSL. It does not run an agent or JavaScript inside Max.
 ## Architecture
 
 ```text
-MCP client
-  | stdio
-maxforge-mcp (Node.js 20+)
+MCP client A ---- stdio ---- maxforge-mcp frontend A --+
+MCP client B ---- stdio ---- maxforge-mcp frontend B --+-- local broker protocol
+                                                       |
+detached project broker (Node.js 20+; one state/history owner)
   | ws://127.0.0.1:8766 by default
   | authenticated LAN WebSocket when explicitly enabled
 one maxforge.sync per registered patch (native Max external)
@@ -19,6 +20,11 @@ containing patcher
 The boundary is intentional:
 
 - MCP, DSL compilation, diffing, and session state belong in Node.js.
+- Per-session `maxforge-mcp` processes are thin stdio frontends. The first
+  frontend starts the detached broker; later frontends attach to the same
+  project broker.
+- The broker, not a frontend, owns the WebSocket listener, desired-state file,
+  edit-history lease, catalog runtime, and live Max registrations.
 - WebSocket transport, request routing, patcher ownership validation, and Max SDK
   mutation belong in `maxforge.sync`.
 - The WebSocket implementation is not duplicated. `maxforge.sync` compiles the
@@ -74,6 +80,36 @@ Environment variables:
 | `MAXFORGE_EDIT_HISTORY_DIR` | `~/.maxforge/projects/<project.id>/edit-history-v1` | Override the project edit-history directory |
 | `MAXFORGE_EDIT_HISTORY_MAX_BYTES` | `268435456` | Maximum retained NDJSON bytes |
 | `MAXFORGE_EDIT_HISTORY_MAX_AGE_DAYS` | `7` | Maximum retained chunk age in days |
+| `MAXFORGE_BROKER_PORT` | deterministic project-local port | Override the loopback broker endpoint; mainly for collision recovery and tests |
+| `MAXFORGE_BROKER_IDLE_MS` | `300000` | Stop the broker after this many milliseconds with zero MCP clients, zero Max clients, and zero pending operations |
+| `MAXFORGE_BROKER_START_TIMEOUT_MS` | `5000` | How long a stdio frontend waits for a starting broker |
+
+### Broker lifecycle and upgrades
+
+The broker is independent of the frontend that first started it. Closing that
+MCP session disconnects only its stdio frontend. The broker continues while
+another MCP frontend or any `maxforge.sync` client remains connected. It exits
+only after all three counts are zero for `MAXFORGE_BROKER_IDLE_MS`:
+
+- MCP frontend connections;
+- Max WebSocket clients;
+- pending inspect/apply/create/open/save/close operations.
+
+Inspect or manage it with the package version you intend to run:
+
+```bash
+npx -y --package=maxforge@latest maxforge broker status --config /absolute/path/maxforge.config.json
+npx -y --package=maxforge@latest maxforge broker restart --config /absolute/path/maxforge.config.json
+```
+
+`stop` and `restart` refuse a broker with connected MCP or Max clients. Close
+those clients first for a non-disruptive package upgrade. `--force` explicitly
+disconnects connected clients, but still refuses while a native operation is
+pending. Existing MCP sessions must reconnect after a forced restart; open
+`maxforge.sync` objects reconnect through their native retry behavior. Broker
+protocol compatibility is independent of the npm frontend version, so a newer
+frontend may continue using an older compatible broker until restart is
+explicitly requested.
 
 When custom externals or reusable abstractions appear in desired DSL, set
 `MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
@@ -95,15 +131,15 @@ path because a client's launch directory is not a reliable project root:
 
 The configured catalog is loaded at server startup. After editing its files,
 call `maxforge_reload_catalog` and verify the replacement digest with
-`maxforge_catalog`; a full MCP restart is unnecessary. A valid declaration is
+`maxforge_catalog`; a broker restart is unnecessary. A valid declaration is
 not a runtime availability check: the Max machine still needs the corresponding
 external binary or abstraction search path. See
 [`object-catalog.md`](object-catalog.md#project-object-catalogs).
 Hot reload may change object declarations or the display name, but it rejects a
-different `project.id`; switching persistence namespace requires an MCP restart.
+different `project.id`; switching persistence namespace requires a broker restart.
 
 Add a stable `project.id` even when the project has no custom objects if edit
-history must survive MCP restarts. Without it, managed state still uses the
+history must survive broker restarts. Without it, managed state still uses the
 per-port fallback, but edit-history persistence is intentionally disabled;
 maxforge does not invent a collision-prone `default` project. `maxforge_status`
 reports the loaded project and edit-history persistence health.
@@ -125,7 +161,7 @@ to all interfaces:
 ```
 
 On the Max machine, point `maxforge.sync` at the LAN address of the machine
-running the MCP process and use the same token:
+running the broker and use the same token:
 
 ```text
 maxforge.sync @host 192.168.1.20 @port 8766 @token studio-session_1
@@ -210,11 +246,13 @@ Call `recovery` before retrying an ambiguous failure.
 
 Reports:
 
+- broker lifecycle state, package version, PID, idle timeout, connected MCP
+  frontend count, connected Max count, and pending native operation count;
 - raw connected Max client count;
 - every registered patch's `patcherId`, scope, controller capability, path,
   and revision;
 - the last revision received for each `patcherId:scope` target;
-- graph revisions remembered by the current MCP process;
+- graph revisions remembered by the current broker runtime;
 - targets with a post-apply structural inspection baseline;
 - effective object-catalog digest, configured source files, and built-in,
   custom, and abstraction counts.
@@ -226,7 +264,7 @@ therefore not ambiguous.
 
 ### `maxforge_catalog`
 
-Reads the compiler catalog loaded by this MCP process. It does not require Max
+Reads the compiler catalog loaded by the project broker. It does not require Max
 to be running and never mutates a patch.
 
 Arguments:
@@ -369,7 +407,7 @@ The native external debounces notifications for 75 ms, snapshots the root and
 nested patchers, excludes agent-authored plan application, and drops events when
 the structure token did not change. The bridge retains at most 128 observations
 or 32 MiB globally in memory. With `project.id`, append-only NDJSON chunks
-restore retained evidence after an MCP restart; reconnect starts a new session
+restore retained evidence after a broker restart; reconnect starts a new session
 with a fresh baseline rather than comparing across that boundary. Disk
 retention defaults to seven days and 256 MiB. Multiple edits inside one debounce
 window collapse into one observation; notification categories can be `unknown`; Max undo steps,
@@ -413,7 +451,7 @@ Deletes retained edit evidence instead of hiding it. Before calling it:
 
 1. the human must explicitly request deletion;
 2. close every Max patch containing `maxforge.sync` for the project;
-3. verify `maxforge_status.connectedClients` is zero;
+3. verify `maxforge_status.bridge.connectedClients` is zero;
 4. pass the exact `expectedProjectId` and confirmation text
    `ERASE PROJECT HISTORY <project.id>`.
 
@@ -430,17 +468,17 @@ that SSD blocks, backups, or filesystem snapshots were overwritten.
 
 ### Single-writer lease
 
-Persistent edit history supports one `maxforge-mcp` writer per history
-directory. Bridge startup atomically creates `writer-v1.lock`; a second process
-using that directory fails before loading or appending history. Clean bridge
-shutdown removes the lock only when its random token still matches.
+Persistent edit history supports one broker writer per history directory.
+Broker endpoint binding elects one project owner before bridge startup, and the
+owner atomically creates `writer-v1.lock`. Clean shutdown removes the lock only
+when its random token still matches.
 
-An abnormal process termination can leave the lock behind. Maxforge does not
-auto-remove a supposedly stale lock because checking a PID and unlinking later
-would race a newly started writer. Inspect the lock, verify that the recorded
-process is stopped, and only then remove it manually. Do not remove the file to
-run concurrent writers. When persistent edit history is disabled, no history
-lease exists; single-writer-per-project is then an operational requirement.
+After an abnormal broker termination, the replacement validates the lease,
+checks that its recorded process is dead, atomically quarantines the stale file,
+and creates a new lease. It never replaces a lease whose process is alive or a
+malformed lease it cannot validate. Do not delete `writer-v1.lock` to create a
+concurrent writer. A remaining refusal is evidence that another live owner or
+an untrusted lease still requires diagnosis.
 
 ### `maxforge_inspect_pending_apply`
 
@@ -598,7 +636,7 @@ Arguments:
 - `scope` — managed namespace.
 - `desiredDsl` — complete desired state, not an imperative edit.
 - `currentDsl` — optional current desired state. When omitted, the tool uses
-  the graph remembered by this MCP process; it uses empty state only when the
+  the graph remembered by this broker runtime; it uses empty state only when the
   scope is not initialized.
 
 ### `maxforge_apply_dsl`
@@ -829,7 +867,9 @@ optimistic concurrency.
 |---|---|---|
 | `maxforge_list_patches` returns no targets | Max is closed, the controller patch is closed, the external is missing, or registration has not completed | Call `maxforge_status`; open the controller patch and verify `maxforge.sync` in Max |
 | Raw client count is nonzero but no patch is registered | WebSocket connected before a valid registration event | Check `patcherId`, scope, and Max console errors; do not target the raw connection |
-| Port 8766 is already in use | Another MCP server owns the bridge port | Stop the duplicate server or set the same alternate `MAXFORGE_WS_PORT`/`@port` on both sides |
+| `maxforge_status.broker.state` is `unavailable` | Broker runtime could not acquire its configured WebSocket port, state, or history ownership | Read the structured broker error; stop the conflicting legacy process or correct the project settings, then run `maxforge broker restart` |
+| Broker command reports `BUSY` | MCP clients, Max clients, or native operations are still active | Close clients and retry; use `--force` only to disconnect clients, never to interrupt a pending operation |
+| Broker endpoint configuration mismatch | Two frontends use the same project identity with different runtime paths, bridge options, or tokens | Make their `MAXFORGE_*` settings identical, or stop the old broker before changing configuration |
 | Patch creation reports no controller | No registered patch has `controller: true` | Open the distributed controller patch and list patches again |
 | Patch creation reports multiple controllers | More than one controller patch is open | Leave exactly one controller registered before creating a patch |
 | Duplicate `patcherId` | Two live patches advertise the same transport identity | Change one `@patcher_id`; titles are irrelevant |

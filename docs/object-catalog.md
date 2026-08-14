@@ -79,7 +79,7 @@ before compilation. Use `maxforge catalog [query] --json` to search the
 effective catalog; an unfiltered call lists project declarations, while a query
 also searches built-ins. `--all` requests a complete built-in listing.
 
-The MCP process deliberately has no working-directory discovery because an MCP
+The MCP broker deliberately has no working-directory discovery because an MCP
 client's process directory is often unrelated to the patch project. Set
 `MAXFORGE_CONFIG` explicitly, preferably to an absolute path. `maxforge_status`
 reports the effective digest and source files; `maxforge_catalog` exposes the

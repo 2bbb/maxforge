@@ -96,7 +96,8 @@ for i in 0..7 {
    it intentionally omits volatile values, opaque attributes, and nested data.
    A failed apply attempts generated reverse operations but is not transactional;
    inspect before retrying even when the error says reverse operations completed.
-8. After an MCP process restart, provide the previous complete DSL as
+8. Restarting a stdio frontend leaves shared broker state intact. After a broker
+   restart without persisted state, provide the previous complete DSL as
    `currentDsl` when Max reports an initialized scope. A revision hash is not a
    recoverable graph.
 
@@ -137,10 +138,9 @@ for i in 0..7 {
   connected clients, and the exact `ERASE PROJECT HISTORY <project.id>` phrase
   is available. It deletes the edit journal and identity ledger, not Max/DSL/
   config files or desired-state cache, and cannot guarantee SSD secure overwrite.
-- Treat persistent history as single-writer. Never remove `writer-v1.lock` to
-  run another MCP process. After a crash, require the human to verify that the
-  PID recorded in the lock is stopped before manual removal; maxforge does not
-  auto-reclaim the lock because that would race a new writer.
+- Treat persistent history as broker-owned single-writer state. Never remove
+  `writer-v1.lock` to run another broker. A replacement automatically reclaims
+  a valid dead-process lease; it deliberately refuses a live or malformed lease.
 - Prefer fixed port metadata backed by the external's reference/help patch.
   Use bounded `ports.mode: "arguments"` when integer initialization arguments
   deterministically control counts; it is not an arbitrary expression hook.

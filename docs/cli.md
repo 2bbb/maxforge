@@ -1,8 +1,9 @@
 # CLI guide
 
 The `maxforge` executable provides offline DSL compilation, decompilation,
-validation, catalog inspection, plan generation, and package bundling. It does
-not start the MCP server; that executable is `maxforge-mcp`.
+validation, catalog inspection, plan generation, package bundling, and MCP
+broker lifecycle management. Live MCP stdio is still exposed by
+`maxforge-mcp`.
 
 ## Run without global installation
 
@@ -118,6 +119,26 @@ maxforge bundle input.maxdsl -o my-package --name "Studio Tools"
 The command builds a Max package directory and copies referenced paths declared
 in the project catalog. It does not discover or redistribute undeclared
 dependencies automatically.
+
+### `broker`
+
+```bash
+maxforge broker status --config /absolute/path/maxforge.config.json
+maxforge broker start --config /absolute/path/maxforge.config.json
+maxforge broker stop --config /absolute/path/maxforge.config.json
+maxforge broker restart --config /absolute/path/maxforge.config.json
+```
+
+The command manages the detached project broker used by per-session
+`maxforge-mcp` frontends. `stop` and `restart` refuse connected MCP/Max clients
+or pending native operations. `--force` may disconnect clients during an
+explicit upgrade, but pending operations remain non-interruptible. Use the new
+package executable when replacing an old broker:
+
+```bash
+npx -y --package=maxforge@latest maxforge broker restart \
+  --config /absolute/path/maxforge.config.json --force
+```
 
 ## Shared options
 

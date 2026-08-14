@@ -223,7 +223,7 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
 1. 初回操作では`maxforge_help`へ`topic: "workflow"`を渡し、serverが返す
    最新の操作規約を読む。失敗後は`topic: "recovery"`を読む。
 2. custom externalまたはabstractionを使う場合は`maxforge_catalog`で、
-   MCP processが実際に読み込んだ定義を確認する。設定ファイルを変更した
+   MCP brokerが実際に読み込んだ定義を確認する。設定ファイルを変更した
    場合は`maxforge_reload_catalog`を呼び、新digestを確認する。reload失敗時は
    旧catalogがそのまま有効であり、部分更新とは扱わない。
 3. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
@@ -263,8 +263,9 @@ MCPクライアントからMaxを変更する場合は、次の順序を崩さ�
     dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
     `discard: true`を渡すまで拒否される。
 
-MCPプロセス再起動後、Max側のscopeが初期化済みなら、以前の完全なDSLを
-`currentDsl`として一度渡す。revision hashだけから現在graphを推測してはいけない。
+stdio frontendだけの再起動では共有broker stateは失われない。brokerをstate persistence
+無しで再起動し、Max側scopeが初期化済みなら、以前の完全なDSLを`currentDsl`として
+一度渡す。revision hashだけから現在graphを推測してはいけない。
 
 managed manual changeをinspectしただけではbaselineは更新されない。
 `maxforge_review_live_changes`は差分を中立的なsignalへ分類するが、意図を捏造しない。
@@ -418,15 +419,16 @@ identity、aliases、過去のdecisionを確認し、人間が同一性を確認
 `merge`は既知IDへの統合、`forget`はAgent-facing lookupからの論理除外である。
 いずれもlive `maxforge.sync`のroutingや元のNDJSONを書き換えず、`forget`も物理削除ではない。
 人間が履歴そのものの削除を明示した場合だけ、全Max clientを閉じ、
-`maxforge_status.connectedClients == 0`を確認してから
+`maxforge_status.bridge.connectedClients == 0`を確認してから
 `maxforge_erase_project_history`へ正確なproject IDと
 `ERASE PROJECT HISTORY <project.id>`を渡す。この操作はhistory chunkとidentity ledger、
 bridge上のretained observationを削除するが、Max patch、DSL/config、desired-state cacheは
 削除せず、SSD等のsecure overwriteも保証しない。
-永続historyはhistory directoryごとにsingle writerである。server起動時の
-`writer-v1.lock`が2つ目の`maxforge-mcp`を拒否する。異常終了後も自動削除しないため、
-lock内PIDのprocess停止を人間が確認した後だけ手動削除する。lockを消して並行writerを
-起動してはいけない。history persistenceを無効化した場合、この機械的guardも無い。
+永続historyはhistory directoryごとにsingle writerである。sessionごとの
+`maxforge-mcp`はproject brokerへ接続し、brokerだけが`writer-v1.lock`を所有する。
+broker異常終了後は、記録されたprocessが死んでいる有効なleaseだけをreplacementが
+atomicに回収する。live processまたは検証不能なleaseは置換しない。lockを消して
+並行writerを起動してはいけない。history persistenceを無効化した場合、このguardも無い。
 
 agentは`maxforge_catalog`の結果とdigestを確認してからcustom objectを使う。
 ただしcatalog entryはcompiler metadataでしかない。Max側machineへのexternal

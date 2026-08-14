@@ -142,11 +142,11 @@
         <p class="eyebrow">02 / LIVE CONTROL</p>
         <h2>Let an agent read and replace<br>a managed patch scope.</h2>
         <p>
-          The MCP server compiles desired DSL and sends ordered plans to one native
+          A shared project broker compiles desired DSL and sends ordered plans to one native
           <code>maxforge.sync</code> object in each patch. The external inspects and
           mutates through the Max SDK—including text, comments, and bounded changed
           box/cord attributes—without a JavaScript bridge or screenshot.
-          Project-scoped edit evidence can survive MCP restarts without treating
+          Project-scoped edit evidence can survive broker restarts without treating
           filenames or window titles as patch identity.
         </p>
       </div>
@@ -161,11 +161,17 @@
         <div class="architecture-node architecture-node-hot">
           <span>02</span>
           <strong>maxforge-mcp</strong>
-          <small>Node.js planner</small>
+          <small>stdio frontend</small>
+        </div>
+        <div class="architecture-link"><span>local broker protocol</span></div>
+        <div class="architecture-node">
+          <span>03</span>
+          <strong>project broker</strong>
+          <small>shared planner + state owner</small>
         </div>
         <div class="architecture-link"><span>local / token LAN WS</span></div>
         <div class="architecture-node">
-          <span>03</span>
+          <span>04</span>
           <strong>maxforge.sync</strong>
           <small>native Max external</small>
         </div>

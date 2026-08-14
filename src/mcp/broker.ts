@@ -189,9 +189,15 @@ export class MaxforgeBroker {
 
   private handleStop(socket: Socket, force: boolean): void {
     const status = this.getStatus();
-    const busy = status.mcpClients > 0 ||
-      status.maxClients > 0 ||
-      status.pendingOperations > 0;
+    if (status.pendingOperations > 0) {
+      this.reject(
+        socket,
+        "BUSY",
+        "Broker has pending operations; wait for them to settle before stopping"
+      );
+      return;
+    }
+    const busy = status.mcpClients > 0 || status.maxClients > 0;
     if (busy && !force) {
       this.reject(
         socket,

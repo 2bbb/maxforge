@@ -96,6 +96,11 @@ Install the Max package from
 containing one `maxforge.sync` object. The server listens on
 `127.0.0.1:8766` by default.
 
+Each MCP invocation is a thin stdio frontend. The first frontend starts a
+detached project broker; later sessions attach to that broker instead of
+competing for the WebSocket port or project state. The broker remains alive
+while any MCP or Max client is connected and exits after an idle grace period.
+
 Read [MCP setup and tool contracts](docs/mcp.md) before relying on live
 mutation. The shorter [native synchronization overview](docs/patch-sync.md)
 documents ownership, revisions, rollback limits, and failure handling.

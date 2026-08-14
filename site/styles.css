@@ -436,7 +436,7 @@ pre {
 
 .architecture {
   display: grid;
-  grid-template-columns: 1fr 0.45fr 1fr 0.45fr 1fr;
+  grid-template-columns: 1fr 0.32fr 1fr 0.32fr 1fr 0.32fr 1fr;
   align-items: stretch;
   margin-bottom: 6rem;
 }

@@ -35,9 +35,15 @@ The rules are:
 4. `MaxforgePatchService` coordinates revisions, reconciliation, persistence,
    and transport. DSL compilation and catalog-backed box resolution are
    injected through `PatchGraphAdapter`.
-5. Entry points compose concrete implementations. `src/mcp/bin.ts` starts the
-   executable unconditionally, while `src/mcp/server.ts` owns the
-   `DslPatchAdapter`, state store, WebSocket bridge, and MCP server lifecycle.
+5. Entry points compose concrete implementations. `src/mcp/bin.ts` is a thin
+   per-session stdio frontend. It connects through the local broker protocol
+   and starts `broker-bin.ts` only when no project owner exists.
+6. `src/mcp/runtime.ts` composes the `DslPatchAdapter`, state store, edit
+   history, WebSocket bridge, service, and MCP server factory. One detached
+   broker owns that runtime; stdio frontend termination does not own it.
+7. Broker endpoint binding elects one project owner before any persistent or
+   WebSocket resource is acquired. Multiple frontends share the same service
+   instance rather than copying graph state or writing the same files.
 
 ## Source boundaries
 
@@ -48,6 +54,7 @@ The rules are:
 | Patch domain | `src/max/patch-graph.ts`, `patch-merge.ts`, `patch-protocol.ts`, `patch-snapshot.ts` | Managed graph identity, revisions, plans, snapshots, and pure comparisons |
 | Live-control application | `src/mcp/service.ts`, `reconcile.ts`, `state-store.ts`, `edit-history-store.ts`, `patch-history-identity.ts` | Coordinate desired state, atomic recovery state, append-only edit evidence, explicit history identity decisions, and confirmed history deletion |
 | Adapters | `src/mcp/dsl-patch-adapter.ts`, `bridge.ts`, `mcp-server.ts` | Catalog resolution, WebSocket transport, and agent-facing MCP tools |
+| Process lifecycle | `src/mcp/broker.ts`, `broker-client.ts`, `broker-protocol.ts`, `runtime.ts` | Project-owner election, stdio multiplexing, idle shutdown, explicit upgrades, and runtime composition |
 | Max host | `source/projects/maxforge.sync/` | Validate and apply protocol operations through the Max SDK |
 
 ## Public packaging
