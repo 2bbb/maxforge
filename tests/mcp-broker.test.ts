@@ -122,6 +122,34 @@ describe("maxforge project broker", () => {
       await new Promise<void>((resolveClose) => blocker.close(() => resolveClose()));
     }
   });
+
+  it("refuses an implicit upgrade while busy and performs an explicit forced restart", async () => {
+    const environment = await brokerEnvironment(5000);
+    const client = startMcp(environment);
+    await client.initialize();
+    const originalPid = (await client.status()).broker.pid;
+
+    const refused = await runCli(["broker", "restart", "--config", environment.MAXFORGE_CONFIG!], environment);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain("BUSY");
+    expect((await client.status()).broker.pid).toBe(originalPid);
+
+    const restarted = await runCli([
+      "broker",
+      "restart",
+      "--config",
+      environment.MAXFORGE_CONFIG!,
+      "--force",
+    ], environment);
+    expect(restarted).toMatchObject({ code: 0, stderr: "" });
+    const restartStatus = JSON.parse(restarted.stdout);
+    expect(restartStatus).toMatchObject({ state: "ready" });
+    expect(restartStatus.pid).not.toBe(originalPid);
+
+    const reconnected = startMcp(environment);
+    await reconnected.initialize();
+    expect((await reconnected.status()).broker.pid).toBe(restartStatus.pid);
+  });
 });
 
 async function brokerEnvironment(idleTimeoutMs: number): Promise<NodeJS.ProcessEnv> {
@@ -279,6 +307,33 @@ async function freePort(): Promise<number> {
   const port = address.port;
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
   return port;
+}
+
+function runCli(
+  arguments_: string[],
+  environment: NodeJS.ProcessEnv
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolveRun, reject) => {
+    const child = spawn(process.execPath, [resolve("dist/cli/index.js"), ...arguments_], {
+      cwd: resolve("."),
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => resolveRun({
+      code,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+    }));
+  });
 }
 
 async function waitFor(

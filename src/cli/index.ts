@@ -17,6 +17,8 @@ import {
 import { toClipboardText, fromClipboardText } from "../core/clipboard.js";
 import { cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { basename, dirname, extname, join, resolve } from "path";
+import { brokerDescriptorFromEnvironment } from "../mcp/broker-protocol.js";
+import { requestBroker, spawnBroker } from "../mcp/broker-client.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -59,6 +61,11 @@ async function main() {
 
   if (command === "catalog") {
     await catalogCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "broker") {
+    await brokerCommand(args.slice(1));
     return;
   }
 
@@ -496,6 +503,132 @@ async function catalogCommand(cmdArgs: string[]) {
   }
 }
 
+async function brokerCommand(cmdArgs: string[]) {
+  const action = cmdArgs[0] ?? "status";
+  if (!["status", "start", "stop", "restart"].includes(action)) {
+    throw new Error(`Unknown broker action: ${action}`);
+  }
+  let force = false;
+  const environment = { ...process.env };
+  for (let i = 1; i < cmdArgs.length; i++) {
+    const argument = cmdArgs[i];
+    if (argument === "--config") {
+      environment.MAXFORGE_CONFIG = resolve(requiredOptionValue(cmdArgs, i));
+      i++;
+    } else if (argument === "--force") {
+      force = true;
+    } else {
+      throw new Error(`Unknown broker argument: ${argument}`);
+    }
+  }
+  if (force && action !== "stop" && action !== "restart") {
+    throw new Error("--force is only valid with broker stop or broker restart");
+  }
+
+  const descriptor = await brokerDescriptorFromEnvironment(environment);
+  if (action === "status") {
+    const response = await requestBroker(descriptor, "status");
+    console.log(JSON.stringify({
+      key: descriptor.key,
+      endpoint: `${descriptor.host}:${descriptor.port}`,
+      clientVersion: descriptor.clientVersion,
+      ...response.status,
+    }, null, 2));
+    return;
+  }
+  if (action === "start") {
+    try {
+      const response = await requestBroker(descriptor, "status");
+      if (response.status.state === "ready") {
+        console.log(JSON.stringify(response.status, null, 2));
+        return;
+      }
+      throw new Error(
+        `Broker already exists in ${response.status.state} state; use broker restart`
+      );
+    } catch (error) {
+      if (!isConnectionRefused(error)) throw error;
+    }
+    spawnBroker(environment);
+    console.log(JSON.stringify(await waitForBrokerReady(descriptor), null, 2));
+    return;
+  }
+
+  if (action === "restart") {
+    let wasRunning = true;
+    try {
+      await requestBroker(descriptor, "stop", force);
+    } catch (error) {
+      if (isConnectionRefused(error)) wasRunning = false;
+      else if (!isConnectionReset(error)) throw error;
+    }
+    if (wasRunning) await waitForBrokerStopped(descriptor);
+    spawnBroker(environment);
+    console.log(JSON.stringify(await waitForBrokerReady(descriptor), null, 2));
+    return;
+  }
+
+  const response = await requestBroker(descriptor, "stop", force);
+  console.log(JSON.stringify(response.status, null, 2));
+}
+
+async function waitForBrokerReady(
+  descriptor: Awaited<ReturnType<typeof brokerDescriptorFromEnvironment>>
+) {
+  const deadline = Date.now() + 5000;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const response = await requestBroker(descriptor, "status");
+      if (response.status.state === "ready") return response.status;
+      if (response.status.state === "failed") {
+        throw new Error(response.status.error ?? "Broker runtime failed to start");
+      }
+    } catch (error) {
+      lastError = error;
+      if (!isBrokerTransitionError(error)) throw error;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Timed out waiting for broker startup");
+}
+
+async function waitForBrokerStopped(
+  descriptor: Awaited<ReturnType<typeof brokerDescriptorFromEnvironment>>
+) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      await requestBroker(descriptor, "status");
+    } catch (error) {
+      if (isConnectionRefused(error)) return;
+      if (isConnectionReset(error)) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+        continue;
+      }
+      throw error;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  throw new Error("Timed out waiting for broker shutdown");
+}
+
+function isConnectionRefused(error: unknown): boolean {
+  return error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === "ECONNREFUSED";
+}
+
+function isConnectionReset(error: unknown): boolean {
+  return error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === "ECONNRESET";
+}
+
+function isBrokerTransitionError(error: unknown): boolean {
+  return isConnectionRefused(error) || isConnectionReset(error);
+}
+
 function requiredOptionValue(cmdArgs: string[], index: number): string {
   const option = cmdArgs[index];
   const value = cmdArgs[index + 1];
@@ -594,6 +727,7 @@ Usage:
   maxforge doctor [--config path] [--input input.maxdsl]
   maxforge bundle <input.maxdsl> -o package-directory [--config path] [--name package-name]
   maxforge catalog [query] [--config path] [--input input.maxdsl] [--all] [--limit n] [--json]
+  maxforge broker [status|start|stop|restart] [--config path] [--force]
 
 Commands:
   compile         Compile .maxdsl to .maxpat JSON
@@ -604,6 +738,7 @@ Commands:
   doctor          Validate project catalog files and abstraction metadata
   bundle          Build a portable Max package directory with declared dependencies
   catalog         List project objects or search the effective object catalog
+  broker          Inspect, start, stop, or restart the project MCP broker
 
 Options:
   -o <file>          Output file path
@@ -618,6 +753,7 @@ Options:
   --all              Include all built-in objects in an unfiltered catalog listing
   --limit <n>        Maximum catalog records (default: 50, maximum: 1000)
   --json             Emit machine-readable catalog search results
+  --force            Disconnect active clients during broker stop or restart
 `);
 }
 

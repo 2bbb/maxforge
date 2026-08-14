@@ -105,6 +105,7 @@ function initializeThroughSymlink(
         ...process.env,
         MAXFORGE_WS_PORT: "0",
         MAXFORGE_STATE_FILE: "off",
+        MAXFORGE_BROKER_IDLE_MS: "100",
       },
       stdio: ["pipe", "pipe", "pipe"],
     });

@@ -67,7 +67,7 @@ export async function requestBroker(
   descriptor: BrokerDescriptor,
   action: Exclude<BrokerAction, "mcp">,
   force = false
-): Promise<BrokerResponse> {
+): Promise<Extract<BrokerResponse, { ok: true }>> {
   const { socket, response } = await connectToBroker(
     descriptor,
     action,
@@ -91,7 +91,10 @@ async function connectToBroker(
   descriptor: BrokerDescriptor,
   action: BrokerAction,
   force = false
-): Promise<{ socket: Socket; response: BrokerResponse }> {
+): Promise<{
+  socket: Socket;
+  response: Extract<BrokerResponse, { ok: true }>;
+}> {
   const socket = createConnection({
     host: descriptor.host,
     port: descriptor.port,
