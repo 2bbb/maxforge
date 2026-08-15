@@ -279,7 +279,9 @@ both root objects and objects inside `p generated_bank`.
 
 - MCP graph, intent, baseline, and in-flight apply state is atomically persisted
   by default. `currentDsl` re-seeding is only required when persistence was
-  disabled or the matching state file is unavailable.
+  disabled or the matching state file is unavailable. Default schema-v1 state
+  is migrated to schema v2 only after all stored graphs round-trip losslessly;
+  migration failure stops startup rather than discarding the baseline.
 - New patch creation requires exactly one registered controller patch.
 - A `PatchPlan` is not atomic by itself.
 - Runtime/standalone Max support is not guaranteed.

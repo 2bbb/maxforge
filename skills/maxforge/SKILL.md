@@ -101,9 +101,11 @@ for i in 0..7 {
    A failed apply attempts generated reverse operations but is not transactional;
    inspect before retrying even when the error says reverse operations completed.
 8. Restarting a stdio frontend leaves shared broker state intact. After a broker
-   restart without persisted state, provide the previous complete DSL as
-   `currentDsl` when Max reports an initialized scope. A revision hash is not a
-   recoverable graph.
+   restart, default schema-v1 state is migrated only when every graph can be
+   serialized losslessly to schema v2; a migration error must be resolved, not
+   treated as an empty baseline. If persisted state is genuinely unavailable,
+   provide the previous complete DSL as `currentDsl` when Max reports an
+   initialized scope. A revision hash is not a recoverable graph.
 
 ## Syntax reminders
 

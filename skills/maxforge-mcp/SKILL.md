@@ -178,7 +178,11 @@ failure.
 
 Restarting one stdio frontend does not restart shared broker state. After an
 actual broker restart, call `maxforge_status` and verify the persistence path,
-restored revision, and pending scopes. Normal broker restarts restore state automatically. If persistence was
+restored revision, and pending scopes. Normal broker restarts restore state
+automatically. A missing default v2 state is migrated from the matching v1 file
+only when every graph has a lossless DSL representation; migration failure is a
+startup error, not permission to treat the patch as unmanaged. Explicit custom
+state paths are not searched for guessed legacy siblings. If persistence was
 disabled or its file is unavailable, provide the exact previous complete DSL as
 `currentDsl` once. Never guess it, reset the revision, or claim the scope is
 empty. A pending scope must reconnect so Maxforge can compare its recorded base

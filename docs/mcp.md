@@ -900,6 +900,15 @@ inspection baselines, and in-flight apply records. The default file is scoped by
 WebSocket port under `~/.maxforge`. Set an absolute `MAXFORGE_STATE_FILE` when an
 MCP client needs an explicit location.
 
+When the current `mcp-state-v2.json` is absent, the default project- or
+port-scoped store checks for its corresponding `mcp-state-v1.json`. Every
+persisted graph, including pending and superseded apply graphs, must serialize
+back to DSL without revision loss; Maxforge then writes v2 atomically and keeps
+the v1 file as recovery evidence. Invalid or unrepresentable v1 state fails
+startup with the source and destination paths instead of silently starting with
+empty state. An explicit `MAXFORGE_STATE_FILE` is never paired with a guessed
+legacy filename; migrate that custom file deliberately.
+
 Live-edit evidence uses a separate append-only NDJSON journal because the
 atomic state document is not an event log. Each session header stores project,
 patcher/scope, native instance, MCP session, title/filename/filepath, and the
