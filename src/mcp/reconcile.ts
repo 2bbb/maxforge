@@ -496,10 +496,22 @@ function defaultLiveBox(
     varName: snapshot.varName,
     maxclass: snapshot.maxclass,
     patchingRect: snapshot.patchingRect,
-    text: snapshot.text,
+    text: snapshotText(snapshot),
     comment: snapshot.comment,
     attributes: resolveSnapshotAttributes(snapshot, base, baseline),
   };
+}
+
+function snapshotText(snapshot: MaxforgeSnapshotBox): string | undefined {
+  // Max inspection exposes runtime display/value text for native UI boxes such
+  // as number and flonum. That value is not a serialized box text field and
+  // the DSL cannot represent it as one. Only classes whose DSL form owns a
+  // structural text field may contribute snapshot.text to the managed graph.
+  return snapshot.maxclass === "newobj" ||
+      snapshot.maxclass === "message" ||
+      snapshot.maxclass === "comment"
+    ? snapshot.text
+    : undefined;
 }
 
 function flattenBaseBoxes(

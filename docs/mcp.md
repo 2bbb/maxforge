@@ -657,6 +657,12 @@ that cannot round-trip remain conflicts. A successful recovery normally emits
 a zero-operation plan because the structure already exists in Max; the native
 acknowledgement advances it to the desired revision.
 
+Max may report transient display/value text while inspecting native UI classes
+such as `number` and `flonum`. Reconciliation excludes that runtime text from
+managed graph identity because those DSL objects have no serialized `text`
+field. Structural text remains significant for `newobj`, `message`, and
+`comment` boxes.
+
 The result contains `canApply`, a structured `conflicts` array, and an ordered
 plan only when the merge is safe. This tool never mutates Max. Do not convert
 `canApply: false` into an overwrite: inspect the conflict and make the intended

@@ -174,6 +174,44 @@ describe("live patch reconciliation", () => {
     });
   });
 
+  it.each(["number", "flonum"])(
+    "ignores runtime display text when recovering a directly added %s box",
+    (maxclass) => {
+      const base = graph("osc = cycle~ 440 at(10, 20)");
+      const desired = graph(
+        `osc = cycle~ 440 at(10, 20)\n` +
+        `extra = ${maxclass} @minimum 0 @maximum 1 at(180, 20, 50, 22)`
+      );
+      const current = snapshot(desired);
+      const extraIndex = current.boxes.findIndex(
+        (box) => box.varName === "maxforge_voices_obj_extra"
+      );
+      current.boxes[extraIndex] = {
+        ...current.boxes[extraIndex],
+        text: "0.",
+      };
+
+      const result = reconcilePatchGraphs(
+        base,
+        base,
+        desired,
+        current,
+        snapshot(base)
+      );
+
+      expect(result.conflicts).toEqual([]);
+      expect(result.graph?.revision).toBe(desired.revision);
+      expect(
+        result.graph?.patcher.boxes.find((box) => box.id === "obj-extra")?.text
+      ).toBeUndefined();
+      expect(result.plan).toMatchObject({
+        baseRevision: base.revision,
+        targetRevision: desired.revision,
+        operations: [],
+      });
+    }
+  );
+
   it("rejects a recovered managed addition whose live box differs from desired DSL", () => {
     const base = graph("osc = cycle~ 440 at(10, 20)");
     const desired = graph(
