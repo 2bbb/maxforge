@@ -51,11 +51,10 @@ export class DslPatchAdapter implements PatchGraphAdapter {
     base: PatchBox,
     baseline?: MaxforgeSnapshotBox
   ): PatchBox {
-    const objectText = base.maxclass === "newobj"
-      ? snapshot.text
-      : snapshot.maxclass;
-    const resolved = !base.patcher && objectText
-      ? lookupObject(objectText, this.database, true)
+    const resolved = !base.patcher &&
+        base.maxclass === "newobj" &&
+        snapshot.text
+      ? lookupObject(snapshot.text, this.database, true)
       : null;
     return {
       ...base,
@@ -65,9 +64,13 @@ export class DslPatchAdapter implements PatchGraphAdapter {
       numoutlets: resolved?.def.numoutlets ?? base.numoutlets,
       outlettype: resolved?.def.outlettype ?? base.outlettype,
       patchingRect: snapshot.patchingRect,
-      text: snapshot.text,
+      text: hasStructuralText(base.maxclass) ? snapshot.text : undefined,
       comment: snapshot.comment,
       attributes: resolveSnapshotAttributes(snapshot, base, baseline),
     };
   }
+}
+
+function hasStructuralText(maxclass: string): boolean {
+  return maxclass === "newobj" || maxclass === "message" || maxclass === "comment";
 }

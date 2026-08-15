@@ -1523,6 +1523,55 @@ describe("MaxforgePatchService", () => {
     expect(applied.workingDsl).not.toMatch(/@numinlets|@numoutlets|@outlettype/);
   });
 
+  it("retains bpatcher identity when Max inspects it as jpatcher", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const baseDsl =
+      "panel = bpatcher @name voice.maxpat @args 1 at(10, 10, 180, 120)";
+    transport.snapshotAfterApply = snapshotForDsl(baseDsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: baseDsl,
+    });
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        maxclass: "jpatcher",
+        patchingRect: [40, 50, 180, 120] as const,
+      })),
+    };
+
+    const review = await service.reviewLiveChanges("patch-a", "voices");
+    expect(review).toMatchObject({
+      canAdopt: true,
+      conflicts: [],
+      proposedWorkingDsl: expect.stringContaining("panel = bpatcher"),
+    });
+
+    const adopted = await service.adoptLiveChanges({
+      patcherId: "patch-a",
+      scope: "voices",
+      expectedStructureToken: review.structureToken,
+    });
+    expect(adopted.workingDsl).toContain("panel = bpatcher");
+    expect(adopted.workingDsl).not.toContain("= newobj");
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: `${baseDsl}\ntrigger = button at(240, 50)`,
+    });
+    expect(preview).toMatchObject({
+      canApply: true,
+      conflicts: [],
+      plan: {
+        operations: [{ op: "create", box: { id: "obj-trigger" } }],
+      },
+    });
+  });
+
   it("does not report canApply when the merged graph cannot serialize", async () => {
     const transport = new FakeTransport();
     const adapter = new DslPatchAdapter(database);
