@@ -1572,6 +1572,66 @@ describe("MaxforgePatchService", () => {
     });
   });
 
+  it("builds rollback from live topology after merged manual deletions", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const retained = Array.from(
+      { length: 39 },
+      (_, index) => `voice_${index} = button at(${index * 30}, 20)`
+    );
+    const removed = Array.from(
+      { length: 8 },
+      (_, index) => `removed_${index} = button at(${index * 30}, 60)`
+    );
+    const additions = Array.from(
+      { length: 7 },
+      (_, index) => `added_${index} = button at(${index * 30}, 100)`
+    );
+    const initialDsl = [...retained, ...removed].join("\n");
+    const desiredDsl = [...retained, ...additions].join("\n");
+    transport.snapshotAfterApply = snapshotForDsl(initialDsl, "voices");
+    await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: initialDsl,
+    });
+    const removedVarNames = new Set(
+      removed.map((_, index) => `maxforge_voices_obj_removed_${index}`)
+    );
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.filter(
+        (box) => !removedVarNames.has(box.varName)
+      ),
+    };
+
+    const preview = await service.reconcilePlan({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+    });
+
+    expect(preview).toMatchObject({
+      canApply: true,
+      conflicts: [],
+      managedChangeCount: 8,
+    });
+    expect(preview.plan?.operations).toHaveLength(7);
+    expect(preview.plan?.operations.every((operation) => operation.op === "create"))
+      .toBe(true);
+    expect(preview.plan?.rollbackOperations).toHaveLength(7);
+    expect(
+      preview.plan?.rollbackOperations?.every(
+        (operation) => operation.op === "delete"
+      )
+    ).toBe(true);
+    expect(
+      preview.plan?.rollbackOperations?.filter(
+        (operation) => operation.op === "create"
+      )
+    ).toEqual([]);
+  });
+
   it("does not report canApply when the merged graph cannot serialize", async () => {
     const transport = new FakeTransport();
     const adapter = new DslPatchAdapter(database);

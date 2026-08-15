@@ -77,6 +77,10 @@ auto child_path_key(
 	const std::vector<std::string> &path,
 	const std::string &variable_name
 ) -> std::string;
+auto same_managed_box_topology(
+	const virtual_patch &left,
+	const virtual_patch &right
+) -> bool;
 void validate_identity(
 	const std::string &scope,
 	const std::string &id,

@@ -1300,7 +1300,7 @@ void validate_plan_against_patch(
 			configured_scope,
 			plan.target_revision
 		);
-		if(restored_state != state) {
+		if(!sync_protocol::same_managed_box_topology(restored_state, state)) {
 			throw std::runtime_error(
 				"rollback operations do not restore managed box topology"
 			);

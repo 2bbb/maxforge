@@ -535,6 +535,32 @@ void test_reverse_plan_restores_topology() {
 	require(restored_state == initial_state, "reverse plan did not restore topology");
 }
 
+void test_topology_comparison_ignores_empty_child_patchers() {
+	const sync_protocol::virtual_patch inspected_state{
+		{"", {"maxforge_default_obj_panel"}},
+		{"maxforge_default_obj_panel", {}}
+	};
+	const sync_protocol::virtual_patch restored_state{
+		{"", {"maxforge_default_obj_panel"}}
+	};
+	require(
+		sync_protocol::same_managed_box_topology(inspected_state, restored_state),
+		"empty child patcher changed managed box topology"
+	);
+
+	const sync_protocol::virtual_patch missing_nested_box{
+		{"", {"maxforge_default_obj_panel"}},
+		{"maxforge_default_obj_panel", {"maxforge_default_obj_nested"}}
+	};
+	require(
+		!sync_protocol::same_managed_box_topology(
+			missing_nested_box,
+			restored_state
+		),
+		"non-empty child patcher difference was ignored"
+	);
+}
+
 }
 
 int main() {
@@ -554,7 +580,8 @@ int main() {
 		{"duplicate create", test_duplicate_create_guard},
 		{"delete descendants", test_delete_removes_descendants},
 		{"plain object child patcher", test_plain_object_does_not_create_child_patcher},
-		{"reverse plan topology", test_reverse_plan_restores_topology}
+		{"reverse plan topology", test_reverse_plan_restores_topology},
+		{"empty child patcher topology", test_topology_comparison_ignores_empty_child_patchers}
 	};
 
 	std::size_t failure_count{};

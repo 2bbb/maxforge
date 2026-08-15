@@ -270,6 +270,24 @@ auto child_path_key(
 	return key;
 }
 
+auto same_managed_box_topology(
+	const virtual_patch &left,
+	const virtual_patch &right
+) -> bool
+{
+	for(const auto &[path, boxes] : left) {
+		if(boxes.empty()) continue;
+		const auto counterpart = right.find(path);
+		if(counterpart == right.end() || counterpart->second != boxes) return false;
+	}
+	for(const auto &[path, boxes] : right) {
+		if(boxes.empty()) continue;
+		const auto counterpart = left.find(path);
+		if(counterpart == left.end() || counterpart->second != boxes) return false;
+	}
+	return true;
+}
+
 void validate_identity(
 	const std::string &scope,
 	const std::string &id,
