@@ -1,6 +1,6 @@
 {
   "name": "maxforge",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Unofficial text-first DSL compiler for generating Max/MSP .maxpat patches",
   "type": "module",
   "main": "dist/index.js",

@@ -1,7 +1,7 @@
 {
   "title": "maxforge",
   "description": "Unofficial text-first Max patch generation and synchronization tools",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "author": "2bit",
   "website": "https://github.com/2bbb/maxforge",
   "extends": "",
