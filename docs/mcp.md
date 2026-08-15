@@ -111,10 +111,14 @@ pending. Existing MCP sessions must reconnect after a forced restart; open
 attachment requires the frontend and broker to report the same Maxforge package
 version. A mismatched frontend still initializes a diagnostic MCP server, but
 `maxforge_status` reports `VERSION_MISMATCH` and the running broker status
-instead of exposing mutation tools. Use `broker status` and then an explicit
-`broker restart` with the intended package version; lifecycle commands remain
-available across package-version mismatch so an old broker is not stranded
-during upgrades.
+instead of exposing mutation tools. Each diagnostic `maxforge_status` call
+rechecks the live broker rather than retaining the startup failure. After a
+compatible replacement appears, it reports `RECONNECT_REQUIRED` with the new
+broker PID and version. Reconnect that MCP frontend to negotiate the full tool
+set; the outer Agent host does not need to be restarted. Use `broker status` and
+then an explicit `broker restart` with the intended package version; lifecycle
+commands remain available across package-version mismatch so an old broker is
+not stranded during upgrades.
 
 When custom externals or reusable abstractions appear in desired DSL, set
 `MAXFORGE_CONFIG` in the MCP client process configuration. Prefer an absolute
@@ -957,6 +961,7 @@ optimistic concurrency.
 | Raw client count is nonzero but no patch is registered | WebSocket connected before a valid registration event | Check `patcherId`, scope, and Max console errors; do not target the raw connection |
 | `maxforge_status.broker.state` is `unavailable` | Broker runtime could not acquire its configured WebSocket port, state, or history ownership | Read the structured broker error; stop the conflicting legacy process or correct the project settings, then run `maxforge broker restart` |
 | `maxforge_status.broker.code` is `VERSION_MISMATCH` | The stdio frontend package version differs from the detached broker | Inspect `brokerStatus`, close active clients, then run `maxforge broker restart` using the intended package version |
+| `maxforge_status.broker.code` is `RECONNECT_REQUIRED` | A diagnostic frontend found a compatible replacement broker, but its startup tool set remains diagnostic-only | Reconnect this MCP server entry so it initializes against the replacement broker; do not restart the outer Agent host |
 | A patch reports `versionCompatible: false` | The loaded `maxforge.sync` version is missing or differs from the MCP/broker package | Do not mutate. Install the matching release external in the intended Max package or project search path, remove stale duplicates, restart Max, reopen the patch, and list it again |
 | Broker command reports `BUSY` | MCP clients, Max clients, or native operations are still active | Close clients and retry; use `--force` only to disconnect clients, never to interrupt a pending operation |
 | Broker endpoint configuration mismatch | Two frontends use the same project identity with different runtime paths, bridge options, or tokens | Make their `MAXFORGE_*` settings identical, or stop the old broker before changing configuration |

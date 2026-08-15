@@ -188,6 +188,12 @@ disabled or its file is unavailable, provide the exact previous complete DSL as
 empty. A pending scope must reconnect so Maxforge can compare its recorded base
 and target revisions.
 
+If a frontend initialized in diagnostic mode because of `VERSION_MISMATCH`,
+repeat `maxforge_status` after replacing the broker. Diagnostic status is live,
+not a cached startup snapshot. `RECONNECT_REQUIRED` means the new broker is
+compatible; reconnect only that MCP server entry to negotiate the full tool
+set. Do not restart the outer Agent host.
+
 If Max reports a third revision, stop ordinary compile/review/reconcile calls.
 Call `maxforge_inspect_pending_apply` and preserve its base, target, intent, and
 live DSL evidence. If it returns `supersededApply`, preserve that original

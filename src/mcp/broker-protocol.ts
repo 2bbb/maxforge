@@ -22,7 +22,7 @@ const BROKER_PORT_RANGE = 20000;
 const BROKER_OWNER_PORT_BASE = 10000;
 const BROKER_OWNER_PORT_RANGE = 20000;
 
-export type BrokerAction = "mcp" | "status" | "stop";
+export type BrokerAction = "mcp" | "probe" | "status" | "stop";
 
 export interface BrokerDescriptor {
   readonly protocol: typeof BROKER_PROTOCOL;
@@ -174,7 +174,12 @@ export function parseBrokerRequest(source: string): BrokerRequest | undefined {
     const value = JSON.parse(source) as Partial<BrokerRequest>;
     if (
       value.protocol !== BROKER_PROTOCOL ||
-      (value.action !== "mcp" && value.action !== "status" && value.action !== "stop") ||
+      (
+        value.action !== "mcp" &&
+        value.action !== "probe" &&
+        value.action !== "status" &&
+        value.action !== "stop"
+      ) ||
       typeof value.key !== "string" ||
       value.host !== BROKER_HOST ||
       !Number.isInteger(value.port) ||

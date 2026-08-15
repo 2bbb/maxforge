@@ -1,14 +1,19 @@
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
+import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { brokerDescriptorFromEnvironment } from "../src/mcp/broker-protocol.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  BrokerDescriptor,
+  brokerDescriptorFromEnvironment,
+} from "../src/mcp/broker-protocol.js";
 import {
   ensureBrokerConnection,
   requestBroker,
 } from "../src/mcp/broker-client.js";
+import { MaxforgeBroker } from "../src/mcp/broker.js";
+import type { MaxforgeMcpRuntime } from "../src/mcp/runtime.js";
 
 const children: McpChild[] = [];
 const temporaryDirectories: string[] = [];
@@ -141,6 +146,47 @@ describe("maxforge project broker", () => {
     });
   });
 
+  it("refreshes a startup version mismatch after the broker is replaced", async () => {
+    const environment = await brokerEnvironment(5000);
+    const descriptor = await brokerDescriptorFromEnvironment(environment);
+    const oldBroker = await startLegacyMismatchBroker(descriptor);
+    let replacement: MaxforgeBroker | undefined;
+
+    try {
+      const frontend = startMcp(environment);
+      await frontend.initialize();
+      expect((await frontend.status()).broker).toMatchObject({
+        state: "unavailable",
+        code: "VERSION_MISMATCH",
+        brokerStatus: {
+          brokerVersion: "older-broker",
+          pid: oldBroker.pid,
+        },
+      });
+
+      await oldBroker.close();
+      replacement = testBroker(descriptor);
+      await replacement.start();
+      await waitFor(() => replacement?.getStatus().state === "ready");
+
+      for (let index = 0; index < 2; index += 1) {
+        expect((await frontend.status()).broker).toMatchObject({
+          state: "unavailable",
+          code: "RECONNECT_REQUIRED",
+          brokerStatus: {
+            brokerVersion: descriptor.clientVersion,
+            pid: replacement.getStatus().pid,
+            mcpClients: 0,
+          },
+        });
+        expect(replacement.getStatus().mcpClients).toBe(0);
+      }
+    } finally {
+      await replacement?.close().catch(() => undefined);
+      await oldBroker.close();
+    }
+  });
+
   it("still initializes MCP and reports a degraded status when bridge startup fails", async () => {
     const environment = await brokerEnvironment(5000);
     const blockedPort = Number(environment.MAXFORGE_WS_PORT);
@@ -195,6 +241,94 @@ describe("maxforge project broker", () => {
     expect((await reconnected.status()).broker.pid).toBe(restartStatus.pid);
   });
 });
+
+function testBroker(descriptor: BrokerDescriptor): MaxforgeBroker {
+  return new MaxforgeBroker({
+    descriptor,
+    idleTimeoutMs: 5000,
+    createRuntime: async () => ({
+      bridge: {
+        getStatus: () => ({ connectedClients: 0 }),
+        getPendingOperationCount: () => 0,
+      } as MaxforgeMcpRuntime["bridge"],
+      service: {} as MaxforgeMcpRuntime["service"],
+      version: descriptor.clientVersion,
+      createServer: vi.fn() as MaxforgeMcpRuntime["createServer"],
+      getCatalog: vi.fn() as MaxforgeMcpRuntime["getCatalog"],
+      close: async () => undefined,
+    }),
+  });
+}
+
+async function startLegacyMismatchBroker(
+  descriptor: BrokerDescriptor
+): Promise<{ pid: number; close: () => Promise<void> }> {
+  const pid = process.pid + 100_000;
+  const status = {
+    state: "ready" as const,
+    brokerVersion: "older-broker",
+    pid,
+    mcpClients: 0,
+    maxClients: 0,
+    pendingOperations: 0,
+    idleTimeoutMs: 5000,
+    ownerPort: descriptor.ownerPort,
+    ownership: {
+      state: "owned" as const,
+      path: descriptor.ownerLeasePath,
+      identity: descriptor.key,
+      pid,
+      acquiredAt: new Date(0).toISOString(),
+    },
+  };
+  const server = createServer((socket) => {
+    let source = "";
+    socket.on("data", (chunk: Buffer) => {
+      source += chunk.toString("utf8");
+      const newline = source.indexOf("\n");
+      if (newline < 0) return;
+      const request = JSON.parse(source.slice(0, newline)) as { action?: string };
+      if (request.action === "status") {
+        socket.end(`${JSON.stringify({
+          protocol: descriptor.protocol,
+          ok: true,
+          key: descriptor.key,
+          status,
+        })}\n`);
+        return;
+      }
+      socket.end(`${JSON.stringify({
+        protocol: descriptor.protocol,
+        ok: false,
+        key: descriptor.key,
+        code: request.action === "mcp"
+          ? "VERSION_MISMATCH"
+          : "INVALID_REQUEST",
+        error: request.action === "mcp"
+          ? `Frontend ${descriptor.clientVersion} cannot attach to broker older-broker`
+          : "Invalid broker handshake",
+        status,
+      })}\n`);
+    });
+  });
+  await listen(server, descriptor.port);
+  return {
+    pid,
+    close: async () => {
+      if (!server.listening) return;
+      await new Promise<void>((resolveClose, reject) => {
+        server.close((error) => error ? reject(error) : resolveClose());
+      });
+    },
+  };
+}
+
+function listen(server: Server, port: number): Promise<void> {
+  return new Promise((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", resolveListen);
+  });
+}
 
 async function brokerEnvironment(idleTimeoutMs: number): Promise<NodeJS.ProcessEnv> {
   const directory = mkdtempSync(join(tmpdir(), "maxforge-broker-test-"));

@@ -269,35 +269,93 @@ function serveUnavailableMcp(
         }),
       }),
     },
-    async () => ({
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify({
-          broker: {
-            state: "unavailable",
-            key: descriptor?.key ?? null,
-            host: descriptor?.host ?? null,
-            port: descriptor?.port ?? null,
-            error,
-            code: failure?.code ?? null,
-            brokerStatus: failure?.status ?? null,
-          },
-        }, null, 2),
-      }],
-      structuredContent: {
-        broker: {
-          state: "unavailable" as const,
-          key: descriptor?.key ?? null,
-          host: descriptor?.host ?? null,
-          port: descriptor?.port ?? null,
-          error,
-          code: failure?.code ?? null,
-          brokerStatus: failure?.status ?? null,
-        },
-      },
-    })
+    async () => {
+      const broker = await refreshUnavailableBrokerStatus(
+        descriptor,
+        error,
+        failure
+      );
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ broker }, null, 2),
+        }],
+        structuredContent: { broker },
+      };
+    }
   );
   serveStdio(() => server);
+}
+
+async function refreshUnavailableBrokerStatus(
+  descriptor: BrokerDescriptor | undefined,
+  initialError: string,
+  initialFailure?: BrokerFailureResponse
+): Promise<{
+  state: "unavailable";
+  key: string | null;
+  host: string | null;
+  port: number | null;
+  error: string;
+  code: string | null;
+  brokerStatus: BrokerFailureResponse["status"] | null;
+}> {
+  const base = {
+    state: "unavailable" as const,
+    key: descriptor?.key ?? null,
+    host: descriptor?.host ?? null,
+    port: descriptor?.port ?? null,
+  };
+  if (!descriptor) {
+    return {
+      ...base,
+      error: initialError,
+      code: initialFailure?.code ?? null,
+      brokerStatus: initialFailure?.status ?? null,
+    };
+  }
+
+  try {
+    const statusResponse = await requestBroker(descriptor, "status");
+    if (statusResponse.status.brokerVersion !== descriptor.clientVersion) {
+      return {
+        ...base,
+        error:
+          `VERSION_MISMATCH: Frontend ${descriptor.clientVersion} cannot ` +
+          `attach to broker ${statusResponse.status.brokerVersion}; restart ` +
+          "the broker with the frontend package version",
+        code: "VERSION_MISMATCH",
+        brokerStatus: statusResponse.status,
+      };
+    }
+    const connection = await connectToBroker(descriptor, "probe");
+    connection.socket.destroy();
+    return {
+      ...base,
+      error:
+        "The project broker is compatible now. Reconnect this MCP frontend " +
+        "to expose the broker's full tool set.",
+      code: "RECONNECT_REQUIRED",
+      brokerStatus: connection.response.status,
+    };
+  } catch (latestError) {
+    if (latestError instanceof BrokerRequestError) {
+      return {
+        ...base,
+        error: latestError.message,
+        code: latestError.response.code,
+        brokerStatus: latestError.response.status ?? null,
+      };
+    }
+    return {
+      ...base,
+      error: latestError instanceof Error
+        ? latestError.message
+        : String(latestError),
+      code: null,
+      brokerStatus: null,
+    };
+  }
 }
 
 function timeoutFromEnvironment(environment: NodeJS.ProcessEnv): number {

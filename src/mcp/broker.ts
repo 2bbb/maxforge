@@ -244,6 +244,15 @@ export class MaxforgeBroker {
       );
       return;
     }
+    if (request.action === "probe") {
+      this.respondAndClose(socket, {
+        protocol: this.descriptor.protocol,
+        ok: true,
+        key: this.descriptor.key,
+        status: this.getStatus(),
+      });
+      return;
+    }
     this.attachMcp(socket, this.runtime);
   }
 
