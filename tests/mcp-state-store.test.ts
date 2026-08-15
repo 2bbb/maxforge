@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,8 +7,10 @@ import { ObjectDatabase } from "../src/core/types.js";
 import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import {
   JsonFilePatchStateStore,
+  legacyStateFileFromEnvironment,
   stateFileFromEnvironment,
 } from "../src/mcp/state-store.js";
+import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 
 const database = dbData as ObjectDatabase;
 
@@ -128,6 +130,98 @@ describe("JsonFilePatchStateStore", () => {
     );
   });
 
+  it("atomically migrates default v1 state to lossless v2 sources", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-migration-"));
+    const legacyPath = join(directory, "mcp-state-v1.json");
+    const path = join(directory, "mcp-state-v2.json");
+    const graph = compileDslToPatchGraph(
+      "osc = cycle~ 440 at(10, 20)",
+      database,
+      "voices"
+    ).graph!;
+    const snapshot = {
+      title: "Voices",
+      filename: "voices.maxpat",
+      filepath: "/tmp/voices.maxpat",
+      dirty: false,
+      locked: false,
+      presentation: false,
+      boxes: [],
+      connections: [],
+    };
+    writeFileSync(legacyPath, JSON.stringify({
+      schemaVersion: 1,
+      managedGraphs: [{ target: "patch-a:voices", value: graph }],
+      intentGraphs: [{ target: "patch-a:voices", value: graph }],
+      baselineSnapshots: [{ target: "patch-a:voices", value: snapshot }],
+      pendingApplies: [{
+        target: "patch-b:voices",
+        value: {
+          baseRevision: graph.revision,
+          nextGraph: graph,
+          intentGraph: graph,
+          recoveryBaseGraph: graph,
+          superseded: {
+            baseRevision: graph.revision,
+            nextGraph: graph,
+            intentGraph: graph,
+          },
+        },
+      }],
+    }));
+    const adapter = new DslPatchAdapter(database);
+    const store = new JsonFilePatchStateStore(path, {
+      legacyPath,
+      serializeGraph: (value) => adapter.serialize(value),
+    });
+
+    const restored = store.load()!;
+
+    expect(restored.managedGraphs.get("patch-a:voices")).toEqual(graph);
+    expect(restored.workingSources.get("patch-a:voices"))
+      .toContain("osc = cycle~ 440");
+    expect(restored.intentSources.get("patch-a:voices"))
+      .toContain("osc = cycle~ 440");
+    expect(restored.pendingApplies.get("patch-b:voices")).toMatchObject({
+      nextSource: expect.stringContaining("osc = cycle~ 440"),
+      intentSource: expect.stringContaining("osc = cycle~ 440"),
+      recoveryBaseSource: expect.stringContaining("osc = cycle~ 440"),
+      superseded: {
+        nextSource: expect.stringContaining("osc = cycle~ 440"),
+        intentSource: expect.stringContaining("osc = cycle~ 440"),
+      },
+    });
+    expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({
+      schemaVersion: 2,
+    });
+    expect(existsSync(legacyPath)).toBe(true);
+  });
+
+  it("fails explicitly instead of discarding an unrepresentable v1 state", () => {
+    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-migration-"));
+    const legacyPath = join(directory, "mcp-state-v1.json");
+    const path = join(directory, "mcp-state-v2.json");
+    const graph = compileDslToPatchGraph("n = number", database, "main").graph!;
+    writeFileSync(legacyPath, JSON.stringify({
+      schemaVersion: 1,
+      managedGraphs: [{ target: "patch:main", value: graph }],
+      intentGraphs: [],
+      baselineSnapshots: [],
+      pendingApplies: [],
+    }));
+    const store = new JsonFilePatchStateStore(path, {
+      legacyPath,
+      serializeGraph: () => {
+        throw new Error("synthetic lossless conversion failure");
+      },
+    });
+
+    expect(() => store.load()).toThrow(
+      /Cannot migrate legacy maxforge state.*synthetic lossless conversion failure/
+    );
+    expect(existsSync(path)).toBe(false);
+  });
+
   it("uses project identity when available and supports disable or override", () => {
     expect(stateFileFromEnvironment({}, 8766)).toMatch(/mcp-state-8766-v2\.json$/);
     expect(stateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
@@ -136,5 +230,16 @@ describe("JsonFilePatchStateStore", () => {
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766)).toBeUndefined();
     expect(stateFileFromEnvironment({ MAXFORGE_STATE_FILE: "/tmp/custom.json" }, 8766))
       .toBe("/tmp/custom.json");
+    expect(legacyStateFileFromEnvironment({}, 8766)).toMatch(
+      /mcp-state-8766-v1\.json$/
+    );
+    expect(legacyStateFileFromEnvironment({}, 8766, "studio_patchset")).toMatch(
+      /projects\/studio_patchset\/mcp-state-v1\.json$/
+    );
+    expect(legacyStateFileFromEnvironment({ MAXFORGE_STATE_FILE: "off" }, 8766))
+      .toBeUndefined();
+    expect(legacyStateFileFromEnvironment({
+      MAXFORGE_STATE_FILE: "/tmp/custom.json",
+    }, 8766)).toBeUndefined();
   });
 });

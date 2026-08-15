@@ -6,6 +6,7 @@ import { MaxforgePatchService } from "./service.js";
 import { DslPatchAdapter } from "./dsl-patch-adapter.js";
 import {
   JsonFilePatchStateStore,
+  legacyStateFileFromEnvironment,
   stateFileFromEnvironment,
 } from "./state-store.js";
 import {
@@ -85,10 +86,17 @@ export async function createMaxforgeMcpRuntime(
       status.port,
       catalog.project?.id
     );
-    const stateStore = stateFile
-      ? new JsonFilePatchStateStore(stateFile)
-      : undefined;
     const patchAdapter = new DslPatchAdapter(catalog.database);
+    const stateStore = stateFile
+      ? new JsonFilePatchStateStore(stateFile, {
+          legacyPath: legacyStateFileFromEnvironment(
+            environment,
+            status.port,
+            catalog.project?.id
+          ),
+          serializeGraph: (graph) => patchAdapter.serialize(graph),
+        })
+      : undefined;
     const service = new MaxforgePatchService(
       patchAdapter,
       bridge,

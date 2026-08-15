@@ -46,6 +46,11 @@ export interface PatchStateStore {
   save(state: PatchServiceState): void;
 }
 
+export interface JsonFilePatchStateStoreOptions {
+  readonly legacyPath?: string;
+  readonly serializeGraph?: (graph: PatchGraph) => string;
+}
+
 interface StateDocument {
   readonly schemaVersion: 2;
   readonly managedGraphs: readonly StateEntry<PatchGraph>[];
@@ -63,10 +68,19 @@ interface StateEntry<Value> {
 
 export class JsonFilePatchStateStore implements PatchStateStore {
   readonly description: string;
+  private readonly legacyPath?: string;
+  private readonly serializeGraph?: (graph: PatchGraph) => string;
 
-  constructor(readonly path: string) {
+  constructor(
+    readonly path: string,
+    options: JsonFilePatchStateStoreOptions = {}
+  ) {
     this.path = resolve(path);
     this.description = this.path;
+    this.legacyPath = options.legacyPath
+      ? resolve(options.legacyPath)
+      : undefined;
+    this.serializeGraph = options.serializeGraph;
   }
 
   load(): PatchServiceState | undefined {
@@ -74,7 +88,7 @@ export class JsonFilePatchStateStore implements PatchStateStore {
     try {
       source = readFileSync(this.path, "utf8");
     } catch (error) {
-      if (isMissingFileError(error)) return undefined;
+      if (isMissingFileError(error)) return this.loadLegacy();
       throw new Error(`Cannot read maxforge state ${this.path}: ${errorMessage(error)}`);
     }
 
@@ -85,6 +99,42 @@ export class JsonFilePatchStateStore implements PatchStateStore {
       throw new Error(`Invalid maxforge state JSON ${this.path}: ${errorMessage(error)}`);
     }
     return parseStateDocument(raw, this.path);
+  }
+
+  private loadLegacy(): PatchServiceState | undefined {
+    if (!this.legacyPath) return undefined;
+    let source: string;
+    try {
+      source = readFileSync(this.legacyPath, "utf8");
+    } catch (error) {
+      if (isMissingFileError(error)) return undefined;
+      throw new Error(
+        `Cannot read legacy maxforge state ${this.legacyPath}: ${errorMessage(error)}`
+      );
+    }
+    if (!this.serializeGraph) {
+      throw new Error(
+        `Cannot migrate legacy maxforge state ${this.legacyPath}: ` +
+        "no lossless graph serializer is configured"
+      );
+    }
+
+    try {
+      const raw = JSON.parse(source) as unknown;
+      const migrated = parseLegacyStateDocument(
+        raw,
+        this.legacyPath,
+        this.serializeGraph
+      );
+      this.save(migrated);
+      return migrated;
+    } catch (error) {
+      throw new Error(
+        `Cannot migrate legacy maxforge state ${this.legacyPath} to ` +
+        `${this.path}: ${errorMessage(error)}. Repair or archive the legacy ` +
+        "state before restarting maxforge."
+      );
+    }
   }
 
   save(state: PatchServiceState): void {
@@ -132,6 +182,24 @@ export function stateFileFromEnvironment(
     : join(homedir(), ".maxforge", `mcp-state-${port}-v2.json`);
 }
 
+export function legacyStateFileFromEnvironment(
+  environment: NodeJS.ProcessEnv,
+  port: number,
+  projectId?: string
+): string | undefined {
+  const configured = environment.MAXFORGE_STATE_FILE;
+  if (configured !== undefined && configured.length > 0) return undefined;
+  return projectId
+    ? join(
+      homedir(),
+      ".maxforge",
+      "projects",
+      projectId,
+      "mcp-state-v1.json"
+    )
+    : join(homedir(), ".maxforge", `mcp-state-${port}-v1.json`);
+}
+
 function parseStateDocument(raw: unknown, path: string): PatchServiceState {
   if (!isRecord(raw) || raw.schemaVersion !== 2) {
     throw new Error(`Invalid maxforge state ${path}: expected schemaVersion 2`);
@@ -150,6 +218,34 @@ function parseStateDocument(raw: unknown, path: string): PatchServiceState {
   };
 }
 
+function parseLegacyStateDocument(
+  raw: unknown,
+  path: string,
+  serializeGraph: (graph: PatchGraph) => string
+): PatchServiceState {
+  if (!isRecord(raw) || raw.schemaVersion !== 1) {
+    throw new Error(`Invalid maxforge state ${path}: expected schemaVersion 1`);
+  }
+  const managedGraphs = parseGraphEntries(raw.managedGraphs, "managedGraphs", path);
+  const intentGraphs = parseGraphEntries(raw.intentGraphs, "intentGraphs", path);
+  return {
+    managedGraphs,
+    intentGraphs,
+    workingSources: serializeGraphEntries(managedGraphs, serializeGraph),
+    intentSources: serializeGraphEntries(intentGraphs, serializeGraph),
+    baselineSnapshots: parseSnapshotEntries(
+      raw.baselineSnapshots,
+      "baselineSnapshots",
+      path
+    ),
+    pendingApplies: parseLegacyPendingEntries(
+      raw.pendingApplies,
+      path,
+      serializeGraph
+    ),
+  };
+}
+
 function parseSourceEntries(
   raw: unknown,
   field: string,
@@ -157,11 +253,20 @@ function parseSourceEntries(
 ): Map<string, string> {
   const entries = parseEntries(raw, field, path);
   return new Map(entries.map(({ target, value }) => {
-    if (typeof value !== "string" || value.length === 0) {
+    if (typeof value !== "string") {
       throw new Error(`Invalid maxforge state ${path}: ${field} source for ${target}`);
     }
     return [target, value];
   }));
+}
+
+function serializeGraphEntries(
+  graphs: ReadonlyMap<string, PatchGraph>,
+  serializeGraph: (graph: PatchGraph) => string
+): Map<string, string> {
+  return new Map(
+    [...graphs].map(([target, graph]) => [target, serializeGraph(graph)])
+  );
 }
 
 function parseGraphEntries(
@@ -231,6 +336,64 @@ function parsePendingEntries(
               ),
               nextSource: superseded.nextSource,
               intentSource: superseded.intentSource,
+            },
+          }
+        : {}),
+    }];
+  }));
+}
+
+function parseLegacyPendingEntries(
+  raw: unknown,
+  path: string,
+  serializeGraph: (graph: PatchGraph) => string
+): Map<string, PendingPatchApply> {
+  const entries = parseEntries(raw, "pendingApplies", path);
+  return new Map(entries.map(({ target, value }) => {
+    if (!isRecord(value) || typeof value.baseRevision !== "string") {
+      throw new Error(`Invalid pending apply state for ${target}`);
+    }
+    const nextGraph = parseGraph(value.nextGraph, `pending ${target} nextGraph`);
+    const intentGraph = parseGraph(value.intentGraph, `pending ${target} intentGraph`);
+    const recoveryBaseGraph = value.recoveryBaseGraph === undefined
+      ? undefined
+      : parseGraph(value.recoveryBaseGraph, `pending ${target} recoveryBaseGraph`);
+    const superseded = value.superseded;
+    if (
+      superseded !== undefined &&
+      (!isRecord(superseded) || typeof superseded.baseRevision !== "string")
+    ) {
+      throw new Error(`Invalid superseded pending apply state for ${target}`);
+    }
+    const supersededNextGraph = isRecord(superseded)
+      ? parseGraph(superseded.nextGraph, `pending ${target} superseded nextGraph`)
+      : undefined;
+    const supersededIntentGraph = isRecord(superseded)
+      ? parseGraph(superseded.intentGraph, `pending ${target} superseded intentGraph`)
+      : undefined;
+    return [target, {
+      baseRevision: value.baseRevision,
+      nextGraph,
+      intentGraph,
+      nextSource: serializeGraph(nextGraph),
+      intentSource: serializeGraph(intentGraph),
+      ...(recoveryBaseGraph
+        ? {
+            recoveryBaseGraph,
+            recoveryBaseSource: serializeGraph(recoveryBaseGraph),
+          }
+        : {}),
+      ...(isRecord(superseded) &&
+          typeof superseded.baseRevision === "string" &&
+          supersededNextGraph &&
+          supersededIntentGraph
+        ? {
+            superseded: {
+              baseRevision: superseded.baseRevision,
+              nextGraph: supersededNextGraph,
+              intentGraph: supersededIntentGraph,
+              nextSource: serializeGraph(supersededNextGraph),
+              intentSource: serializeGraph(supersededIntentGraph),
             },
           }
         : {}),
