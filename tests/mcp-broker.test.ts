@@ -163,8 +163,20 @@ describe("maxforge project broker", () => {
           pid: oldBroker.pid,
         },
       });
+      expect((await frontend.status()).broker).toMatchObject({
+        state: "unavailable",
+        code: "VERSION_MISMATCH",
+      });
+      expect(oldBroker.actions).toEqual(["mcp", "status", "status"]);
 
       await oldBroker.close();
+      expect((await frontend.status()).broker).toMatchObject({
+        state: "unavailable",
+        code: null,
+        brokerStatus: null,
+        error: expect.stringMatching(/ECONNREFUSED|connect/i),
+      });
+
       replacement = testBroker(descriptor);
       await replacement.start();
       await waitFor(() => replacement?.getStatus().state === "ready");
@@ -208,8 +220,58 @@ describe("maxforge project broker", () => {
         code: "UNAVAILABLE",
       });
       expect(status.broker.error).toMatch(/EADDRINUSE|address already in use/i);
+      expect(await client.toolNames()).toEqual(["maxforge_status"]);
     } finally {
       await new Promise<void>((resolveClose) => blocker.close(() => resolveClose()));
+    }
+  });
+
+  it("refreshes a startup failure after the failed broker is replaced", async () => {
+    const environment = await brokerEnvironment(5000);
+    const descriptor = await brokerDescriptorFromEnvironment(environment);
+    const blocker = createServer();
+    await listen(blocker, Number(environment.MAXFORGE_WS_PORT));
+    let replacement: MaxforgeBroker | undefined;
+
+    try {
+      const frontend = startMcp(environment);
+      await frontend.initialize();
+      expect((await frontend.status()).broker).toMatchObject({
+        state: "unavailable",
+        code: "UNAVAILABLE",
+        error: expect.stringMatching(/EADDRINUSE|address already in use/i),
+      });
+
+      await new Promise<void>((resolveClose) => blocker.close(() => resolveClose()));
+      await requestBroker(descriptor, "stop", true);
+      await waitFor(async () => {
+        try {
+          await requestBroker(descriptor, "status");
+          return false;
+        } catch (error) {
+          return (error as NodeJS.ErrnoException).code === "ECONNREFUSED";
+        }
+      });
+
+      replacement = testBroker(descriptor);
+      await replacement.start();
+      await waitFor(() => replacement?.getStatus().state === "ready");
+
+      expect((await frontend.status()).broker).toMatchObject({
+        state: "unavailable",
+        code: "RECONNECT_REQUIRED",
+        brokerStatus: {
+          brokerVersion: descriptor.clientVersion,
+          pid: replacement.getStatus().pid,
+          mcpClients: 0,
+        },
+      });
+      expect(await frontend.toolNames()).toEqual(["maxforge_status"]);
+    } finally {
+      if (blocker.listening) {
+        await new Promise<void>((resolveClose) => blocker.close(() => resolveClose()));
+      }
+      await replacement?.close().catch(() => undefined);
     }
   });
 
@@ -235,6 +297,7 @@ describe("maxforge project broker", () => {
     const restartStatus = JSON.parse(restarted.stdout);
     expect(restartStatus).toMatchObject({ state: "ready" });
     expect(restartStatus.pid).not.toBe(originalPid);
+    expect(await client.waitForExit()).toMatchObject({ code: 1, signal: null });
 
     const reconnected = startMcp(environment);
     await reconnected.initialize();
@@ -262,8 +325,9 @@ function testBroker(descriptor: BrokerDescriptor): MaxforgeBroker {
 
 async function startLegacyMismatchBroker(
   descriptor: BrokerDescriptor
-): Promise<{ pid: number; close: () => Promise<void> }> {
+): Promise<{ pid: number; actions: string[]; close: () => Promise<void> }> {
   const pid = process.pid + 100_000;
+  const actions: string[] = [];
   const status = {
     state: "ready" as const,
     brokerVersion: "older-broker",
@@ -288,6 +352,7 @@ async function startLegacyMismatchBroker(
       const newline = source.indexOf("\n");
       if (newline < 0) return;
       const request = JSON.parse(source.slice(0, newline)) as { action?: string };
+      actions.push(request.action ?? "missing");
       if (request.action === "status") {
         socket.end(`${JSON.stringify({
           protocol: descriptor.protocol,
@@ -314,6 +379,7 @@ async function startLegacyMismatchBroker(
   await listen(server, descriptor.port);
   return {
     pid,
+    actions,
     close: async () => {
       if (!server.listening) return;
       await new Promise<void>((resolveClose, reject) => {
@@ -369,12 +435,16 @@ class McpChild {
   private stderr = "";
   private nextId = 1;
   private closed = false;
+  private readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 
   constructor(environment: NodeJS.ProcessEnv) {
     this.child = spawn(process.execPath, [resolve("dist/mcp/bin.js")], {
       cwd: resolve("."),
       env: environment,
       stdio: ["pipe", "pipe", "pipe"],
+    });
+    this.exited = new Promise((resolveExit) => {
+      this.child.once("exit", (code, signal) => resolveExit({ code, signal }));
     });
     this.child.stdout.on("data", (chunk: Buffer) => this.receive(chunk));
     this.child.stderr.on("data", (chunk: Buffer) => {
@@ -405,6 +475,26 @@ class McpChild {
       arguments: {},
     });
     return response.result.structuredContent;
+  }
+
+  async toolNames(): Promise<string[]> {
+    const response = await this.request("tools/list", {});
+    return response.result.tools.map(({ name }: { name: string }) => name);
+  }
+
+  async waitForExit(timeoutMs = 5000): Promise<{
+    code: number | null;
+    signal: NodeJS.Signals | null;
+  }> {
+    return new Promise((resolveExit, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("Timed out waiting for MCP frontend exit"));
+      }, timeoutMs);
+      this.exited.then((result) => {
+        clearTimeout(timeout);
+        resolveExit(result);
+      });
+    });
   }
 
   request(method: string, params: Record<string, unknown>): Promise<Record<string, any>> {

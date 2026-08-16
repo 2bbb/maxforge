@@ -1,0 +1,228 @@
+#!/usr/bin/env node
+
+import { execFile, spawn } from "node:child_process";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual, promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const repository = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const temporaryRoot = await mkdtemp(join(tmpdir(), "maxforge-npm-package-"));
+
+try {
+  const packageJson = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
+  const packageLock = JSON.parse(await readFile(join(repository, "package-lock.json"), "utf8"));
+  assertEqual(packageLock.packages?.[""]?.version, packageJson.version, "package-lock version");
+  assertEqual(packageLock.packages?.[""]?.bin, packageJson.bin, "package-lock bins");
+
+  const packDirectory = join(temporaryRoot, "pack");
+  await mkdir(packDirectory);
+  await writeFile(join(temporaryRoot, "package.json"), JSON.stringify({ private: true }));
+  const { stdout: packOutput } = await execFileAsync("npm", [
+    "pack",
+    "--ignore-scripts",
+    "--json",
+    "--pack-destination",
+    packDirectory,
+  ], { cwd: repository });
+  const packResult = JSON.parse(packOutput)[0];
+  if (!packResult?.filename) throw new Error("npm pack did not report an archive");
+
+  const packedFiles = new Set(packResult.files.map(({ path }) => path));
+  for (const path of Object.values(packageJson.bin)) {
+    if (!packedFiles.has(path)) throw new Error(`npm package is missing bin target: ${path}`);
+  }
+
+  const archive = join(packDirectory, packResult.filename);
+  await execFileAsync("npm", [
+    "install",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    "--no-package-lock",
+    archive,
+  ], { cwd: temporaryRoot });
+
+  const binDirectory = join(temporaryRoot, "node_modules", ".bin");
+  const cli = installedBin(binDirectory, "maxforge");
+  const mcp = installedBin(binDirectory, "maxforge-mcp");
+  await assertExecutable(cli);
+  await assertExecutable(mcp);
+
+  const dslPath = join(temporaryRoot, "smoke.maxdsl");
+  await writeFile(dslPath, [
+    'patch "Package smoke" | "Installed CLI" | 320x240',
+    "btn = button",
+    "out = print maxforge_package_smoke",
+    "btn -> out",
+    "",
+  ].join("\n"));
+  const validation = await execFileAsync(cli, ["validate", dslPath], {
+    cwd: temporaryRoot,
+  });
+  if (validation.stdout.trim() !== "Validation passed." || validation.stderr) {
+    throw new Error(`installed CLI validation failed: ${validation.stderr || validation.stdout}`);
+  }
+
+  const environment = await mcpEnvironment(temporaryRoot);
+  await initializeMcp(mcp, environment);
+  await stopBroker(cli, environment);
+
+  console.log(`Verified installed maxforge npm package ${packageJson.version}.`);
+} finally {
+  await rm(temporaryRoot, { recursive: true, force: true });
+}
+
+function installedBin(directory, name) {
+  return join(directory, process.platform === "win32" ? `${name}.cmd` : name);
+}
+
+async function assertExecutable(path) {
+  const metadata = await stat(path);
+  if (!metadata.isFile()) throw new Error(`npm bin is not a file: ${path}`);
+  if (process.platform !== "win32") {
+    await chmod(path, metadata.mode | 0o100);
+  }
+}
+
+function assertEqual(actual, expected, label) {
+  if (!isDeepStrictEqual(actual, expected)) {
+    throw new Error(`${label} does not match package.json`);
+  }
+}
+
+async function mcpEnvironment(root) {
+  const configPath = join(root, "maxforge.config.json");
+  await writeFile(configPath, JSON.stringify({
+    schemaVersion: 1,
+    project: { id: `npm_package_smoke_${process.pid}` },
+  }));
+  return {
+    ...process.env,
+    MAXFORGE_CONFIG: configPath,
+    MAXFORGE_BROKER_PORT: String(await freePort()),
+    MAXFORGE_WS_PORT: String(await freePort()),
+    MAXFORGE_BROKER_IDLE_MS: "100",
+    MAXFORGE_BROKER_START_TIMEOUT_MS: "5000",
+    MAXFORGE_BROKER_DIR: join(root, "broker"),
+    MAXFORGE_EDIT_HISTORY_DIR: join(root, "history"),
+    MAXFORGE_STATE_FILE: join(root, "state.json"),
+  };
+}
+
+function initializeMcp(executable, environment) {
+  return new Promise((resolveInitialize, reject) => {
+    const child = spawn(executable, [], {
+      cwd: temporaryRoot,
+      env: environment,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let response;
+    let settled = false;
+    const timeout = setTimeout(() => finish(new Error(
+      `installed maxforge-mcp timed out; stderr=${stderr.trim()}`
+    )), 10_000);
+
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (!child.killed && child.exitCode === null) child.kill("SIGTERM");
+      if (error) reject(error);
+      else resolveInitialize();
+    };
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+      for (;;) {
+        const newline = stdout.indexOf("\n");
+        if (newline < 0) break;
+        const line = stdout.slice(0, newline).trim();
+        stdout = stdout.slice(newline + 1);
+        if (!line) continue;
+        try {
+          const message = JSON.parse(line);
+          if (message.id === 1) {
+            response = message;
+            child.stdin.end();
+          }
+        } catch {
+          finish(new Error(`installed maxforge-mcp polluted stdout: ${line}`));
+        }
+      }
+    });
+    child.once("error", finish);
+    child.once("exit", (code, signal) => {
+      if (!response) {
+        finish(new Error(
+          `installed maxforge-mcp exited before initialize ` +
+          `(code=${String(code)}, signal=${String(signal)}, stderr=${stderr.trim()})`
+        ));
+        return;
+      }
+      const serverInfo = response.result?.serverInfo;
+      if (response.jsonrpc !== "2.0" || serverInfo?.name !== "maxforge") {
+        finish(new Error(`invalid MCP initialize response: ${JSON.stringify(response)}`));
+        return;
+      }
+      if (code !== 0) {
+        finish(new Error(`installed maxforge-mcp exited with code ${String(code)}`));
+        return;
+      }
+      finish();
+    });
+
+    child.stdin.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "maxforge-package-smoke", version: "1.0.0" },
+      },
+    })}\n`);
+  });
+}
+
+async function stopBroker(cli, environment) {
+  try {
+    await execFileAsync(cli, ["broker", "stop", "--config", environment.MAXFORGE_CONFIG], {
+      cwd: temporaryRoot,
+      env: environment,
+    });
+  } catch (error) {
+    if (!String(error?.stderr ?? error).includes("ECONNREFUSED")) throw error;
+  }
+}
+
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Could not reserve a localhost test port");
+  }
+  await new Promise((resolveClose) => server.close(resolveClose));
+  return address.port;
+}

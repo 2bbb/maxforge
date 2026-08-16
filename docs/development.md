@@ -21,13 +21,18 @@ npm install
 npm run build
 npm test
 npm run test:coverage
+npm run test:package
 npm run docs:check
 npm run pack:dry-run
 ```
 
 The coverage command enforces the thresholds configured in
 `vitest.config.ts`. CLI and executable-entrypoint tests also spawn built files
-as subprocesses.
+as subprocesses. `test:package` packs the repository, installs the tarball into
+a clean temporary project, validates DSL through the installed `maxforge` bin,
+and initializes MCP through the installed `maxforge-mcp` bin. It therefore
+catches package file-list, npm bin-link, and runtime-dependency failures that a
+source-tree test cannot.
 
 ## Native build and unit test
 
