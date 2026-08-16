@@ -42,6 +42,14 @@ try {
   for (const path of Object.values(packageJson.bin)) {
     if (!packedFiles.has(path)) throw new Error(`npm package is missing bin target: ${path}`);
   }
+  for (const path of [
+    "skills/maxforge/SKILL.md",
+    "skills/maxforge/agents/openai.yaml",
+    "skills/maxforge-mcp/SKILL.md",
+    "skills/maxforge-mcp/agents/openai.yaml",
+  ]) {
+    if (!packedFiles.has(path)) throw new Error(`npm package is missing skill artifact: ${path}`);
+  }
 
   const archive = join(packDirectory, packResult.filename);
   await execFileAsync("npm", [

@@ -8,9 +8,22 @@ description: Operate and collaboratively edit live Max/MSP patches through the m
 Control a live Max patch through `maxforge-mcp` and the native `maxforge.sync`
 external. Treat the DSL as complete desired state and preserve revision safety.
 
-## Required tools
+## Tool availability and setup
 
-Require these MCP tools:
+For Codex, a typical stdio entry is:
+
+```toml
+[mcp_servers.maxforge]
+command = "npx"
+args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
+```
+
+This starts only the Node.js side. Max must separately load the matching native
+`maxforge.sync` external in a controller patch. The skill itself installs
+neither component.
+
+Require `maxforge_help` and `maxforge_status` for diagnosis. A normal mutation
+session must expose all of these tools:
 
 - `maxforge_help`
 - `maxforge_status`
@@ -34,10 +47,14 @@ Require these MCP tools:
 - `maxforge_compile_plan`
 - `maxforge_apply_dsl`
 
-If they are unavailable, stop. Explain that the MCP client must launch
-`maxforge-mcp` and Max must load a patch containing `maxforge.sync`. Do not
-imitate this workflow with screenshots, accessibility automation, Max
-JavaScript, `node.script`, or invented `thispatcher` messages.
+If only `maxforge_help` and `maxforge_status` are available, inspect status
+before giving setup advice. `VERSION_MISMATCH` and `RECONNECT_REQUIRED` are
+intentional diagnostic-only states, not evidence that the command is missing.
+If status is unavailable, stop and verify the stdio entry above. If the full
+inventory is available but no patch is registered, Max must load a controller
+patch containing `maxforge.sync`. Do not imitate this workflow with screenshots,
+accessibility automation, Max JavaScript, `node.script`, or invented
+`thispatcher` messages.
 
 ## Live mutation workflow
 
