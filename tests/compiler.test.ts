@@ -45,10 +45,7 @@ describe("snapshot", () => {
 // Public examples
 // ---------------------------------------------------------------------------
 describe("examples", () => {
-  const examples = fs
-    .readdirSync(examplesDir)
-    .filter((name) => name.endsWith(".maxdsl"))
-    .sort();
+  const examples = findFiles(examplesDir, ".maxdsl");
 
   for (const name of examples) {
     it(`compiles example: ${name}`, () => {
@@ -60,31 +57,18 @@ describe("examples", () => {
       expect(result.success).toBe(true);
     });
   }
-
-  it("compiles the Max node.script demo harness with unknown Max runtime objects", () => {
-    const source = fs.readFileSync(
-      path.join(examplesDir, "max_node_script", "maxforge_node_script_demo.maxdsl"),
-      "utf-8"
-    );
-    const { ast, errors } = parse(source);
-    expect(errors).toHaveLength(0);
-
-    const result = compile(ast, db, true);
-    expect(result.success).toBe(true);
-  });
-
-  it("compiles the Max node.script runtime-generated DSL with unknown print object", () => {
-    const source = fs.readFileSync(
-      path.join(examplesDir, "max_node_script", "generated_patch.maxdsl"),
-      "utf-8"
-    );
-    const { ast, errors } = parse(source);
-    expect(errors).toHaveLength(0);
-
-    const result = compile(ast, db, true);
-    expect(result.success).toBe(true);
-  });
 });
+
+function findFiles(root: string, extension: string, prefix = ""): string[] {
+  return fs.readdirSync(path.join(root, prefix), { withFileTypes: true })
+    .flatMap((entry) => {
+      const relative = path.join(prefix, entry.name);
+      return entry.isDirectory()
+        ? findFiles(root, extension, relative)
+        : entry.name.endsWith(extension) ? [relative] : [];
+    })
+    .sort();
+}
 
 // ---------------------------------------------------------------------------
 // Round-trip (deep property comparison)

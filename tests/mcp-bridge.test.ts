@@ -88,6 +88,53 @@ describe("MaxforgeWebSocketBridge", () => {
       .toEqual(["patch-a", "patch-b"]);
   });
 
+  it("cleans up a timed-out apply and ignores its late acknowledgement", async () => {
+    const bridge = createBridge(undefined, 30);
+    const status = await bridge.start();
+    const client = await connect(status.port);
+    await register(bridge, client, registration("patch-a", "voices", false));
+    const requestPromise = new Promise<{
+      requestId: string;
+      patcherId: string;
+      plan: ReturnType<typeof diffPatchGraphs>;
+    }>((resolveRequest) => {
+      client.once("message", (data) => resolveRequest(JSON.parse(data.toString())));
+    });
+    const plan = diffPatchGraphs(
+      createEmptyPatchGraph("voices"),
+      createEmptyPatchGraph("voices")
+    );
+    const applying = bridge.apply("patch-a", plan);
+    const request = await requestPromise;
+
+    await expect(applying).rejects.toThrow("Timed out waiting for Max patch");
+    expect(bridge.getPendingOperationCount()).toBe(0);
+    expect(bridge.getLiveRevision("patch-a", "voices")).toBeNull();
+
+    client.send(JSON.stringify({
+      type: "maxforge.applied",
+      requestId: request.requestId,
+      patcherId: request.patcherId,
+      scope: request.plan.scope,
+      revision: request.plan.targetRevision,
+      operations: request.plan.operations.length,
+    }));
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+    expect(bridge.getLiveRevision("patch-a", "voices")).toBeNull();
+
+    client.once("message", (data) => {
+      const inspection = JSON.parse(data.toString());
+      client.send(JSON.stringify({
+        ...snapshotEvent(inspection.requestId),
+        patcherId: inspection.patcherId,
+        scope: inspection.scope,
+      }));
+    });
+    await expect(bridge.inspect("patch-a", "voices")).resolves.toMatchObject({
+      type: "maxforge.snapshot",
+    });
+  });
+
   it("correlates errors and inspections per patch", async () => {
     const bridge = createBridge();
     const status = await bridge.start();
@@ -812,11 +859,12 @@ describe("parseBridgeEvent", () => {
 });
 
 function createBridge(
-  editHistoryStore?: EditHistoryStore
+  editHistoryStore?: EditHistoryStore,
+  applyTimeoutMs = 1000
 ): MaxforgeWebSocketBridge {
   const bridge = new MaxforgeWebSocketBridge({
     port: 0,
-    applyTimeoutMs: 1000,
+    applyTimeoutMs,
     expectedExternalVersion: "0.4.0",
   }, editHistoryStore);
   bridges.push(bridge);

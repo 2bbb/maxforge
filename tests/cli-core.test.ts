@@ -117,6 +117,61 @@ describe("maxforge core CLI commands", () => {
     });
   });
 
+  it("requires --allow-unknown instead of silently accepting unknown objects", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "unknown.maxdsl");
+    const output = join(root, "unknown.maxpat");
+    await writeFile(input, "custom = vendor.not_installed 123\n");
+
+    await expect(execFileAsync(process.execPath, [
+      cliPath,
+      "compile",
+      input,
+      "-o",
+      output,
+    ])).rejects.toMatchObject({ stderr: expect.stringContaining("[E003]") });
+
+    await execFileAsync(process.execPath, [
+      cliPath,
+      "compile",
+      input,
+      "--allow-unknown",
+      "-o",
+      output,
+    ]);
+    const patch = JSON.parse(await readFile(output, "utf8"));
+    expect(patch.patcher.boxes).toEqual([
+      expect.objectContaining({
+        box: expect.objectContaining({ text: "vendor.not_installed 123" }),
+      }),
+    ]);
+  });
+
+  it("builds a compact differential plan from --current DSL", async () => {
+    const root = await temporaryDirectory();
+    const current = join(root, "current.maxdsl");
+    const desired = join(root, "desired.maxdsl");
+    await writeFile(current, "source = button\n");
+    await writeFile(desired, "source = button\nsink = print cli_diff\nsource -> sink\n");
+
+    const { stdout } = await execFileAsync(process.execPath, [
+      cliPath,
+      "plan",
+      desired,
+      "--current",
+      current,
+      "--scope",
+      "cli_diff",
+      "--compact",
+    ]);
+    expect(stdout.trim().split("\n")).toHaveLength(1);
+    const plan = JSON.parse(stdout);
+    expect(plan.operations).toEqual([
+      expect.objectContaining({ op: "create", box: expect.objectContaining({ id: "obj-sink" }) }),
+      expect.objectContaining({ op: "connect" }),
+    ]);
+  });
+
   it("rejects ambiguous output and unknown command options", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "source.maxdsl");

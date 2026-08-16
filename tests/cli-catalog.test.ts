@@ -71,6 +71,22 @@ describe("maxforge catalog CLI", () => {
       }),
     ]);
   });
+
+  it.each(["0", "1001", "not-a-number"])(
+    "rejects invalid --limit value %s",
+    async (limit) => {
+      const root = await temporaryDirectory();
+      await expect(execFileAsync(process.execPath, [
+        cliPath,
+        "catalog",
+        "cycle~",
+        "--limit",
+        limit,
+      ], { cwd: root })).rejects.toMatchObject({
+        stderr: expect.stringContaining("--limit must be an integer from 1 to 1000"),
+      });
+    }
+  );
 });
 
 async function temporaryDirectory(): Promise<string> {

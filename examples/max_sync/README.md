@@ -15,9 +15,8 @@ npm run build
 node dist/cli/index.js plan examples/max_sync/managed_patch.maxdsl \
   --scope sync_demo \
   --compact \
-  -o examples/max_sync/managed_plan.json
+  -o help/managed_plan.json
 node dist/cli/index.js compile examples/max_sync/maxforge_sync_demo.maxdsl \
-  --allow-unknown \
   -o examples/max_sync/maxforge_sync_demo.maxpat
 ```
 
@@ -34,7 +33,7 @@ directory to Max's file preferences.
 
 The plan starts from an empty `sync_demo` scope. Click **apply plan** again to
 confirm it is rejected because its `baseRevision` is stale. Use **import plan**
-manually after regenerating `managed_plan.json`.
+after regenerating `help/managed_plan.json`.
 
 ## Safety boundary
 
