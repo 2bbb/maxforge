@@ -15,12 +15,30 @@ For Codex, a typical stdio entry is:
 ```toml
 [mcp_servers.maxforge]
 command = "npx"
-args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
+args = ["-y", "--package=maxforge@0.4.4", "maxforge-mcp"]
 ```
 
 This starts only the Node.js side. Max must separately load the matching native
 `maxforge.sync` external in a controller patch. The skill itself installs
-neither component.
+neither component. Pin the npm package to the exact version embedded in the
+installed external. Use `@latest` only while deliberately updating both sides;
+otherwise it can create a version mismatch without changing the Max package.
+
+The detached broker can outlive the frontend that started it. During an update,
+inspect and restart it with the package version being installed:
+
+```bash
+npx -y --package=maxforge@0.4.4 maxforge broker status \
+  --config /absolute/path/maxforge.config.json
+npx -y --package=maxforge@0.4.4 maxforge broker restart \
+  --config /absolute/path/maxforge.config.json
+```
+
+`restart` refuses connected MCP/Max clients and pending native operations. Close
+clients for a non-disruptive update. Use `--force` only after the human accepts
+disconnection; it still cannot interrupt a pending operation. After replacement,
+reconnect this MCP server entry to negotiate the full tool inventory. Do not
+restart the outer Agent host merely to replace the broker.
 
 Require `maxforge_help` and `maxforge_status` for diagnosis. A normal mutation
 session must expose all of these tools:

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+const packageVersion = JSON.parse(source("package.json")).version as string;
+
 function source(relativePath: string): string {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 }
@@ -55,6 +57,15 @@ describe("agent skills", () => {
 
     expect(new Set(documented).size).toBe(documented.length);
     expect(documented.sort()).toEqual(registered.sort());
+  });
+
+  it("pins live-control commands to the matching package version", () => {
+    const skill = source("skills/maxforge-mcp/SKILL.md");
+
+    expect(skill).toContain(`--package=maxforge@${packageVersion}`);
+    expect(skill).not.toContain("--package=maxforge@latest");
+    expect(skill).toContain("maxforge broker status");
+    expect(skill).toContain("maxforge broker restart");
   });
 
   it("rejects known fabricated Max signal object names in agent guidance", () => {
