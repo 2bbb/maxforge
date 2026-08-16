@@ -1,214 +1,143 @@
-# Manual Max/MCP test checklist
+# Max/MCP 手動テストチェックリスト
 
-Run this checklist only after CI passes. It covers behavior that source-level
-tests cannot prove. Do not use an important patch: several cases deliberately
-restart processes, create files, and mutate patchers.
+このチェックリストは、CIが通過した後にだけ実行する。ソースレベルのテストでは証明できない挙動を対象とする。プロセスの再起動、ファイル作成、patcherの変更を意図的に行うため、重要なpatchをテスト対象にしてはいけない。
 
-## Test record
+## テスト記録
 
-Copy this block into the release/issue record before testing:
+テスト開始前に、次のブロックをreleaseまたはissueの記録へコピーする。
 
 ```text
-Date:
-Tester:
-Commit/tag:
+実施日:
+実施者:
+commit/tag:
 npm maxforge version:
 maxforge.sync externalVersion:
 Max version:
 MCP host/version:
 Node/npm versions:
-OS and architecture:
+OS/architecture:
 Max package/external path:
-MAXFORGE_CONFIG path and project.id:
-Result: PASS / FAIL / BLOCKED
-Failures and evidence links:
+MAXFORGE_CONFIG path/project.id:
+結果: PASS / FAIL / BLOCKED
+失敗内容と証跡へのリンク:
 ```
 
-For each case, record the target `patcherId`, scope, broker PID, structure token
-or revision where relevant. A screenshot is evidence only for UI/security
-behavior; use structured MCP output and Max Console text for protocol failures.
+各テストでは、必要に応じて対象の`patcherId`、scope、broker PID、structure token、revisionを記録する。スクリーンショットはUIやOS security動作の証跡にはなるが、protocol failureの証跡にはならない。protocol failureにはstructured MCP outputとMax Consoleのテキストを使う。
 
 ## Release gate
 
-For an ordinary release candidate, run H01–H06 and H09 on macOS. Run H07 when
-LAN behavior changes, H08 when catalog/config behavior changes, and the Windows
-part of H09 when the native external, packaging, or CI toolchain changes.
+通常のrelease candidateでは、macOSでH01〜H06とH09を実行する。LAN関連を変更した場合はH07、catalog/config関連を変更した場合はH08、native external・package構成・CI toolchainを変更した場合はH09のWindows項目も実行する。
 
-### H01 — Native external discovery and registration
+### H01 — Native externalの検出と登録
 
-**Requires:** Max, the release-candidate Max package, and matching npm package.
+**前提:** Max、release candidateのMax package、それとversionが一致するnpm package。
 
-1. Remove or rename duplicate development copies of `maxforge.sync` from Max
-   search paths; otherwise this test proves nothing about the intended binary.
-2. Start Max and open `maxforge.sync.maxhelp` from the installed package.
-3. Confirm the object is not missing and the Max Console contains no red load,
-   class, attribute, WebSocket, or registration error.
-4. Start/reconnect the MCP entry and call `maxforge_status`, then
-   `maxforge_list_patches`.
-5. Confirm the help patch is registered, `externalVersion` equals the npm
-   runtime's expected version, and `versionCompatible` is `true`.
+1. Maxのsearch pathから、開発中のものを含む重複した`maxforge.sync`を削除するか一時的に名前を変える。重複を放置した場合、意図したbinaryをテストした証明にならない。
+2. Maxを起動し、installしたpackageから`maxforge.sync.maxhelp`を開く。
+3. objectがmissingになっていないこと、Max Consoleに赤色のload、class、attribute、WebSocket、registration errorがないことを確認する。
+4. MCP entryを起動または再接続し、`maxforge_status`、続いて`maxforge_list_patches`を呼ぶ。
+5. help patchが登録され、`externalVersion`がnpm runtimeのexpected versionと一致し、`versionCompatible`が`true`であることを確認する。
 
-**Pass:** the intended binary loads and registers without a Max error.
+**合格条件:** 意図したbinaryがMax errorなしでload・registerされる。
 
-### H02 — Human edit followed by differential agent sync
+### H02 — 人間による編集後のAgent差分sync
 
-**Requires:** a disposable registered patch containing at least three connected
-objects.
+**前提:** 3個以上の接続済みobjectを含む、破棄可能なregistered patch。
 
-1. Inspect the target at summary and full detail; retain its structure token.
-2. Through the Max UI, move one managed object, add a `button`, and rewire one
-   existing patch cord. Do not tell the agent the exact edits.
-3. Ask the agent to inspect/review the live changes and explain them from MCP
-   state, not from the screen.
-4. Confirm `maxforge_get_live_edit_history` and
-   `maxforge_review_live_changes` describe the move, addition, and rewire as
-   evidence, including any interpretation risk.
-5. Adopt the accepted managed edits using the exact current structure token.
-6. Ask the agent to add one more object and connection through complete desired
-   DSL, preview the plan, then apply it.
-7. Inspect again. Confirm the three human edits remain and only the reviewed
-   agent delta was added.
+1. 対象をsummary detailとfull detailでinspectし、structure tokenを記録する。
+2. Max UI上で、managed objectを1個移動し、`button`を1個追加し、既存patch cordを1本つなぎ替える。何を変更したかはAgentへ伝えない。
+3. Agentにlive changesのinspect/reviewと変更内容の説明を依頼する。画面ではなくMCP stateから説明させる。
+4. `maxforge_get_live_edit_history`と`maxforge_review_live_changes`が、move、addition、rewireをevidenceとして説明し、必要なinterpretation riskも返していることを確認する。
+5. 現在の正確なstructure tokenを使い、受け入れるmanaged editsをadoptする。
+6. Agentにcomplete desired DSLを使ってobjectとconnectionをもう1組追加させる。planをpreviewしてからapplyする。
+7. 再度inspectする。3つの人間編集がすべて残り、reviewしたAgent差分だけが追加されていることを確認する。
 
-**Fail immediately if:** the agent overwrites unreviewed edits, relies on window
-appearance, uses a stale token, or treats edit-history inference as human intent.
+**即時失敗条件:** Agentがreviewしていない編集を上書きする、windowの見た目に依存する、stale tokenを使う、またはedit-historyの推論を人間の意図として断定する。
 
-### H03 — Create, save, close, and reopen a top-level patch
+### H03 — Top-level patchの作成、保存、close、reopen
 
-**Requires:** exactly one controller-capable registered patch and a writable
-temporary directory.
+**前提:** controller capabilityを持つregistered patchが1個だけ存在し、書き込み可能なtemporary directoryがあること。
 
-1. Create a new patch with a unique `patcherId`, scope, and title using
-   `maxforge_create_patch`.
-2. Confirm it registers as a separate target containing one `maxforge.sync`.
-3. Apply a small desired DSL containing `button`, `counter`, and `print`, then
-   verify connections by inspection.
-4. Save it to an absolute temporary `.maxpat` path with
-   `maxforge_save_patch`; confirm Max reports a clean patch and the file exists.
-5. Close it through `maxforge_close_patch` and confirm it disappears from the
-   target list.
-6. Reopen the saved file normally in Max. Because it already contains
-   `maxforge.sync`, do **not** pass it to `maxforge_open_patch`. Confirm it
-   registers itself and retains the expected graph and saved path.
-7. Separately create a plain `.maxpat` with no sync object, open it through
-   `maxforge_open_patch`, and confirm Maxforge injects exactly one sync object,
-   marks the patch dirty, and registers it as a distinct target.
+1. 一意な`patcherId`、scope、titleを指定し、`maxforge_create_patch`で新規patchを作成する。
+2. そのpatchが、`maxforge.sync`を1個だけ含む独立したtargetとしてregisterされることを確認する。
+3. `button`、`counter`、`print`を含む小さなdesired DSLをapplyし、connectionをinspectionで検証する。
+4. `maxforge_save_patch`でabsolute temporary `.maxpat` pathへ保存する。Maxがclean patchを報告し、ファイルが存在することを確認する。
+5. `maxforge_close_patch`でcloseし、target listから消えることを確認する。
+6. 保存したファイルをMaxから通常の方法で開き直す。すでに`maxforge.sync`を含むため、`maxforge_open_patch`へ渡してはいけない。自動的にregisterされ、期待するgraphとsaved pathを保持していることを確認する。
+7. 別途、sync objectを含まないplain `.maxpat`を作る。それを`maxforge_open_patch`で開き、Maxforgeがsync objectを正確に1個だけinjectし、patchをdirtyにし、独立したtargetとしてregisterすることを確認する。
 
-**Pass:** target identity and graph survive the full file lifecycle without a
-duplicate sync object or ambiguous window selection.
+**合格条件:** duplicate sync objectや曖昧なwindow選択を起こさず、target identityとgraphがfile lifecycle全体で維持される。
 
-### H04 — Persistence across frontend, broker, Max, and MCP-host restarts
+### H04 — Frontend、broker、Max、MCP hostの再起動と永続化
 
-**Requires:** the saved H03 patch and a stable `project.id`.
+**前提:** H03で保存したpatchと、固定された`project.id`。
 
-1. Record broker PID, current DSL, graph revision, edit-history persistence
-   status, and saved path.
-2. Restart only the MCP entry. Confirm it attaches to the same broker PID and
-   the target remains inspectable.
-3. Close all MCP entries and Max clients; wait past a deliberately short
-   `MAXFORGE_BROKER_IDLE_MS`. Confirm `maxforge broker status` can no longer
-   connect.
-4. Reopen the patch and MCP entry. Confirm a new broker owns the project and
-   persisted source/baseline/history are recovered without a writer-lock error.
-5. Quit Max without stopping the broker, reopen Max and the saved patch, and
-   confirm native retry registration restores inspection.
-6. Restart the outer MCP host (for example Codex) once. Confirm its configured
-   Maxforge entry initializes and can list the same target.
+1. broker PID、current DSL、graph revision、edit-history persistence status、saved pathを記録する。
+2. MCP entryだけを再起動する。同じbroker PIDへattachし、targetを引き続きinspectできることを確認する。
+3. すべてのMCP entryとMax clientを閉じ、意図的に短く設定した`MAXFORGE_BROKER_IDLE_MS`を超えるまで待つ。`maxforge broker status`が接続できなくなることを確認する。
+4. patchとMCP entryを開き直す。新しいbrokerがprojectを所有し、writer-lock errorなしで保存済みsource、baseline、historyを復元することを確認する。
+5. brokerを停止せずMaxを終了し、Maxと保存済みpatchを開き直す。native retry registrationによってinspectionが復旧することを確認する。
+6. outer MCP host（例: Codex）を一度再起動する。設定済みMaxforge entryがinitializeし、同じtargetをlistできることを確認する。
 
-**Pass:** each restart has the documented ownership behavior; no stale target,
-duplicate owner, or silent loss of persisted state appears.
+**合格条件:** 各再起動がdocumented ownership behaviorに従い、stale target、duplicate owner、永続stateのsilent lossが発生しない。
 
-### H05 — Package-version mismatch and broker upgrade
+### H05 — Package version mismatchとbroker upgrade
 
-**Requires:** two Maxforge npm versions and no valuable pending operation.
+**前提:** 2種類のMaxforge npm versionを用意し、破棄できないpending operationが存在しないこと。
 
-1. Start a broker with the older package, then start the MCP entry with the
-   newer package for the same project.
-2. Confirm MCP initialization succeeds in diagnostic mode, only
-   `maxforge_status` is exposed, and it reports `VERSION_MISMATCH` with both
-   versions and the old broker PID.
-3. Stop/restart the broker with the intended package. Use `--force` only after
-   confirming that disconnecting clients is acceptable.
-4. Call status again from the still-open diagnostic entry. Confirm it reports
-   `RECONNECT_REQUIRED`, the replacement PID/version, and still does not expose
-   mutation tools.
-5. Reconnect that MCP entry without restarting the outer host. Confirm the full
-   tool set appears and normal patch listing works.
+1. 古いpackageでbrokerを起動し、同じprojectに対して新しいpackageのMCP entryを起動する。
+2. MCP initializationがdiagnostic modeで成功し、`maxforge_status`だけを公開し、両方のversionと古いbroker PIDを含む`VERSION_MISMATCH`を報告することを確認する。
+3. 使用するpackage versionでbrokerをstop/restartする。`--force`は、clientを切断してよいことを確認した場合だけ使う。
+4. 開いたままのdiagnostic entryからstatusを再度呼ぶ。replacementのPID/versionを含む`RECONNECT_REQUIRED`を報告し、mutation toolは依然として公開しないことを確認する。
+5. outer hostを再起動せず、そのMCP entryだけを再接続する。full tool setが現れ、通常のpatch listingが動作することを確認する。
 
-**Pass:** mismatch never exposes mutation tools, status is live rather than
-stale, and reconnect—not a full host restart—completes the upgrade.
+**合格条件:** version mismatch中はmutation toolを公開せず、statusはcached resultではなくlive stateを返し、host全体ではなくMCP entryのreconnectだけでupgradeが完了する。
 
-### H06 — Max error-channel behavior
+### H06 — Max error channel
 
-1. In a disposable patch instantiate
-   `maxforge.sync @host 192.0.2.1` without a token. A non-loopback host without
-   `@token` is deliberately rejected before a network connection is attempted.
-2. Confirm the message appears in the Max Console with error severity (red),
-   not as an ordinary `post` line.
-3. Restore valid settings and confirm subsequent registration succeeds without
-   restarting Max unless the error explicitly requires it.
+1. 破棄可能なpatchで、tokenを指定せずに`maxforge.sync @host 192.0.2.1`をinstantiateする。tokenなしのnon-loopback hostはnetwork connection前に意図的にrejectされる。
+2. messageが通常の`post`ではなく、error severity（赤色）でMax Consoleへ表示されることを確認する。
+3. 有効な設定へ戻し、errorが明示的に要求しない限りMaxを再起動せず、その後のregistrationが成功することを確認する。
 
-**Pass:** actionable native failures use Max's error channel and recovery is
-observable.
+**合格条件:** 対処可能なnative failureがMaxのerror channelを使い、recoveryを観測できる。
 
-### H07 — Authenticated LAN operation
+### H07 — 認証付きLAN操作
 
-**Requires:** two machines on a trusted LAN and firewall access to the selected
-port.
+**前提:** trusted LAN上の2台のmachineと、選択したportへのfirewall access。
 
-1. On the broker machine, set a human-chosen `MAXFORGE_WS_TOKEN`; confirm the
-   effective bind is non-loopback (or the explicitly configured LAN address).
-2. On the Max machine, configure `maxforge.sync` with the broker machine's LAN
-   address, port, and matching token.
-3. Confirm registration, inspect, one previewed apply, and acknowledgement.
-4. Change the Max-side token to an incorrect value. Confirm registration and
-   mutation are rejected without leaking the configured token in logs.
-5. Remove the token while requesting a non-loopback bind. Confirm startup is
-   rejected. Do not expose this plaintext WebSocket directly to the Internet.
+1. broker machineで、人間が決めた`MAXFORGE_WS_TOKEN`を設定する。effective bindがnon-loopback、または明示指定したLAN addressであることを確認する。
+2. Max machineの`maxforge.sync`に、broker machineのLAN address、port、一致するtokenを設定する。
+3. registration、inspection、preview済みapplyを1回、acknowledgementまで確認する。
+4. Max側tokenを誤った値へ変更する。設定したtokenをlogへ漏らさず、registrationとmutationがrejectされることを確認する。
+5. non-loopback bindを要求したままtokenを削除する。startupがrejectされることを確認する。このplaintext WebSocketをInternetへ直接公開してはいけない。
 
-**Pass:** only the matching token controls the patch across the LAN and secrets
-are absent from evidence.
+**合格条件:** 一致するtokenだけがLAN越しにpatchを制御でき、証跡にsecretが含まれない。
 
-### H08 — Project external and abstraction catalog
+### H08 — Project externalとabstraction catalog
 
-1. Configure one custom external and one abstraction in the project catalog,
-   including accurate `ports.mode`/rules and artifact/search paths.
-2. Start MCP with the absolute `MAXFORGE_CONFIG` path and verify both entries via
-   `maxforge_catalog`.
-3. Instantiate both through desired DSL in Max and verify actual inlet/outlet
-   topology.
-4. Change catalog metadata, call `maxforge_reload_catalog`, and verify the digest
-   changes without dropping the Max registration.
-5. Remove the actual Max artifact while leaving the declaration. Confirm the
-   compiler catalog still lists it but Max reports the runtime load failure.
+1. 正確な`ports.mode`/rules、artifact/search pathsを含め、custom externalを1個、abstractionを1個project catalogへ設定する。
+2. absolute `MAXFORGE_CONFIG` pathを指定してMCPを起動し、`maxforge_catalog`で両方のentryを確認する。
+3. desired DSLを使ってMax上に両方をinstantiateし、実際のinlet/outlet topologyを確認する。
+4. catalog metadataを変更し、`maxforge_reload_catalog`を呼ぶ。Max registrationを切断せずdigestが変わることを確認する。
+5. declarationを残したまま実際のMax artifactを取り除く。compiler catalogには表示され続ける一方、Maxはruntime load failureを報告することを確認する。
 
-**Pass:** declared metadata controls compilation while runtime availability is
-correctly treated as a separate Max search-path concern.
+**合格条件:** declaration metadataはcompileを制御し、runtime availabilityは別のMax search-path問題として正しく扱われる。
 
-### H09 — Published npm and downloadable Max package
+### H09 — 公開済みnpm packageとdownload可能なMax package
 
-1. In a clean temporary directory, invoke the exact published version with
-   `npx -y --package=maxforge@<version> maxforge --help`, then initialize
-   `npx -y --package=maxforge@<version> maxforge-mcp` from an MCP test client.
-2. Confirm MCP returns an initialize response when invoked through npm's bin
-   link, not only through `node dist/...`.
-3. Download `maxforge.zip` from the matching GitHub release and verify its
-   recorded checksum before extraction.
-4. Install the package through Max's supported package/search-path mechanism.
-5. On macOS, confirm the universal external loads after the documented security
-   action, if any. On Windows, confirm the x64 `.mxe64` loads in Max.
-6. Open the shipped help patch and repeat H01's version-compatible registration
-   check.
+1. clean temporary directoryで、`npx -y --package=maxforge@<version> maxforge --help`を使って公開済みの正確なversionを実行する。続いてMCP test clientから`npx -y --package=maxforge@<version> maxforge-mcp`をinitializeする。
+2. `node dist/...`を直接実行した場合だけでなく、npm bin link経由でMCP initialize responseが返ることを確認する。
+3. 対応するGitHub Releaseから`maxforge.zip`をdownloadし、展開前に記録済みchecksumと一致することを確認する。
+4. Maxが対応するpackage/search-pathの方法でpackageをinstallする。
+5. macOSでは、必要ならdocumented security actionを実施した後、universal externalがloadされることを確認する。Windowsではx64 `.mxe64`がMaxでloadされることを確認する。
+6. 同梱help patchを開き、H01のversion-compatible registration checkを繰り返す。
 
-**Pass:** npm version, native external version, Git tag/release, and downloaded
-artifact all identify the same source and work from clean installation paths.
+**合格条件:** npm version、native external version、Git tag/release、download artifactが同じsourceを示し、clean installation pathから動作する。
 
 ## Cleanup
 
-- Close disposable patches without saving unintended changes.
-- Delete H03 temporary `.maxpat` files.
-- Restore normal MCP package version, broker idle timeout, config, bind address,
-  token, and firewall rules.
-- Stop test brokers only after confirming no other MCP/Max client uses the same
-  `project.id`.
-- Restore renamed external copies deliberately; do not leave duplicate active
-  copies in Max search paths.
+- 意図しない変更を保存せず、破棄可能なpatchを閉じる。
+- H03で作成したtemporary `.maxpat`を削除する。
+- 通常使用するMCP package version、broker idle timeout、config、bind address、token、firewall rulesへ戻す。
+- 同じ`project.id`を使う別のMCP/Max clientがないことを確認してからtest brokerを停止する。
+- 一時的に名前を変えたexternalを元へ戻す。ただしMax search pathにactiveなduplicate copyを残してはいけない。
