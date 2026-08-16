@@ -232,7 +232,7 @@ The default source is
 different Max installation. The audit currently reads:
 
 - Max reference XML;
-- object lists and object mappings;
+- object lists;
 - `interfaces/max.db.json` external, alias, and fake-object indexes;
 - saved `.maxhelp`, `.maxpat`, and `.maxsnip` boxes.
 
@@ -247,9 +247,11 @@ saved patches. Bundled files span multiple Max versions and can retain stale
 `numinlets`, `numoutlets`, or `outlettype` values. The audit therefore does not
 use a global majority vote as proof of current behavior.
 
-Two aliases, `s~` and `r~`, have mapping evidence but no direct saved-patcher
-instance in the audited installation. The audit reports those as warnings
-rather than pretending their saved shape was independently observed.
+An `objectfile` mapping alone is not accepted as object identity evidence.
+In particular, Max ships mappings for `s~` and `r~`, but the audited Max 9
+installation has no reference entry or saved-patcher instance for either name.
+They are therefore excluded instead of inventing port metadata for mapping-only
+aliases. Use `send~` and `receive~`.
 
 ## Port metadata classes
 

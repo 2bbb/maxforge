@@ -26,7 +26,7 @@ MAXFORGE_CONFIG path/project.id:
 
 ## Release gate
 
-通常のrelease candidateでは、macOSでH01〜H06とH09を実行する。LAN関連を変更した場合はH07、catalog/config関連を変更した場合はH08、native external・package構成・CI toolchainを変更した場合はH09のWindows項目も実行する。
+通常のrelease candidateでは、macOSでH01〜H06とH09を実行する。LAN関連を変更した場合はH07、project catalog/config関連を変更した場合はH08、built-in catalogを変更した場合はH10、native external・package構成・CI toolchainを変更した場合はH09のWindows項目も実行する。
 
 ### H01 — Native externalの検出と登録
 
@@ -133,6 +133,19 @@ MAXFORGE_CONFIG path/project.id:
 6. 同梱help patchを開き、H01のversion-compatible registration checkを繰り返す。
 
 **合格条件:** npm version、native external version、Git tag/release、download artifactが同じsourceを示し、clean installation pathから動作する。
+
+### H10 — Built-in object catalogの一次資料監査
+
+**前提:** 対象バージョンのMaxが`/Applications/Max.app`、または既知の別pathへinstallされていること。
+
+1. Maxの正確なversionと、監査対象の`C74` resources pathを記録する。
+2. repository rootで`python3 scripts/audit-object-catalog.py --max-root <C74-resources-path>`を実行する。
+3. `errors=0`で終了することを確認する。warningは黙認せず、対象objectのreference、help patch、saved patcherを確認して理由を記録する。
+4. 今回追加・変更した全objectをMaxのobject boxでinstantiateし、missing objectにならないことを確認する。
+5. port metadataを変更したobjectは、空の引数と代表的な引数の両方で実際のinlet/outlet数と型を確認する。引数依存objectは最低値、通常値、上限付近を含める。
+6. `objectfile` mappingしか根拠がない名称をcatalogへ追加していないことを確認する。`s~` / `r~`をsignal objectとして扱わず、`send~` / `receive~`を使う。
+
+**合格条件:** catalog identityはreference、object index、database、またはsaved patcherの一次資料で裏付けられ、変更したport shapeが実際のMaxと一致する。
 
 ## Cleanup
 

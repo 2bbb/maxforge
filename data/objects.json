@@ -1285,31 +1285,7 @@
     ],
     "category": "logic"
   },
-  "s~": {
-    "maxclass": "newobj",
-    "numinlets": 1,
-    "numoutlets": 0,
-    "outlettype": [],
-    "defaultSize": [
-      80,
-      22
-    ],
-    "category": "logic"
-  },
   "receive~": {
-    "maxclass": "newobj",
-    "numinlets": 1,
-    "numoutlets": 1,
-    "outlettype": [
-      "signal"
-    ],
-    "defaultSize": [
-      80,
-      22
-    ],
-    "category": "logic"
-  },
-  "r~": {
     "maxclass": "newobj",
     "numinlets": 1,
     "numoutlets": 1,

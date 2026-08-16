@@ -219,13 +219,6 @@ def collect_identity_evidence(max_root: Path, observations: list[Observation]) -
         except OSError:
             continue
 
-    mapping_pattern = re.compile(r"^\s*max\s+objectfile\s+(\S+)", re.MULTILINE)
-    for path in max_root.glob("**/*objectmappings*.txt"):
-        try:
-            names.update(mapping_pattern.findall(path.read_text(errors="ignore")))
-        except OSError:
-            continue
-
     max_db_path = max_root / "interfaces" / "max.db.json"
     try:
         max_db = json.loads(max_db_path.read_text()).get("maxdb", {})

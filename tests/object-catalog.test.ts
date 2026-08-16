@@ -19,14 +19,14 @@ function shape(text: string): Pick<ObjectDef, "numinlets" | "numoutlets" | "outl
 }
 
 describe("object catalog integrity", () => {
-  it("contains 321 unique top-level entries", () => {
+  it("contains 319 reviewed entries without duplicate top-level keys", () => {
     const raw = fs.readFileSync(catalogPath, "utf8");
     const serializedTopLevelKeys = [...raw.matchAll(/^  "(?:[^"\\]|\\.)+": \{/gm)];
-    expect(serializedTopLevelKeys).toHaveLength(321);
-    expect(Object.keys(catalog)).toHaveLength(321);
+    expect(serializedTopLevelKeys).toHaveLength(319);
+    expect(Object.keys(catalog)).toHaveLength(319);
   });
 
-  it("contains no fabricated port classes or removed unsupported names", () => {
+  it("rejects known fabricated, mapping-only, and unsupported names", () => {
     for (const name of [
       "inlet~",
       "outlet~",
@@ -40,6 +40,8 @@ describe("object catalog integrity", () => {
       "selector",
       "mstosamps",
       "bbb.agent.hub",
+      "s~",
+      "r~",
     ]) {
       expect(catalog).not.toHaveProperty(name);
     }

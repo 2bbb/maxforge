@@ -19,7 +19,7 @@ Status meanings:
 | ID | Boundary | Status | Current evidence | Human follow-up |
 |---|---|---|---|---|
 | A01 | DSL parsing, blocks, `for`, `if`, arithmetic, diagnostics | CI | `tests/block.test.ts`, `tests/expander.test.ts`, `tests/compiler.test.ts` | None for language semantics |
-| A02 | Built-in/project catalog, fabricated objects, argument-dependent ports | CI / Partial | `tests/object-catalog.test.ts`, `tests/catalog-config.test.ts`, `tests/compiler.test.ts` | H08 proves that declared custom objects also resolve inside Max |
+| A02 | Built-in/project catalog, known-invalid names, argument-dependent ports | CI / Partial | CI checks catalog structure, reviewed regressions, and argument rules; it does not prove every built-in name exists | H08 proves declared custom objects in Max; H10 audits built-ins against installed Max resources |
 | A03 | Patch graph conversion, diff, merge, layout, patch-cord metadata | CI | `tests/patch-graph.test.ts`, `tests/patch-merge.test.ts`, `tests/reconcile.test.ts`, `tests/thispatcher.test.ts` | H02 checks the native Max result |
 | A04 | MCP schemas, help, tool responses, target routing | CI | `tests/mcp-server.test.ts`, `tests/mcp-service.test.ts`, `tests/mcp-bridge.test.ts` | H02–H04 check one real MCP host and Max session |
 | A05 | Human-edit evidence, review/adopt/reconcile, stale tokens | CI / Partial | `tests/patch-edit-review.test.ts`, `tests/mcp-edit-history-store.test.ts`, `tests/mcp-service.test.ts` | H02 supplies edits through the Max UI rather than synthetic snapshots |
