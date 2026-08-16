@@ -111,13 +111,16 @@ Run the complete checks from a clean `main` checkout:
 
 ```bash
 npm run build
+npm run typecheck:tests
 npm run test:coverage
+npm run test:package
+npm run docs:check
 npm audit --omit=dev --audit-level=high
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAXFORGE_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build --build-config Release --output-on-failure
 python3 scripts/verify-max-package.py --source .
-npm pack --dry-run
+npm run pack:dry-run
 ```
 
 Commit and push the synchronized version files. Wait for the `main` workflow to

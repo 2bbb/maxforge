@@ -6,13 +6,13 @@ port metadata to validate connections, and supply a layout size.
 
 ## Current scope
 
-The catalog contains 321 entries:
+The catalog contains 319 entries:
 
-- 320 Max object names or aliases with identity evidence in the resources
+- 318 Max object names or aliases with identity evidence in the resources
   bundled with the locally audited Max 9 application;
 - the project-owned `maxforge.sync` external, verified from this repository's
   C++ source and Max reference file;
-- 239 entries with a fixed base shape, 45 entries with an explicit
+- 237 entries with a fixed base shape, 45 entries with an explicit
   argument-dependent rule, and 37 entries marked `dynamicPorts`.
 
 These groups overlap neither each other nor the unknown-object fallback.

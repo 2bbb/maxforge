@@ -19,6 +19,7 @@ unit test. It is required only for host-level integration testing.
 ```bash
 npm install
 npm run build
+npm run typecheck:tests
 npm test
 npm run test:coverage
 npm run test:package
@@ -27,12 +28,19 @@ npm run pack:dry-run
 ```
 
 The coverage command enforces the thresholds configured in
-`vitest.config.ts`. CLI and executable-entrypoint tests also spawn built files
-as subprocesses. `test:package` packs the repository, installs the tarball into
-a clean temporary project, validates DSL through the installed `maxforge` bin,
-and initializes MCP through the installed `maxforge-mcp` bin. It therefore
-catches package file-list, npm bin-link, and runtime-dependency failures that a
-source-tree test cannot.
+`vitest.config.ts`, but its percentage is only for TypeScript loaded in the
+Vitest process. `src/cli/**` is explicitly excluded, and V8 does not merge code
+executed by spawned CLI, MCP, or broker processes. Python scripts, package
+assembly, and C++ are outside this metric. Do not describe the reported number
+as whole-product coverage.
+
+CLI and executable-entrypoint tests instead assert subprocess behavior.
+`test:package` first rebuilds, packs the repository, installs the tarball into a
+clean temporary project, checks every declared npm bin, executes the installed
+`maxforge` and `maxforge-broker` bins, initializes the installed
+`maxforge-mcp` bin, and imports `maxforge/mcp`. It catches package file-list,
+npm bin-link, export-map, and runtime-dependency failures that a source-tree
+test cannot.
 
 ## Native build and unit test
 

@@ -423,13 +423,13 @@ When the compiler encounters `name = type_text`, it:
 3. Resolves `maxclass`, port metadata, and layout size from one of three
    catalog classes: fixed, argument-dependent, or dynamic.
 
-The bundled catalog contains 321 entries: 320 Max object names or aliases with
+The bundled catalog contains 319 entries: 318 Max object names or aliases with
 identity evidence in the locally audited Max 9 resources, plus the project-owned
 `maxforge.sync` external. This is not a complete Max API. Catalog membership is
 also not a claim that an optional package is installed on every Max system.
 
 The exact evidence hierarchy, generated-metadata limits, dynamic-port behavior,
-and known identity-only alias warnings are documented in
+and exclusions for mapping-only aliases are documented in
 [`object-catalog.md`](object-catalog.md).
 
 ### 5.2 Project catalog resolution
