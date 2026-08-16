@@ -15,24 +15,29 @@ For Codex, a typical stdio entry is:
 ```toml
 [mcp_servers.maxforge]
 command = "npx"
-args = ["-y", "--package=maxforge@0.4.4", "maxforge-mcp"]
+args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
 ```
 
 This starts only the Node.js side. Max must separately load the matching native
 `maxforge.sync` external in a controller patch. The skill itself installs
-neither component. Pin the npm package to the exact version embedded in the
-installed external. Use `@latest` only while deliberately updating both sides;
-otherwise it can create a version mismatch without changing the Max package.
+neither component. Treat `@latest` as bootstrap/update configuration, not a
+stable deployment pin. After status identifies the version embedded in the
+external Max actually loaded, replace `latest` with that exact `X.Y.Z` version
+when reproducible startup matters. Update the npm package and native external
+together; never copy a version number from this skill.
 
 The detached broker can outlive the frontend that started it. During an update,
 inspect and restart it with the package version being installed:
 
 ```bash
-npx -y --package=maxforge@0.4.4 maxforge broker status \
+npx -y --package=maxforge@X.Y.Z maxforge broker status \
   --config /absolute/path/maxforge.config.json
-npx -y --package=maxforge@0.4.4 maxforge broker restart \
+npx -y --package=maxforge@X.Y.Z maxforge broker restart \
   --config /absolute/path/maxforge.config.json
 ```
+
+Replace `X.Y.Z` with the intended installed version; it is not a literal package
+specifier to copy unchanged.
 
 `restart` refuses connected MCP/Max clients and pending native operations. Close
 clients for a non-disruptive update. Use `--force` only after the human accepts
