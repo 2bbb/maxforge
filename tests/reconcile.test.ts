@@ -3,12 +3,13 @@ import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import {
   PatchGraph,
+  PatchSetValue,
 } from "../src/max/patch-graph.js";
 import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import { MaxforgePatcherSnapshot } from "../src/max/patch-protocol.js";
 import { reconcilePatchGraphs } from "../src/mcp/reconcile.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 
 describe("live patch reconciliation", () => {
   it("builds live-to-merged operations while retaining the native base revision", () => {
@@ -103,6 +104,7 @@ describe("live patch reconciliation", () => {
       maxclass: "button",
       patchingRect: [180, 20, 24, 24],
       managed: false,
+      attributes: {},
     });
     current.connections.push({
       targetPath: [],
@@ -116,6 +118,7 @@ describe("live patch reconciliation", () => {
         varName: "manual_button",
         port: 0,
       },
+      attributes: {},
     });
 
     const result = reconcilePatchGraphs(base, base, desired, current, snapshot(base));
@@ -139,6 +142,7 @@ describe("live patch reconciliation", () => {
       patchingRect: [180, 20, 80, 22],
       managed: true,
       text: "cycle~ 220",
+      attributes: {},
     });
 
     const result = reconcilePatchGraphs(base, base, base, current, snapshot(base));
@@ -277,6 +281,7 @@ describe("live patch reconciliation", () => {
       maxclass: "meter~",
       patchingRect: [300, 20, 80, 22],
       managed: false,
+      attributes: {},
     });
     current.connections.push({
       targetPath: [],
@@ -460,7 +465,7 @@ function snapshot(
       patchingRect: override?.patchingRect ?? [...box.patchingRect] as [number, number, number, number],
       managed: true,
       comment: box.comment,
-      attributes: { ...box.attributes },
+      attributes: { ...box.attributes } as Readonly<Record<string, PatchSetValue>>,
       ...(override?.text !== undefined
         ? { text: override.text }
         : box.text !== undefined
@@ -510,7 +515,7 @@ function snapshotBox(
     patchingRect: box.patchingRect,
     managed: true,
     comment: box.comment,
-    attributes: { ...box.attributes },
+    attributes: { ...box.attributes } as Readonly<Record<string, PatchSetValue>>,
     ...(box.text === undefined ? {} : { text: box.text }),
   };
 }

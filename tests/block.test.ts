@@ -3,7 +3,7 @@ import { parse, compile } from "../src/index.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
-const db = dbData as ObjectDatabase;
+const db = dbData as unknown as ObjectDatabase;
 
 describe("block parsing regressions", () => {
   it("does not consume statements after a nested subpatcher block", () => {

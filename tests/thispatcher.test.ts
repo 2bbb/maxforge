@@ -7,7 +7,7 @@ import {
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
-const db = dbData as ObjectDatabase;
+const db = dbData as unknown as ObjectDatabase;
 
 describe("thispatcher command generation", () => {
   it("emits newobject and connect messages for a flat patcher", () => {

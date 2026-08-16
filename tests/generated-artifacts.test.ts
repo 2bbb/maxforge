@@ -6,7 +6,7 @@ import { serialize } from "../src/core/serializer.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import { parse } from "../src/dsl/parser.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 
 const generatedPairs = [
   ["examples/basic_synth.maxdsl", "examples/basic_synth.maxpat", false],

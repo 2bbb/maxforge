@@ -30,7 +30,7 @@ import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 import { PatchPlan } from "../src/max/patch-graph.js";
 import { JsonLinesEditHistoryStore } from "../src/mcp/edit-history-store.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 const configuredDatabase: ObjectDatabase = {
   ...database,
   "vendor.test~": {
@@ -410,7 +410,9 @@ describe("maxforge MCP protocol surface", () => {
           },
         },
       });
-      expect(inspection.result.structuredContent).not.toHaveProperty("snapshot");
+      expect((inspection as unknown as {
+        result: { structuredContent: Record<string, unknown> };
+      }).result.structuredContent).not.toHaveProperty("snapshot");
 
       const fullInspection = await client.request(50, "tools/call", {
         name: "maxforge_inspect_patch",

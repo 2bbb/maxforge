@@ -54,10 +54,18 @@ try {
   ], { cwd: temporaryRoot });
 
   const binDirectory = join(temporaryRoot, "node_modules", ".bin");
-  const cli = installedBin(binDirectory, "maxforge");
-  const mcp = installedBin(binDirectory, "maxforge-mcp");
-  await assertExecutable(cli);
-  await assertExecutable(mcp);
+  const installedBins = Object.fromEntries(
+    Object.keys(packageJson.bin).map((name) => [
+      name,
+      installedBin(binDirectory, name),
+    ])
+  );
+  for (const executable of Object.values(installedBins)) {
+    await assertExecutable(executable);
+  }
+  const cli = installedBins.maxforge;
+  const mcp = installedBins["maxforge-mcp"];
+  const broker = installedBins["maxforge-broker"];
 
   const dslPath = join(temporaryRoot, "smoke.maxdsl");
   await writeFile(dslPath, [
@@ -74,9 +82,22 @@ try {
     throw new Error(`installed CLI validation failed: ${validation.stderr || validation.stdout}`);
   }
 
+  await verifyMcpPackageExport(packageJson.version);
   const environment = await mcpEnvironment(temporaryRoot);
-  await initializeMcp(mcp, environment);
-  await stopBroker(cli, environment);
+  const brokerProcess = await startBroker(broker, cli, environment, packageJson.version);
+  try {
+    await initializeMcp(mcp, environment, packageJson.version);
+  } finally {
+    let stopError;
+    try {
+      await stopBroker(cli, environment);
+    } catch (error) {
+      stopError = error;
+      brokerProcess.kill("SIGTERM");
+    }
+    await waitForCleanExit(brokerProcess);
+    if (stopError) throw stopError;
+  }
 
   console.log(`Verified installed maxforge npm package ${packageJson.version}.`);
 } finally {
@@ -120,7 +141,24 @@ async function mcpEnvironment(root) {
   };
 }
 
-function initializeMcp(executable, environment) {
+async function verifyMcpPackageExport(expectedVersion) {
+  const { stdout, stderr } = await execFileAsync(process.execPath, [
+    "--input-type=module",
+    "--eval",
+    [
+      'const module = await import("maxforge/mcp");',
+      'const required = ["MaxforgeWebSocketBridge", "MaxforgePatchService", "brokerDescriptorFromEnvironment"];',
+      'const missing = required.filter((name) => typeof module[name] !== "function");',
+      'if (missing.length) throw new Error(`missing exports: ${missing.join(", ")}`);',
+      `process.stdout.write(${JSON.stringify(expectedVersion)});`,
+    ].join("\n"),
+  ], { cwd: temporaryRoot });
+  if (stdout !== expectedVersion || stderr) {
+    throw new Error(`installed maxforge/mcp export smoke failed: ${stderr || stdout}`);
+  }
+}
+
+function initializeMcp(executable, environment, expectedVersion) {
   return new Promise((resolveInitialize, reject) => {
     const child = spawn(executable, [], {
       cwd: temporaryRoot,
@@ -176,7 +214,12 @@ function initializeMcp(executable, environment) {
         return;
       }
       const serverInfo = response.result?.serverInfo;
-      if (response.jsonrpc !== "2.0" || serverInfo?.name !== "maxforge") {
+      if (
+        response.jsonrpc !== "2.0" ||
+        response.result?.protocolVersion !== "2025-06-18" ||
+        serverInfo?.name !== "maxforge" ||
+        serverInfo?.version !== expectedVersion
+      ) {
         finish(new Error(`invalid MCP initialize response: ${JSON.stringify(response)}`));
         return;
       }
@@ -197,6 +240,84 @@ function initializeMcp(executable, environment) {
         clientInfo: { name: "maxforge-package-smoke", version: "1.0.0" },
       },
     })}\n`);
+  });
+}
+
+async function startBroker(executable, cli, environment, expectedVersion) {
+  const child = spawn(executable, [], {
+    cwd: temporaryRoot,
+    env: { ...environment, MAXFORGE_BROKER_IDLE_MS: "10000" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(
+        `installed maxforge-broker exited during startup ` +
+        `(code=${child.exitCode}, stdout=${stdout.trim()}, stderr=${stderr.trim()})`
+      );
+    }
+    try {
+      const { stdout: statusOutput, stderr: statusError } = await execFileAsync(
+        cli,
+        ["broker", "status", "--config", environment.MAXFORGE_CONFIG],
+        { cwd: temporaryRoot, env: environment }
+      );
+      if (statusError) throw new Error(statusError);
+      const status = JSON.parse(statusOutput);
+      if (status.state === "ready") {
+        if (status.brokerVersion !== expectedVersion) {
+          child.kill("SIGTERM");
+          throw new Error(
+            `installed maxforge-broker version ${String(status.brokerVersion)} ` +
+            `does not match package ${expectedVersion}`
+          );
+        }
+        return child;
+      }
+    } catch (error) {
+      const code = error?.code;
+      if (code !== "ECONNREFUSED" && !String(error).includes("ECONNREFUSED")) {
+        if (!String(error).includes("socket hang up")) throw error;
+      }
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  child.kill("SIGTERM");
+  throw new Error(
+    `installed maxforge-broker timed out; stdout=${stdout.trim()}, stderr=${stderr.trim()}`
+  );
+}
+
+async function waitForCleanExit(child) {
+  if (child.exitCode !== null) {
+    if (child.exitCode !== 0) {
+      throw new Error(`installed maxforge-broker exited with code ${child.exitCode}`);
+    }
+    return;
+  }
+  await new Promise((resolveExit, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("installed maxforge-broker did not stop"));
+    }, 5_000);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("exit", (code, signal) => {
+      clearTimeout(timeout);
+      if (code === 0) resolveExit();
+      else reject(new Error(
+        `installed maxforge-broker exited unexpectedly ` +
+        `(code=${String(code)}, signal=${String(signal)})`
+      ));
+    });
   });
 }
 

@@ -5,7 +5,7 @@ import catalogJson from "../data/objects.json" with { type: "json" };
 import { lookupObject } from "../src/core/object-db.js";
 import { ObjectDatabase, ObjectDef } from "../src/core/types.js";
 
-const catalog = catalogJson as ObjectDatabase;
+const catalog = catalogJson as unknown as ObjectDatabase;
 const catalogPath = path.join(__dirname, "..", "data", "objects.json");
 
 function shape(text: string): Pick<ObjectDef, "numinlets" | "numoutlets" | "outlettype"> {

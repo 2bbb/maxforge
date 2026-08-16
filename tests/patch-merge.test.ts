@@ -7,7 +7,7 @@ import {
   PatchGraph,
 } from "../src/index.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 
 describe("managed patch graph three-way merge", () => {
   it("preserves a live text edit while applying an independent desired addition", () => {

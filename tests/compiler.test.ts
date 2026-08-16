@@ -6,7 +6,7 @@ import { toClipboardText, fromClipboardText } from "../src/core/clipboard.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
-const db = dbData as ObjectDatabase;
+const db = dbData as unknown as ObjectDatabase;
 const fixturesDir = path.join(__dirname, "fixtures");
 const examplesDir = path.join(__dirname, "..", "examples");
 
@@ -870,7 +870,7 @@ outer = p outer_patch {
     const outer = result.output!.patcher.boxes[0].box;
     expect(outer.patcher).toBeDefined();
     const innerBox = outer.patcher!.boxes.find(
-      (b: { box: { text: string } }) => b.box.text === "p inner_patch"
+      (b) => b.box.text === "p inner_patch"
     );
     expect(innerBox).toBeDefined();
     expect(innerBox!.box.patcher).toBeDefined();

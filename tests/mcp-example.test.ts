@@ -5,7 +5,7 @@ import { compile } from "../src/core/compiler.js";
 import { ObjectDatabase } from "../src/core/types.js";
 import { parse } from "../src/dsl/parser.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 
 describe("MCP Max bridge example", () => {
   it("compiles to one self-contained maxforge.sync controller", () => {

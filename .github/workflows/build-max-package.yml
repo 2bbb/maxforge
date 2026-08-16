@@ -36,6 +36,9 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
+      - name: Type-check tests
+        run: npm run typecheck:tests
+
       - name: Validate Markdown links
         run: npm run docs:check
 

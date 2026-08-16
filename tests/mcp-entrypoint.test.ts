@@ -184,16 +184,22 @@ function initializeThroughSymlink(
     });
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
-      for (const line of stdout.split("\n")) {
+      for (;;) {
+        const newline = stdout.indexOf("\n");
+        if (newline < 0) break;
+        const line = stdout.slice(0, newline);
+        stdout = stdout.slice(newline + 1);
         if (!line.trim()) continue;
+        let message: Record<string, unknown>;
         try {
-          const message = JSON.parse(line) as Record<string, unknown>;
-          if (message.id === 1) {
-            finish(undefined, message);
-            return;
-          }
+          message = JSON.parse(line) as Record<string, unknown>;
         } catch {
-          // Wait for a complete newline-delimited JSON-RPC message.
+          finish(new Error(`maxforge-mcp polluted stdout: ${line}`));
+          return;
+        }
+        if (message.id === 1) {
+          finish(undefined, message);
+          return;
         }
       }
     });

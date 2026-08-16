@@ -7,7 +7,10 @@ import {
   MaxforgeWebSocketBridge,
   parseBridgeEvent,
 } from "../src/mcp/bridge.js";
-import { MaxforgePatchRegistration } from "../src/max/patch-protocol.js";
+import {
+  MaxforgePatchRegistration,
+  MaxforgeSnapshotEvent,
+} from "../src/max/patch-protocol.js";
 import {
   createEmptyPatchGraph,
   diffPatchGraphs,
@@ -874,7 +877,7 @@ function registration(
   };
 }
 
-function snapshotEvent(requestId: string) {
+function snapshotEvent(requestId: string): MaxforgeSnapshotEvent {
   return {
     type: "maxforge.snapshot",
     requestId,

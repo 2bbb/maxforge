@@ -1,7 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import dbData from "../data/objects.json" with { type: "json" };
 import { ObjectDatabase } from "../src/core/types.js";
 import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
@@ -12,11 +18,24 @@ import {
 } from "../src/mcp/state-store.js";
 import { DslPatchAdapter } from "../src/mcp/dsl-patch-adapter.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+function temporaryDirectory(prefix = "maxforge-state-"): string {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  temporaryDirectories.push(directory);
+  return directory;
+}
 
 describe("JsonFilePatchStateStore", () => {
   it("atomically round-trips graph, baseline, and pending apply state", () => {
-    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
+    const directory = temporaryDirectory();
     const path = join(directory, "state.json");
     const store = new JsonFilePatchStateStore(path);
     const graph = compileDslToPatchGraph(
@@ -75,7 +94,7 @@ describe("JsonFilePatchStateStore", () => {
   });
 
   it("rejects state whose graph revision was tampered with", () => {
-    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
+    const directory = temporaryDirectory();
     const path = join(directory, "state.json");
     const graph = compileDslToPatchGraph("n = number", database, "main").graph!;
     writeFileSync(path, JSON.stringify({
@@ -94,7 +113,7 @@ describe("JsonFilePatchStateStore", () => {
   });
 
   it("rejects persisted snapshots that predate attribute inspection", () => {
-    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-"));
+    const directory = temporaryDirectory();
     const path = join(directory, "state.json");
     writeFileSync(path, JSON.stringify({
       schemaVersion: 2,
@@ -131,7 +150,7 @@ describe("JsonFilePatchStateStore", () => {
   });
 
   it("atomically migrates default v1 state to lossless v2 sources", () => {
-    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-migration-"));
+    const directory = temporaryDirectory("maxforge-state-migration-");
     const legacyPath = join(directory, "mcp-state-v1.json");
     const path = join(directory, "mcp-state-v2.json");
     const graph = compileDslToPatchGraph(
@@ -198,7 +217,7 @@ describe("JsonFilePatchStateStore", () => {
   });
 
   it("fails explicitly instead of discarding an unrepresentable v1 state", () => {
-    const directory = mkdtempSync(join(tmpdir(), "maxforge-state-migration-"));
+    const directory = temporaryDirectory("maxforge-state-migration-");
     const legacyPath = join(directory, "mcp-state-v1.json");
     const path = join(directory, "mcp-state-v2.json");
     const graph = compileDslToPatchGraph("n = number", database, "main").graph!;

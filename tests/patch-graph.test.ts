@@ -13,7 +13,7 @@ import {
 import { ObjectDatabase } from "../src/core/types.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
-const db = dbData as ObjectDatabase;
+const db = dbData as unknown as ObjectDatabase;
 
 function compileGraph(source: string, scope = "voices"): PatchGraph {
   const result = compileDslToPatchGraph(source, db, scope);

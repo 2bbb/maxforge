@@ -4,7 +4,7 @@ import { ObjectDatabase } from "../src/core/types.js";
 import { expandControlFlow } from "../src/dsl/expander.js";
 import dbData from "../data/objects.json" with { type: "json" };
 
-const db = dbData as ObjectDatabase;
+const db = dbData as unknown as ObjectDatabase;
 
 // ---------------------------------------------------------------------------
 // Control-flow / expression expansion tests

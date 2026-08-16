@@ -30,7 +30,7 @@ import { compileDslToPatchGraph } from "../src/max/dsl-patch-graph.js";
 import { PatchGraph, PatchPlan, PatchSetValue } from "../src/max/patch-graph.js";
 import { JsonLinesEditHistoryStore } from "../src/mcp/edit-history-store.js";
 
-const database = dbData as ObjectDatabase;
+const database = dbData as unknown as ObjectDatabase;
 
 function createService(
   transport: PatchPlanTransport,
@@ -1461,22 +1461,25 @@ describe("MaxforgePatchService", () => {
     expect(initial.baselineCaptured).toBe(true);
     transport.snapshot = {
       ...transport.snapshot,
-      boxes: transport.snapshot.boxes.map((box, index) => ({
-        ...box,
-        attributes: {
-          ...box.attributes,
-          ...(box.attributes.args
+      boxes: transport.snapshot.boxes.map((box, index) => {
+        const args = box.attributes.args;
+        return {
+          ...box,
+          attributes: {
+            ...box.attributes,
+            ...(Array.isArray(args)
             ? {
-                args: box.attributes.args.map((value) =>
+                args: args.map((value) =>
                   value === "0." ? "0" : value === "4." ? "4" : value
                 ),
               }
             : {}),
-          numinlets: index + 1,
-          numoutlets: index + 2,
-          outlettype: Array.from({ length: index + 2 }, () => ""),
-        },
-      })),
+            numinlets: index + 1,
+            numoutlets: index + 2,
+            outlettype: Array.from({ length: index + 2 }, () => ""),
+          },
+        };
+      }),
     };
     expect(transport.snapshot.boxes[0].attributes).toHaveProperty(
       "numinlets",
