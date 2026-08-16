@@ -2,7 +2,6 @@
 
 import { execFile, spawn } from "node:child_process";
 import {
-  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -91,8 +90,8 @@ function installedBin(directory, name) {
 async function assertExecutable(path) {
   const metadata = await stat(path);
   if (!metadata.isFile()) throw new Error(`npm bin is not a file: ${path}`);
-  if (process.platform !== "win32") {
-    await chmod(path, metadata.mode | 0o100);
+  if (process.platform !== "win32" && (metadata.mode & 0o111) === 0) {
+    throw new Error(`npm bin is not executable: ${path}`);
   }
 }
 

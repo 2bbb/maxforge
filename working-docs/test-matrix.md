@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Maxforge crosses five processes and persistence boundaries: MCP host, stdio
+Maxforge crosses five runtime and persistence boundaries: MCP host, stdio
 frontend, detached broker, native `maxforge.sync`, and Max itself. Line coverage
 cannot show whether those boundaries survive replacement, restart, or human
 editing. This matrix assigns each boundary to CI or to an explicit human test.
