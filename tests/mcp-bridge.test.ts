@@ -119,7 +119,7 @@ describe("MaxforgeWebSocketBridge", () => {
       revision: request.plan.targetRevision,
       operations: request.plan.operations.length,
     }));
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+    await websocketRoundTrip(client);
     expect(bridge.getLiveRevision("patch-a", "voices")).toBeNull();
 
     client.once("message", (data) => {
@@ -674,7 +674,7 @@ describe("MaxforgeWebSocketBridge", () => {
     await register(bridge, capable, registration("patch-a", "voices", false));
 
     capable.send(JSON.stringify(editObservation("patch-a", "wrong", {})));
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await websocketRoundTrip(capable);
     expect(bridge.getEditObservationHistory("patch-a", "voices").observations)
       .toEqual([]);
 
@@ -685,7 +685,7 @@ describe("MaxforgeWebSocketBridge", () => {
       { ...registration("patch-b", "meters", false), capabilities: [] }
     );
     incapable.send(JSON.stringify(editObservation("patch-b", "meters", {})));
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await websocketRoundTrip(incapable);
     expect(bridge.getEditObservationHistory("patch-b", "meters"))
       .toMatchObject({
         supported: false,
@@ -879,6 +879,22 @@ async function connect(port: number): Promise<WebSocket> {
     client.once("error", reject);
   });
   return client;
+}
+
+async function websocketRoundTrip(client: WebSocket): Promise<void> {
+  await new Promise<void>((resolvePong, reject) => {
+    const handlePong = () => {
+      client.off("error", handleError);
+      resolvePong();
+    };
+    const handleError = (error: Error) => {
+      client.off("pong", handlePong);
+      reject(error);
+    };
+    client.once("pong", handlePong);
+    client.once("error", handleError);
+    client.ping();
+  });
 }
 
 async function register(

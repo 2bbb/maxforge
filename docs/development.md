@@ -38,9 +38,9 @@ CLI and executable-entrypoint tests instead assert subprocess behavior.
 `test:package` first rebuilds, packs the repository, installs the tarball into a
 clean temporary project, checks every declared npm bin, executes the installed
 `maxforge` and `maxforge-broker` bins, initializes the installed
-`maxforge-mcp` bin, and imports `maxforge/mcp`. It catches package file-list,
+`maxforge-mcp` bin, and imports `maxforge/mcp`. It catches omitted bin targets,
 npm bin-link, export-map, and runtime-dependency failures that a source-tree
-test cannot.
+test cannot; it is not an allowlist audit of every tarball file.
 
 ## Native build and unit test
 

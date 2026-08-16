@@ -251,11 +251,14 @@ async function startBroker(executable, cli, environment, expectedVersion) {
   });
   let stdout = "";
   let stderr = "";
+  let spawnError;
+  child.once("error", (error) => { spawnError = error; });
   child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
   child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
 
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
+    if (spawnError) throw spawnError;
     if (child.exitCode !== null) {
       throw new Error(
         `installed maxforge-broker exited during startup ` +
@@ -283,7 +286,10 @@ async function startBroker(executable, cli, environment, expectedVersion) {
     } catch (error) {
       const code = error?.code;
       if (code !== "ECONNREFUSED" && !String(error).includes("ECONNREFUSED")) {
-        if (!String(error).includes("socket hang up")) throw error;
+        if (!String(error).includes("socket hang up")) {
+          child.kill("SIGTERM");
+          throw error;
+        }
       }
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));

@@ -45,7 +45,20 @@ describe("snapshot", () => {
 // Public examples
 // ---------------------------------------------------------------------------
 describe("examples", () => {
-  const examples = findFiles(examplesDir, ".maxdsl");
+  const examples = [
+    "basic_synth.maxdsl",
+    "max_node_script/generated_patch.maxdsl",
+    "max_node_script/maxforge_node_script_demo.maxdsl",
+    "max_sync/managed_patch.maxdsl",
+    "max_sync/maxforge_sync_demo.maxdsl",
+    "mcp_bridge/desired.maxdsl",
+    "mcp_bridge/maxforge_mcp_bridge.maxdsl",
+    "voice_bank.maxdsl",
+  ];
+
+  it("keeps the public example manifest exhaustive", () => {
+    expect(findFiles(examplesDir, ".maxdsl")).toEqual(examples);
+  });
 
   for (const name of examples) {
     it(`compiles example: ${name}`, () => {
