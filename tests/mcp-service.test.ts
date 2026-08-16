@@ -40,6 +40,14 @@ function createService(
 }
 
 describe("MaxforgePatchService", () => {
+  it("matches the native canonical token fixture for an empty patch structure", () => {
+    expect(snapshotStructureToken({
+      ...patcherSnapshot(),
+      boxes: [],
+      connections: [],
+    })).toBe("84ba46f66327d22f");
+  });
+
   it("turns retained observations into ordered evidence without claiming intent", async () => {
     const transport = new FakeTransport();
     const service = createService(transport);
@@ -346,7 +354,9 @@ describe("MaxforgePatchService", () => {
     expect(first.plan.operations.map((operation) => operation.op)).toEqual([
       "create",
     ]);
-    expect(first.plan.baseStructureToken).toBe("0".repeat(16));
+    expect(first.plan.baseStructureToken).toBe(
+      snapshotStructureToken(patcherSnapshot())
+    );
     expect(first.timings).toEqual({
       preflightMs: expect.any(Number),
       pendingStatePersistenceMs: expect.any(Number),
@@ -451,10 +461,46 @@ describe("MaxforgePatchService", () => {
     expect(transport.inspectionCount).toBe(inspectionsBeforeApply + 1);
     expect(applied.verification).toEqual({
       revision: applied.plan.targetRevision,
-      structureToken: "0".repeat(16),
+      structureToken: snapshotStructureToken(transport.snapshotAfterApply!),
       boxCount: 1,
       connectionCount: 0,
     });
+  });
+
+  it("rejects a patch change between cached inspection and native apply", async () => {
+    const transport = new FakeTransport();
+    const service = createService(transport);
+    const initial = await service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)",
+    });
+    const inspected = await service.inspectPatch("patch-a", "voices");
+    transport.snapshot = {
+      ...transport.snapshot,
+      boxes: transport.snapshot.boxes.map((box) => ({
+        ...box,
+        patchingRect: [box.patchingRect[0] + 25, ...box.patchingRect.slice(1)] as [
+          number,
+          number,
+          number,
+          number,
+        ],
+      })),
+    };
+
+    await expect(service.applyDsl({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440 at(50, 50)\ngain = *~ 0.5 at(50, 100)",
+      expectedStructureToken: inspected.snapshot.structureToken,
+    })).rejects.toThrow("live patch structure changed since inspection");
+    expect(transport.getLiveRevision("patch-a", "voices")).toBe(
+      initial.plan.targetRevision
+    );
+    expect(service.getManagedRevisions()["patch-a:voices"]).toBe(
+      initial.plan.targetRevision
+    );
   });
 
   it("compiles read-only plans against the same remembered state used by apply", async () => {
@@ -604,7 +650,7 @@ describe("MaxforgePatchService", () => {
         "voices"
       ).graph!.revision,
       liveRevision: liveGraph.revision,
-      structureToken: "0".repeat(16),
+      structureToken: snapshotStructureToken(transport.snapshot),
     });
     expect(inspected.targetWorkingDsl).toContain("gain = *~ 0.5");
 
@@ -1334,7 +1380,7 @@ describe("MaxforgePatchService", () => {
       conflicts: [],
       plan: {
         baseRevision: transport.plans[0].targetRevision,
-        baseStructureToken: "0".repeat(16),
+        baseStructureToken: snapshotStructureToken(transport.snapshot),
         operations: [{ op: "create", box: { id: "obj-gain" } }],
       },
       mergedGraph: {
@@ -1864,6 +1910,72 @@ function disabledHistoryPersistence() {
   } as const;
 }
 
+function snapshotStructureToken(snapshot: MaxforgePatcherSnapshot): string {
+  const boxes = [...snapshot.boxes]
+    .sort((left, right) =>
+      compareStrings(pathKey(left.targetPath), pathKey(right.targetPath)) ||
+      compareStrings(left.runtimeId, right.runtimeId)
+    )
+    .map((box) => ({
+      targetPath: box.targetPath,
+      runtimeId: box.runtimeId,
+      varName: box.varName,
+      maxclass: box.maxclass,
+      patchingRect: box.patchingRect,
+      managed: box.managed,
+      ...(box.text === undefined ? {} : { text: box.text }),
+      ...(box.comment === undefined ? {} : { comment: box.comment }),
+      attributes: sortedAttributes(box.attributes),
+    }));
+  const connections = [...snapshot.connections]
+    .sort((left, right) =>
+      compareStrings(pathKey(left.targetPath), pathKey(right.targetPath)) ||
+      compareStrings(left.source.runtimeId, right.source.runtimeId) ||
+      left.source.port - right.source.port ||
+      compareStrings(left.destination.runtimeId, right.destination.runtimeId) ||
+      left.destination.port - right.destination.port
+    )
+    .map((connection) => ({
+      targetPath: connection.targetPath,
+      source: {
+        runtimeId: connection.source.runtimeId,
+        varName: connection.source.varName,
+        port: connection.source.port,
+      },
+      destination: {
+        runtimeId: connection.destination.runtimeId,
+        varName: connection.destination.varName,
+        port: connection.destination.port,
+      },
+      attributes: sortedAttributes(connection.attributes),
+    }));
+  const bytes = Buffer.from(JSON.stringify({ boxes, connections }), "utf8");
+  let hash = 14695981039346656037n;
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function pathKey(path: readonly string[]): string {
+  return path.join("/");
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function sortedAttributes(
+  attributes: Readonly<Record<string, PatchSetValue>>
+): Readonly<Record<string, PatchSetValue>> {
+  return Object.fromEntries(
+    Object.entries(attributes).sort(([left], [right]) =>
+      compareStrings(left, right)
+    )
+  );
+}
+
 class FakeTransport implements PatchPlanTransport {
   readonly plans: PatchPlan[] = [];
   readonly liveRevisions = new Map<string, string | null>();
@@ -1891,6 +2003,12 @@ class FakeTransport implements PatchPlanTransport {
     plan: PatchPlan
   ): Promise<MaxforgeAppliedEvent> {
     this.plans.push(plan);
+    if (
+      plan.baseStructureToken !== undefined &&
+      plan.baseStructureToken !== snapshotStructureToken(this.snapshot)
+    ) {
+      throw new Error("live patch structure changed since inspection");
+    }
     if (this.failure) throw this.failure;
     this.liveRevisions.set(
       `${patcherId}:${plan.scope}`,
@@ -1926,7 +2044,7 @@ class FakeTransport implements PatchPlanTransport {
       patcherId,
       scope,
       revision: this.liveRevisions.get(`${patcherId}:${scope}`) ?? null,
-      structureToken: "0".repeat(16),
+      structureToken: snapshotStructureToken(this.snapshot),
       patcher: this.snapshot,
     };
   }
