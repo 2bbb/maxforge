@@ -17,6 +17,7 @@ MARKDOWN_ROOTS = (
     ROOT / "docs",
     ROOT / "examples",
     ROOT / "skills",
+    ROOT / "working-docs",
 )
 LINK_PATTERN = re.compile(r"!?(?:\[[^]]*\])\(([^)]+)\)")
 
