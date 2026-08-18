@@ -114,11 +114,24 @@ jobs:
           test "$(plutil -extract CFBundleShortVersionString raw "$bundle/Contents/Info.plist")" = "$version"
           codesign --verify --deep --strict --verbose=2 "$bundle"
 
+      - name: Sign macOS external
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: .github/scripts/macos-direct-distribution.sh sign externals
+
+      - name: Archive macOS external
+        shell: bash
+        run: .github/scripts/macos-direct-distribution.sh archive externals "$RUNNER_TEMP/macos-externals.zip"
+
       - name: Upload macOS external
         uses: actions/upload-artifact@v7
         with:
           name: maxforge-macos
-          path: externals/
+          path: ${{ runner.temp }}/macos-externals.zip
           if-no-files-found: error
 
   build-windows:
@@ -192,7 +205,11 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: maxforge-macos
-          path: dist/maxforge/externals
+          path: ${{ runner.temp }}/macos-artifact
+
+      - name: Restore signed macOS external
+        shell: bash
+        run: .github/scripts/macos-direct-distribution.sh extract "$RUNNER_TEMP/macos-artifact/macos-externals.zip" dist/maxforge
 
       - name: Download Windows external
         uses: actions/download-artifact@v8
@@ -217,11 +234,27 @@ jobs:
       - name: Verify archive
         run: python3 scripts/verify-max-package.py --archive dist/maxforge.zip
 
+      - name: Notarize and verify public archive
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_PRIVATE_KEY_P8_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_P8_BASE64 }}
+        run: .github/scripts/macos-direct-distribution.sh notarize-and-verify dist/maxforge.zip maxforge
+
+      - name: Generate archive checksum
+        shell: bash
+        run: .github/scripts/macos-direct-distribution.sh checksum dist/maxforge.zip
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
           name: maxforge-latest
-          path: dist/maxforge.zip
+          path: |
+            dist/maxforge.zip
+            dist/maxforge.zip.sha256
           if-no-files-found: error
 
       - name: Update latest package release
@@ -237,7 +270,7 @@ jobs:
           Commit: ${GITHUB_SHA}
           Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
-          The archive contains the universal macOS maxforge.sync.mxo and x64 Windows maxforge.sync.mxe64, plus Max help, reference, documentation, and examples. The macOS external is ad-hoc signed and is not notarized.
+          The archive contains the universal macOS maxforge.sync.mxo and x64 Windows maxforge.sync.mxe64, plus Max help, reference, documentation, and examples. The macOS external is Developer ID signed, and this exact ZIP was accepted by Apple's notarization service.
           EOF
 
           git config user.name "github-actions[bot]"
@@ -246,14 +279,19 @@ jobs:
           git push origin refs/tags/latest --force
 
           if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest dist/maxforge.zip#maxforge.zip --clobber
+            gh release upload latest \
+              dist/maxforge.zip#maxforge.zip \
+              dist/maxforge.zip.sha256#maxforge.zip.sha256 \
+              --clobber
             gh release edit latest \
               --title "maxforge latest" \
               --notes-file latest-release-notes.md \
               --target "$GITHUB_SHA" \
               --latest
           else
-            gh release create latest dist/maxforge.zip#maxforge.zip \
+            gh release create latest \
+              dist/maxforge.zip#maxforge.zip \
+              dist/maxforge.zip.sha256#maxforge.zip.sha256 \
               --title "maxforge latest" \
               --notes-file latest-release-notes.md \
               --target "$GITHUB_SHA" \
@@ -264,5 +302,7 @@ jobs:
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/maxforge.zip
+          files: |
+            dist/maxforge.zip
+            dist/maxforge.zip.sha256
           fail_on_unmatched_files: true
