@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly EXPECTED_DEVELOPER_NAME="ISHII 2bit Program Office"
+readonly EXPECTED_DEVELOPER_NAME="ISHII 2BIT PROGRAM OFFICE"
 readonly BUNDLE_ID_PREFIX="jp.2bit"
 
 die() {
@@ -208,7 +208,7 @@ self_test() {
     || die "identifier sanitizer failed for surrounding whitespace"
   APPLE_TEAM_ID=ABCDE12345
   [[ "$(expected_identity)" == \
-    'Developer ID Application: ISHII 2bit Program Office (ABCDE12345)' ]] \
+    'Developer ID Application: ISHII 2BIT PROGRAM OFFICE (ABCDE12345)' ]] \
     || die "expected identity construction failed"
   printf 'self-test passed\n'
 }

@@ -18,7 +18,7 @@ The expected signing identity is constructed rather than supplied as free-form
 input:
 
 ```text
-Developer ID Application: ISHII 2bit Program Office (${APPLE_TEAM_ID})
+Developer ID Application: ISHII 2BIT PROGRAM OFFICE (${APPLE_TEAM_ID})
 ```
 
 ## Required GitHub Actions secrets
