@@ -1,5 +1,8 @@
 # maxforge
 
+> [!WARNING]
+> This repository is published as AI-assisted, insufficiently tested work in progress ("AI slop"). Treat it as experimental. Correctness, stability, compatibility, and fitness for production use are not guaranteed.
+
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
 [![Build Max package](https://github.com/bbb-max-externals/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/bbb-max-externals/maxforge/actions/workflows/build-max-package.yml)
 
