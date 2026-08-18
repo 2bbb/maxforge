@@ -207,7 +207,7 @@ For agents that support installable skills, add the dedicated live-control
 workflow:
 
 ```bash
-npx skills add 2bbb/maxforge --skill maxforge-mcp
+npx skills add bbb-max-externals/maxforge --skill maxforge-mcp
 ```
 
 Use the separate `maxforge` skill for offline DSL authoring and `.maxpat`

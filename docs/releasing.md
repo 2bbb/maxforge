@@ -61,20 +61,20 @@ ignores the external extension for the other platform.
 ## Private `bbb.agent` dependency
 
 `deps/bbb.agent` is private. A normal `GITHUB_TOKEN` from the public
-`2bbb/maxforge` repository cannot read it. Both external build jobs therefore
+`bbb-max-externals/maxforge` repository cannot read it. Both external build jobs therefore
 require a repository secret named `BBB_AGENT_DEPLOY_KEY` containing a raw
 private SSH key whose public half is a read-only deploy key on
-`2bbb/bbb.agent`.
+`bbb-max-externals/bbb.agent`.
 
 One-time setup:
 
 ```bash
 ssh-keygen -t ed25519 -C maxforge-ci -f /tmp/maxforge-ci -N ''
 gh repo deploy-key add /tmp/maxforge-ci.pub \
-  --repo 2bbb/bbb.agent \
+  --repo bbb-max-externals/bbb.agent \
   --title 'maxforge GitHub Actions'
 gh secret set BBB_AGENT_DEPLOY_KEY \
-  --repo 2bbb/maxforge \
+  --repo bbb-max-externals/maxforge \
   < /tmp/maxforge-ci
 rm /tmp/maxforge-ci /tmp/maxforge-ci.pub
 ```

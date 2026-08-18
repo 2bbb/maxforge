@@ -309,7 +309,7 @@ live操作を継続的にagentへ任せる場合は、汎用DSL skillとは別�
 専用skillを導入する。
 
 ```bash
-npx skills add 2bbb/maxforge --skill maxforge-mcp
+npx skills add bbb-max-externals/maxforge --skill maxforge-mcp
 ```
 
 skillはagentへのinstructionsであり、`maxforge-mcp` serverやnative externalを

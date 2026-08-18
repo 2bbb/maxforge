@@ -169,7 +169,7 @@ for i in 0..7 {
 When evidence shows a maxforge defect rather than invalid DSL, missing catalog
 metadata, an expected safety rejection, or a Max limitation, search existing
 issues first. If no duplicate exists and authenticated GitHub issue creation is
-available, open an issue at `2bbb/maxforge`. Include maxforge/Node/OS/Max
+available, open an issue at `bbb-max-externals/maxforge`. Include maxforge/Node/OS/Max
 versions as relevant, the exact invocation, a minimal reproduction, actual and
 expected behavior, and bounded logs or generated evidence with secrets removed.
 Link the created issue in the response. Do not file conjecture without a

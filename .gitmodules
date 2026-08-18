@@ -3,4 +3,4 @@
 	url = https://github.com/Cycling74/min-api.git
 [submodule "deps/bbb.agent"]
 	path = deps/bbb.agent
-	url = git@github.com:2bbb/bbb.agent.git
+	url = git@github.com:bbb-max-externals/bbb.agent.git

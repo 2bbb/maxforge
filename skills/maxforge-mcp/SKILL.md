@@ -310,7 +310,7 @@ do not guess a target.
 When tool evidence shows a maxforge defect rather than stale input, missing
 catalog configuration, an expected fail-closed rejection, or a Max limitation,
 search existing issues first. If no duplicate exists and authenticated GitHub
-issue creation is available, open an issue at `2bbb/maxforge`. Include
+issue creation is available, open an issue at `bbb-max-externals/maxforge`. Include
 maxforge/broker/Node/OS/Max versions, MCP transport and client, exact tool
 sequence, minimal DSL and patch state, actual and expected behavior, and bounded
 responses/logs with tokens and private paths removed. Link the created issue in

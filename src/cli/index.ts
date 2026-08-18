@@ -418,7 +418,7 @@ async function bundleCommand(cmdArgs: string[]) {
     description: `Portable maxforge bundle for ${title}`,
     version: packageJson.version ?? "0.0.0",
     author: packageJson.author ?? "",
-    website: "https://github.com/2bbb/maxforge",
+    website: "https://github.com/bbb-max-externals/maxforge",
     extends: "",
     extensible: 0,
     homepatcher: mainRelative,

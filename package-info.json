@@ -3,7 +3,7 @@
   "description": "Unofficial text-first Max patch generation and synchronization tools",
   "version": "0.4.4",
   "author": "2bit",
-  "website": "https://github.com/2bbb/maxforge",
+  "website": "https://github.com/bbb-max-externals/maxforge",
   "extends": "",
   "extensible": 0,
   "homepatcher": "",

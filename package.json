@@ -86,10 +86,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/2bbb/maxforge.git"
+    "url": "git+ssh://git@github.com/bbb-max-externals/maxforge.git"
   },
   "bugs": {
-    "url": "https://github.com/2bbb/maxforge/issues"
+    "url": "https://github.com/bbb-max-externals/maxforge/issues"
   },
   "homepage": "https://2bit.jp/maxforge/",
   "dependencies": {

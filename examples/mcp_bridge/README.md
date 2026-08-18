@@ -89,7 +89,7 @@ For repository development, use an absolute path:
 For an AI agent that supports installable skills, add the live-control workflow:
 
 ```bash
-npx skills add 2bbb/maxforge --skill maxforge-mcp
+npx skills add bbb-max-externals/maxforge --skill maxforge-mcp
 ```
 
 The skill provides target selection and recovery rules. It does not replace the

@@ -1,9 +1,9 @@
 # maxforge
 
 [![npm version](https://img.shields.io/npm/v/maxforge.svg)](https://www.npmjs.com/package/maxforge)
-[![Build Max package](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/2bbb/maxforge/actions/workflows/build-max-package.yml)
+[![Build Max package](https://github.com/bbb-max-externals/maxforge/actions/workflows/build-max-package.yml/badge.svg)](https://github.com/bbb-max-externals/maxforge/actions/workflows/build-max-package.yml)
 
-[Website](https://2bit.jp/maxforge/) · [Documentation](https://2bit.jp/maxforge/docs/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/2bbb/maxforge/releases)
+[Website](https://2bit.jp/maxforge/) · [Documentation](https://2bit.jp/maxforge/docs/) · [npm](https://www.npmjs.com/package/maxforge) · [Max package releases](https://github.com/bbb-max-externals/maxforge/releases)
 
 maxforge is an unofficial toolkit for describing Max patches as text. Its main
 use case is generating repeated object and connection structures that are
@@ -92,7 +92,7 @@ args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
 ```
 
 Install the Max package from
-[GitHub Releases](https://github.com/2bbb/maxforge/releases), then open a patch
+[GitHub Releases](https://github.com/bbb-max-externals/maxforge/releases), then open a patch
 containing one `maxforge.sync` object. The server listens on
 `127.0.0.1:8766` by default.
 
@@ -114,8 +114,8 @@ documents ownership, revisions, rollback limits, and failure handling.
 - Repository skills:
 
   ```bash
-  npx skills add 2bbb/maxforge --skill maxforge
-  npx skills add 2bbb/maxforge --skill maxforge-mcp
+  npx skills add bbb-max-externals/maxforge --skill maxforge
+  npx skills add bbb-max-externals/maxforge --skill maxforge-mcp
   ```
 
 Skills provide agent instructions only. They do not install the npm server or
