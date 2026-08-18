@@ -182,7 +182,7 @@ notarize_and_verify() {
     --key "$key_path" \
     --key-id "$APPLE_API_KEY_ID" \
     --issuer "$APPLE_API_ISSUER_ID" \
-    --wait --timeout 30m --output-format json > "$response_path"
+    --wait --timeout 60m --output-format json > "$response_path"
 
   status="$(plutil -extract status raw -o - "$response_path")"
   submission_id="$(plutil -extract id raw -o - "$response_path")"
