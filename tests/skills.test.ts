@@ -77,4 +77,15 @@ describe("agent skills", () => {
     expect(guidance).not.toMatch(/`(?:s~|r~)`/);
     expect(guidance).toContain("never invent `inlet~` or `outlet~`");
   });
+
+  it("requires context-derived semantic identities in agent guidance", () => {
+    const offline = source("skills/maxforge/SKILL.md");
+    const live = source("skills/maxforge-mcp/SKILL.md");
+
+    expect(offline).toContain("semantic DSL names");
+    expect(offline).toContain("Max box ID");
+    expect(live).toContain("managed varname");
+    expect(live).toContain("inspect the surrounding patch context before naming it");
+    expect(live).toContain("Do not silently claim an unmanaged human-created box");
+  });
 });

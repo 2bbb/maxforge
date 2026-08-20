@@ -626,7 +626,7 @@ export function managedIdFromVarName(
   if (!varName.startsWith(prefix)) return null;
 
   const name = varName.substring(prefix.length);
-  return /^\w+$/.test(name) ? `obj-${name}` : null;
+  return /^\w+$/.test(name) && !/^\d+$/.test(name) ? `obj-${name}` : null;
 }
 
 function calculateRevision(scope: string, patcher: PatchGraphNode): string {

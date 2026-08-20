@@ -35,8 +35,11 @@ For example, DSL object `osc_3` in scope `voices` becomes
 
 Only varnames that exactly match this grammar for the active scope belong to the
 graph. A shorter prefix scope does not own a longer scope (`foo` does not own
-`foo_bar`). A consumer must not modify other objects. Managed graph compilation
-rejects `@varname` because overriding it would destroy ownership tracking.
+`foo_bar`). The `<dsl-name>` suffix must contain at least one letter or
+underscore; a digits-only suffix is not a managed identity because it is
+indistinguishable from Max's default box IDs. A consumer must not modify other
+objects. Managed graph compilation rejects `@varname` because overriding it
+would destroy ownership tracking.
 
 The reserved varname is the ownership marker in protocol version 1. The native
 consumer therefore treats a manually renamed object as scope-owned. The MCP
@@ -54,7 +57,17 @@ osc_3 -> obj-osc_3
 
 Names are unique within each patcher, so inserting or reordering unrelated
 declarations does not change existing IDs. Nested patchers have their own local
-ID namespace and are addressed by `targetPath`.
+ID namespace and are addressed by `targetPath`. The normal decompiler recovers
+names from these semantic IDs and ignores default numeric IDs such as `obj-1`.
+For an otherwise unidentified hand-authored Max box, a valid `varname` is the
+next identity source before object-text inference. Reserved managed varnames are
+excluded from this generic fallback; managed serialization supplies the DSL name
+through its scope-aware path.
+
+In a managed graph the DSL name also determines the suffix of the scope-owned
+varname (`filter_cutoff` in `synth` becomes
+`maxforge_synth_obj_filter_cutoff`). Names must therefore express durable patch
+roles, not temporary generation order. Renaming is an identity replacement.
 
 ## Revisions
 

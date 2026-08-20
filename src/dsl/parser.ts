@@ -65,6 +65,13 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     const subpatcherMatch = line.match(/^(\w+)\s*=\s*p\s+(\w+)(.*?)\s*\{$/);
     if (subpatcherMatch) {
       const [, name, subpatcherName, attrText] = subpatcherMatch;
+      if (!isIdentifier(name) || !isIdentifier(subpatcherName)) {
+        appendSyntaxErrors(
+          errors,
+          ["Subpatcher identifiers must contain a letter or underscore"],
+          current.line
+        );
+      }
       const {
         text: cleanSubpatcherText,
         pos,
@@ -94,7 +101,7 @@ export function parse(source: string): { ast: ASTNode; errors: CompileError[] } 
     if (eqIdx > 0) {
       const name = line.substring(0, eqIdx).trim();
       let objectText = line.substring(eqIdx + 1).trim();
-      if (/^\w+$/.test(name)) {
+      if (isIdentifier(name)) {
         const positioned = parsePositionSuffix(objectText);
         appendSyntaxErrors(errors, positioned.errors, current.line);
         objectText = positioned.text;
@@ -159,6 +166,10 @@ function appendSyntaxErrors(
   }
 }
 
+function isIdentifier(value: string): boolean {
+  return /^\w+$/.test(value) && !/^\d+$/.test(value);
+}
+
 function validateSpecialObjectText(text: string): string | null {
   const type = text.match(/^(comment|message)(?:\s|$)/)?.[1];
   if (!type) return null;
@@ -220,6 +231,7 @@ function parseConnection(line: string, lineNum: number): ConnectionStmt | null {
 function parsePortRef(text: string): PortRef | null {
   const match = text.match(/^(\w+)(?:\[(\d+)(?::(\d+))?\])?$/);
   if (!match) return null;
+  if (!isIdentifier(match[1])) return null;
 
   const name = match[1];
   const outlet = match[2] ? parseInt(match[2]) : undefined;

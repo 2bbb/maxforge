@@ -257,7 +257,7 @@ describe("reviewPatchEdits", () => {
       (_, index) => {
         const before = box({
           runtimeId: `runtime-${index}`,
-          varName: `maxforge_voices_obj_${index}`,
+          varName: `maxforge_voices_obj_item_${index}`,
           managed: true,
         });
         return {
@@ -279,12 +279,12 @@ describe("reviewPatchEdits", () => {
     expect(review.editClusters[0]).toMatchObject({
       id: "edit-1",
       changeIndexes: [0],
-      managedObjectIds: ["obj-0"],
+      managedObjectIds: ["obj-item_0"],
     });
     expect(review.editClusters[999]).toMatchObject({
       id: "edit-1000",
       changeIndexes: [999],
-      managedObjectIds: ["obj-999"],
+      managedObjectIds: ["obj-item_999"],
     });
   });
 });

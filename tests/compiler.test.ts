@@ -118,6 +118,113 @@ describe("round-trip", () => {
     }
   });
 
+  it("preserves DSL object names through generated semantic box IDs", () => {
+    const source = `
+frequency_control = number
+carrier_oscillator = cycle~ 440
+frequency_control -> carrier_oscillator
+`;
+    const original = compile(parse(source).ast, db);
+    expect(original.success).toBe(true);
+
+    const dsl = decompile(original.output!);
+    expect(dsl).toContain("frequency_control = number");
+    expect(dsl).toContain("carrier_oscillator = cycle~ 440");
+    expect(dsl).toContain("frequency_control -> carrier_oscillator");
+  });
+
+  it("uses a valid Max varname when the box ID is only a default sequence", () => {
+    const patch = compile(parse("n = number").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+    patch.patcher.boxes[0].box.varname = "filter_cutoff";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("filter_cutoff = number @varname filter_cutoff");
+  });
+
+  it("prefers a semantic box ID over a different Max varname", () => {
+    const patch = compile(parse("carrier_oscillator = cycle~ 440").ast, db).output!;
+    patch.patcher.boxes[0].box.varname = "legacy_name";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain(
+      "carrier_oscillator = cycle~ 440 @varname legacy_name"
+    );
+  });
+
+  it("deduplicates repeated Max varnames and keeps connections valid", () => {
+    const patch = compile(parse("a = number\nb = number\na -> b").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+    patch.patcher.boxes[0].box.varname = "shared_control";
+    patch.patcher.boxes[1].box.id = "obj-2";
+    patch.patcher.boxes[1].box.varname = "shared_control";
+    patch.patcher.lines[0].patchline.source[0] = "obj-1";
+    patch.patcher.lines[0].patchline.destination[0] = "obj-2";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("shared_control = number");
+    expect(dsl).toContain("shared_control_2 = number");
+    expect(dsl).toContain("shared_control -> shared_control_2");
+    expect(parse(dsl).errors).toHaveLength(0);
+  });
+
+  it("reserves semantic IDs ahead of conflicting varname fallbacks", () => {
+    const patch = compile(parse("manual = number\nfilter_cutoff = number").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+    patch.patcher.boxes[0].box.varname = "filter_cutoff";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("filter_cutoff_2 = number @varname filter_cutoff");
+    expect(dsl).toContain("filter_cutoff = number");
+  });
+
+  it("reserves varnames ahead of object-text inference regardless of box order", () => {
+    const patch = compile(parse("inferred = cycle~ 440\nmanual = number").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+    patch.patcher.boxes[1].box.id = "obj-2";
+    patch.patcher.boxes[1].box.varname = "cycle";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("cycle_2 = cycle~ 440");
+    expect(dsl).toContain("cycle = number @varname cycle");
+  });
+
+  it("does not interpret managed ownership varnames as generic DSL names", () => {
+    const patch = compile(parse("n = cycle~ 440").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+    patch.patcher.boxes[0].box.varname = "maxforge_synth_obj_filter_cutoff";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("cycle = cycle~ 440");
+    expect(dsl).not.toContain("maxforge_synth_obj_filter_cutoff =");
+  });
+
+  it("recovers semantic IDs inside nested patchers", () => {
+    const source = `
+signal_path = p inner {
+  source_in = inlet
+  processed_out = outlet
+  source_in -> processed_out
+}
+`;
+    const patch = compile(parse(source).ast, db).output!;
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("signal_path = p inner");
+    expect(dsl).toContain("source_in = inlet");
+    expect(dsl).toContain("processed_out = outlet");
+    expect(dsl).toContain("source_in -> processed_out");
+  });
+
+  it("does not mistake a default numeric Max box ID for a DSL name", () => {
+    const patch = compile(parse("n = number").ast, db).output!;
+    patch.patcher.boxes[0].box.id = "obj-1";
+
+    const dsl = decompile(patch);
+    expect(dsl).toContain("number = number");
+    expect(dsl).not.toContain("1 = number");
+  });
+
   it("preserves all line connections (basic_synth)", () => {
     const source = loadFixture("basic_synth.maxdsl");
     const { ast } = parse(source);
@@ -194,6 +301,16 @@ freq -> mt -> osc -> dac
     expect(
       ast.statements.filter((s) => s.type === "connection")
     ).toHaveLength(1);
+  });
+
+  it("rejects numeric-only names that collide with Max default box IDs", () => {
+    expect(parse("1 = number").errors).toEqual([
+      expect.objectContaining({ code: "E007", line: 1 }),
+    ]);
+    expect(parse("1osc = cycle~ 440").errors).toHaveLength(0);
+    expect(parse("fx = p 1 {\n  i = inlet\n  o = outlet\n}").errors).toEqual([
+      expect.objectContaining({ code: "E007", line: 1 }),
+    ]);
   });
 
   it("parses patch declaration", () => {
@@ -1200,10 +1317,10 @@ describe("attributes", () => {
 
     const dsl = decompile(patch);
     expect(dsl).toContain(
-      "# maxforge omitted unsupported attribute @saved_object_attributes from number"
+      "# maxforge omitted unsupported attribute @saved_object_attributes from n"
     );
     expect(dsl).toContain(
-      "# maxforge omitted unsupported attribute @embedstate from number"
+      "# maxforge omitted unsupported attribute @embedstate from n"
     );
     expect(dsl).not.toContain("[object Object]");
     expect(parse(dsl).errors).toHaveLength(0);

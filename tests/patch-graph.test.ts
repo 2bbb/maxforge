@@ -5,6 +5,7 @@ import {
   createEmptyPatchGraph,
   createPatchGraph,
   diffPatchGraphs,
+  managedIdFromVarName,
   parse,
   PatchGraph,
   patchGraphToDsl,
@@ -23,6 +24,13 @@ function compileGraph(source: string, scope = "voices"): PatchGraph {
 }
 
 describe("managed patch graphs", () => {
+  it("rejects numeric-only managed identity suffixes", () => {
+    expect(managedIdFromVarName("voices", "maxforge_voices_obj_1")).toBeNull();
+    expect(managedIdFromVarName("voices", "maxforge_voices_obj_1osc")).toBe(
+      "obj-1osc"
+    );
+  });
+
   it("serializes nested managed graphs to lossless explicit working DSL", () => {
     const graph = compileGraph(`
 source = cycle~ 440 @presentation 1 at(-12.5, 20.25, 123.5, 31)

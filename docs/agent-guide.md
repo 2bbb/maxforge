@@ -207,6 +207,14 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 
 - `scope` は英字またはアンダースコアで始まる識別子にする。
 - managed graphでは`@varname`を指定しない。`maxforge_<scope>_obj_...`の形式で自動管理される。
+- DSL名は役割を表す意味的な名前にする。例えばscope `synth`の
+  `filter_cutoff`は`maxforge_synth_obj_filter_cutoff`になる。DSL名の変更は
+  表示名の変更ではなくidentityの置換である。
+- ユーザーが名前を指定していない場合、既存DSL、object text、コメント、
+  周辺の接続、同一パッチ内の命名規則を読んでから名前を決める。
+  `obj1`、`thing`、`temp`のような使い捨て名を付けない。
+- 人間が追加したunmanaged objectを自動的にmanaged扱いにしない。文脈から
+  名前を提案できても、管理対象へ取り込む意図が確定してからcomplete DSLへ含める。
 - `baseRevision`が現在のrevisionと一致しないplanは適用しない。
 - managed scope外のオブジェクトを削除・変更しない。
 - DSLはdesired stateとして扱い、`delete`などの命令型構文を追加しない。
@@ -511,7 +519,12 @@ node dist/cli/index.js compile input.maxdsl -o object_name.maxhelp
 
 既存の `.maxpat` ファイルをDSLテキストに変換する。
 
-- オブジェクト名は `text` の先頭トークンまたは `maxclass` から推定され、重複時は `_2`, `_3` が付く
+- オブジェクト名は、意味を持つbox ID (`obj-name`)、通常の`varname`、`text`の
+  先頭トークン、`maxclass`の順で復元・推定され、重複時は`_2`, `_3`が付く。
+  `obj-1`のようなMax標準の連番IDは名前として使わない。
+- `maxforge_<scope>_obj_...`はmanaged ownership用なので、通常のdecompileが
+  genericな`varname` fallbackとして採用することはない。managed graphは
+  scope-aware serializerでDSL名を復元する。
 - 演算子オブジェクト（`*~`, `+~`等）は意味名に変換（`mul`, `add`等）
 - 通常のdecompileは`patching_rect`のx/yを`at(x, y)`として出力する。
 - human edit adoptionが返すworking DSLはresizeを失わないよう`at(x, y, width, height)`を使う。

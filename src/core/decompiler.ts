@@ -26,15 +26,37 @@ export function decompile(
 
   const idToName = new Map<string, string>();
   const usedNames = new Set<string>();
+  const semanticNames = new Map(
+    p.boxes.flatMap(({ box }) => {
+      const name = semanticNameFromId(box.id);
+      return name ? [[box.id, name] as const] : [];
+    })
+  );
+  const reservedSemanticNames = new Set(semanticNames.values());
+  const reservedVarNames = new Set(
+    p.boxes.flatMap(({ box }) => {
+      const name = varNameFromBox(box);
+      return name ? [name] : [];
+    })
+  );
+  const reservedIdentityNames = new Set([
+    ...reservedSemanticNames,
+    ...reservedVarNames,
+  ]);
 
   for (const bw of p.boxes) {
     const box = bw.box;
     const signalPort = signalPortIds.has(box.id);
+    const configuredName = options.boxName?.(box);
+    const semanticName = semanticNames.get(box.id);
+    const varName = varNameFromBox(box);
     const name = generateName(
       box,
       usedNames,
       signalPort,
-      options.boxName?.(box)
+      configuredName ?? semanticName ?? varName,
+      configuredName !== undefined || semanticName !== undefined,
+      varName ? reservedSemanticNames : reservedIdentityNames
     );
     idToName.set(box.id, name);
     usedNames.add(name);
@@ -58,9 +80,11 @@ function generateName(
   box: BoxJSON,
   usedNames: Set<string>,
   signalPort: boolean,
-  preferredName?: string
+  preferredName?: string,
+  requirePreferredName = false,
+  reservedNames: ReadonlySet<string> = new Set()
 ): string {
-  if (preferredName !== undefined) {
+  if (requirePreferredName && preferredName !== undefined) {
     if (!/^\w+$/.test(preferredName)) {
       throw new Error(
         `Preferred DSL name ${JSON.stringify(preferredName)} is not a valid identifier`
@@ -74,14 +98,31 @@ function generateName(
     return preferredName;
   }
 
-  const base = nameFromBox(box, signalPort);
+  const base = sanitizeName(preferredName ?? nameFromBox(box, signalPort));
   let name = base;
   let counter = 2;
-  while (usedNames.has(name) || name === "") {
+  while (usedNames.has(name) || reservedNames.has(name) || name === "") {
     name = `${base}_${counter}`;
     counter++;
   }
-  return sanitizeName(name);
+  return name;
+}
+
+function semanticNameFromId(id: string): string | undefined {
+  const name = id.match(/^obj-(\w+)$/)?.[1];
+  return name && !/^\d+$/.test(name) ? name : undefined;
+}
+
+function varNameFromBox(box: BoxJSON): string | undefined {
+  if (
+    typeof box.varname === "string" &&
+    /^\w+$/.test(box.varname) &&
+    !/^maxforge_[A-Za-z_]\w*_obj_\w+$/.test(box.varname)
+  ) {
+    return box.varname;
+  }
+
+  return undefined;
 }
 
 const OPERATOR_NAMES: Record<string, string> = {

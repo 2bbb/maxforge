@@ -100,7 +100,7 @@ describe("maxforge core CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(await readFile(recovered, "utf8")).toContain('patch "Clipboard CLI"');
-    expect(await readFile(recovered, "utf8")).toContain("button -> print");
+    expect(await readFile(recovered, "utf8")).toContain("source -> sink");
   });
 
   it("returns a failing exit status for invalid DSL", async () => {

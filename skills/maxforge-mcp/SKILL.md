@@ -137,6 +137,12 @@ accessibility automation, Max JavaScript, `node.script`, or invented
    deletions, so do not submit a fragment as though it were an imperative edit.
    Use real Max object names only. Signal subpatch ports are `inlet signal` and
    `outlet signal`, never `inlet~` or `outlet~`. Do not infer names by analogy.
+   Give every object a semantic DSL name that describes its role; that name
+   becomes the suffix of its scope-owned managed varname. When the user has not
+   named a requested object, inspect the surrounding patch context before naming it:
+   read nearby topology, object text, comments, existing DSL, and established
+   naming vocabulary. Do not ask solely for a name when the role is unambiguous,
+   and do not use placeholders such as `obj1`, `thing`, `new_object`, or `temp`.
 9. If inspection reports live changes, call `maxforge_review_live_changes`.
    Treat its layout, configuration, annotation, ownership, and routing signals
    as evidence, not as certainty about the human's intent. Read related changes
@@ -208,6 +214,15 @@ for i in 0..7 {
 
 When changing this graph, retain every managed object and connection that
 should survive. Do not send only the new line.
+
+DSL names are durable managed identities. For example, `filter_cutoff` in scope
+`synth` becomes managed varname `maxforge_synth_obj_filter_cutoff`; renaming it
+causes an identity replacement rather than a cosmetic label change. If a human
+creates or edits an object without assigning a managed varname, inspect its
+object text, comments, neighbors, routing, and the surrounding naming scheme
+before proposing a semantic name. Do not silently claim an unmanaged human-created box.
+Only incorporate it after the user's intent to manage it is established, then
+use the context-derived DSL name consistently in the complete desired state.
 
 ## Recovery rules
 

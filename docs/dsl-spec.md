@@ -93,10 +93,12 @@ osc = cycle~ 440
 ### 3.3 Identifiers (IDENT)
 
 ```
-IDENT ::= ( a-z | A-Z | 0-9 | _ )+
+IDENT ::= ( a-z | A-Z | 0-9 | _ )+ containing at least one letter or underscore
 ```
 
-- Current parser accepts letters, digits, and underscores, including a digit as the first character.
+- The parser accepts letters, digits, and underscores, including a digit as the
+  first character, but rejects digits-only names because they collide with Max's
+  default numeric box IDs (`obj-1`, `obj-2`, ...).
 - For portable output and readable decompilation, prefer starting names with a letter or underscore.
 - Case-sensitive.
 - Used for: object names (LHS of `=`), connection references.
@@ -293,6 +295,13 @@ name = type [args...] [@attr val ...] [at(x, y[, width, height])]
 - The first token of the object text is resolved against the object database.
 - Generated box IDs are derived from the DSL name (`name` → `obj-name`) and stay
   stable when unrelated statements are inserted or reordered.
+- The general decompiler restores the DSL name from a semantic `obj-name` box
+  ID. It ignores Max's default numeric IDs such as `obj-1`; when no semantic ID
+  exists, a valid non-managed `varname` is used before object-text-based name
+  inference. Reserved `maxforge_<scope>_obj_...` ownership varnames are handled
+  only by the managed graph serializer, not as generic fallback names.
+- DSL names should describe functional roles rather than declaration order or
+  object type alone. Renaming one changes its generated box identity.
 - Attributes are emitted as box JSON keys after structural keys are generated. Reserved structural keys are rejected.
 - `at(x, y)` — **Optional** position override.
 - `at(x, y, width, height)` — also preserves the complete box rectangle. Objects without `at()` are positioned by auto-layout.

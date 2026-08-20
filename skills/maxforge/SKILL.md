@@ -120,6 +120,22 @@ for i in 0..7 {
 - Expansion rejects non-finite arithmetic and is capped at 100,000 iterations per loop and 100,000 emitted lines.
 - Inline comments are not supported; put comments on their own line.
 
+## Semantic object identity
+
+- Use semantic DSL names that describe each object's role in the patch, such as
+  `carrier_oscillator`, `filter_cutoff`, or `voice_3_gain`. Do not use disposable
+  names such as `obj1`, `thing`, `new_object`, or `temp`.
+- A DSL name is structural identity, not a comment: maxforge stores it in the
+  generated Max box ID as `name` -> `obj-name`, and decompile uses that Max box
+  ID to recover the original name. Renaming it is therefore an identity change.
+- When the user has not supplied names, derive them from the requested function,
+  nearby object roles, signal/control flow, comments, and the vocabulary already
+  used in the source patch. Use a type-only name such as `number` or `cycle` only
+  when the type itself is genuinely the object's role.
+- For a hand-authored `.maxpat` whose default numeric box ID carries no identity,
+  decompile may use a valid Max `varname` as the DSL name. Preserve meaningful
+  existing `varname` values instead of replacing them with generic labels.
+
 ## Object metadata boundaries
 
 - Do not invent an object name by analogy or by adding/removing `~`.
