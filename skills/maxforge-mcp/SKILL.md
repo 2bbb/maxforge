@@ -246,7 +246,8 @@ accessibility automation, Max JavaScript, `node.script`, or invented
 17. Apply does not persist the Max document. Call `maxforge_save_patch` only
     when persistence is intended. Omit `path` only for an already-saved patch;
     save-as requires an absolute Max-host path and explicit `overwrite: true`
-    to replace a file.
+    to replace a file. Treat a rejected save as a completed failed operation:
+    inspect the target before retrying instead of restarting the broker blindly.
 18. Use `maxforge_close_patch` only when closure is intended. Dirty state is
     rejected unless `discard: true` is explicit; save first otherwise.
 

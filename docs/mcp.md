@@ -392,11 +392,14 @@ that file normally and use its configured `patcherId` instead.
 
 ### `maxforge_save_patch`
 
-Saves a registered patch through Max's patcher `write` method. Omit `path` only
-when the patch already has a file path. Supplying an absolute `.maxpat` path is
-save-as; an existing destination is rejected unless `overwrite: true` is
-explicit. The tool succeeds only after Max reports a non-empty path and a clean
-dirty flag. Applying DSL does not save automatically.
+Saves a registered patch through Max's patcher save methods. Omit `path` only
+when the patch already has a file path; this uses `write`. Supplying an absolute
+`.maxpat` path is save-as and uses Max's filename/path-ID `saveto` method.
+An existing destination is rejected unless `overwrite: true` is explicit. The
+tool succeeds only after Max reports the requested non-empty path and a clean
+dirty flag. A rejected or timed-out save releases the target for subsequent
+inspection and mutation. Max must itself be in a state where saving is enabled.
+Applying DSL does not save automatically.
 
 ### `maxforge_close_patch`
 

@@ -367,6 +367,52 @@ describe("MaxforgeWebSocketBridge", () => {
     expect(bridge.listPatches()).toEqual([]);
   });
 
+  it("allows inspection immediately after Max rejects a save", async () => {
+    const bridge = createBridge();
+    const status = await bridge.start();
+    const client = await connect(status.port);
+    await register(bridge, client, registration("patch-a", "voices", false));
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as {
+        requestId: string;
+        patcherId: string;
+        scope: string;
+      };
+      client.send(JSON.stringify({
+        type: "maxforge.error",
+        requestId: request.requestId,
+        patcherId: request.patcherId,
+        scope: request.scope,
+        message: "save destination is unavailable",
+      }));
+    });
+
+    await expect(bridge.savePatch({
+      patcherId: "patch-a",
+      scope: "voices",
+      path: "/tmp/unavailable.maxpat",
+      overwrite: false,
+    })).rejects.toThrow(
+      'Max patch "patch-a" rejected save: save destination is unavailable'
+    );
+
+    client.once("message", (data) => {
+      const request = JSON.parse(data.toString()) as { requestId: string };
+      client.send(JSON.stringify({
+        ...snapshotEvent(request.requestId),
+        patcherId: "patch-a",
+        scope: "voices",
+      }));
+    });
+
+    await expect(bridge.inspect("patch-a", "voices")).resolves.toMatchObject({
+      type: "maxforge.snapshot",
+      patcherId: "patch-a",
+      scope: "voices",
+    });
+  });
+
   it("validates Max-host patch paths before sending file requests", async () => {
     const bridge = createBridge();
     const status = await bridge.start();

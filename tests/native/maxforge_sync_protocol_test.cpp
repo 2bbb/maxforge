@@ -153,6 +153,40 @@ void test_network_configuration() {
 	);
 }
 
+void test_save_completion() {
+	using state = sync_protocol::save_completion_state;
+	require(
+		sync_protocol::evaluate_save_completion(false, true, true, false) ==
+			state::succeeded,
+		"clean patch at the requested path did not complete"
+	);
+	require(
+		sync_protocol::evaluate_save_completion(true, true, true, false) ==
+			state::pending,
+		"dirty patch completed"
+	);
+	require(
+		sync_protocol::evaluate_save_completion(false, false, true, false) ==
+			state::pending,
+		"patch without a filepath completed"
+	);
+	require(
+		sync_protocol::evaluate_save_completion(false, true, false, false) ==
+			state::pending,
+		"save-as completed at the previous destination"
+	);
+	require(
+		sync_protocol::evaluate_save_completion(false, true, false, true) ==
+			state::timed_out,
+		"wrong destination did not time out"
+	);
+	require(
+		sync_protocol::evaluate_save_completion(false, true, true, true) ==
+			state::succeeded,
+		"completion at the deadline was discarded"
+	);
+}
+
 void test_safe_set_attributes() {
 	require(sync_protocol::is_safe_set_attribute("patching_rect"), "position rejected");
 	require(sync_protocol::is_safe_set_attribute("presentation_rect"), "presentation rejected");
@@ -568,6 +602,7 @@ int main() {
 		{"identifiers", test_identifiers},
 		{"edit observation causes", test_edit_observation_causes},
 		{"network configuration", test_network_configuration},
+		{"save completion", test_save_completion},
 		{"safe set attributes", test_safe_set_attributes},
 		{"managed identity", test_managed_identity},
 		{"revisions, paths, and subpatchers", test_revisions_paths_and_subpatchers},

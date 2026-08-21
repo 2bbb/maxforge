@@ -59,13 +59,16 @@ MAXFORGE_CONFIG path/project.id:
 
 **前提:** controller capabilityを持つregistered patchが1個だけ存在し、書き込み可能なtemporary directoryがあること。
 
-1. 一意な`patcherId`、scope、titleを指定し、`maxforge_create_patch`で新規patchを作成する。
-2. そのpatchが、`maxforge.sync`を1個だけ含む独立したtargetとしてregisterされることを確認する。
-3. `button`、`counter`、`print`を含む小さなdesired DSLをprepareし、返されたreceiptだけをapplyしてconnectionをinspectionで検証する。
-4. `maxforge_save_patch`でabsolute temporary `.maxpat` pathへ保存する。Maxがclean patchを報告し、ファイルが存在することを確認する。
-5. `maxforge_close_patch`でcloseし、target listから消えることを確認する。
-6. 保存したファイルをMaxから通常の方法で開き直す。すでに`maxforge.sync`を含むため、`maxforge_open_patch`へ渡してはいけない。自動的にregisterされ、期待するgraphとsaved pathを保持していることを確認する。
-7. 別途、sync objectを含まないplain `.maxpat`を作る。それを`maxforge_open_patch`で開き、Maxforgeがsync objectを正確に1個だけinjectし、patchをdirtyにし、独立したtargetとしてregisterすることを確認する。
+1. Max標準の新規patchでFile > Save Asが有効なことを確認する。ウィンドウ名に`saving disabled`が表示される環境では成功系を実行できないため、Maxの認証状態を直してから続行する。
+2. 一意な`patcherId`、scope、titleを指定し、`maxforge_create_patch`で新規patchを作成する。
+3. そのpatchが、`maxforge.sync`を1個だけ含む独立したtargetとしてregisterされることを確認する。
+4. `button`、`counter`、`print`を含む小さなdesired DSLをprepareし、返されたreceiptだけをapplyしてconnectionをinspectionで検証する。
+5. まだ存在しないabsolute temporary `.maxpat` pathを指定し、`overwrite: false`で`maxforge_save_patch`を実行する。Maxがrequested pathとclean patchを報告し、ファイルが存在することを確認する。保存ダイアログが開いた場合は失敗とする。
+6. patchを再度変更し、同じpathへ`overwrite: false`で保存する。既存destinationとして拒否された直後にinspectが成功し、targetがpending状態に残っていないことを確認する。
+7. 同じpathへ`overwrite: true`で保存し、ファイル内容とMaxのdirty flagが更新されることを確認する。
+8. `maxforge_close_patch`でcloseし、target listから消えることを確認する。
+9. 保存したファイルをMaxから通常の方法で開き直す。すでに`maxforge.sync`を含むため、`maxforge_open_patch`へ渡してはいけない。自動的にregisterされ、期待するgraphとsaved pathを保持していることを確認する。
+10. 別途、sync objectを含まないplain `.maxpat`を作る。それを`maxforge_open_patch`で開き、Maxforgeがsync objectを正確に1個だけinjectし、patchをdirtyにし、独立したtargetとしてregisterすることを確認する。
 
 **合格条件:** duplicate sync objectや曖昧なwindow選択を起こさず、target identityとgraphがfile lifecycle全体で維持される。
 

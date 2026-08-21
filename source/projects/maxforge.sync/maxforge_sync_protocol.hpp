@@ -25,6 +25,12 @@ enum class edit_observation_cause {
 	unknown
 };
 
+enum class save_completion_state {
+	pending,
+	succeeded,
+	timed_out
+};
+
 struct validation_operation {
 	operation_kind kind{};
 	std::vector<std::string> target_path;
@@ -56,6 +62,12 @@ auto is_loopback_host(const std::string &host) -> bool;
 auto is_valid_network_host(const std::string &host) -> bool;
 auto is_valid_auth_token(const std::string &token) -> bool;
 auto has_maxpat_extension(const std::string &path) -> bool;
+auto evaluate_save_completion(
+	bool dirty,
+	bool has_filepath,
+	bool destination_matches,
+	bool timed_out
+) -> save_completion_state;
 auto is_safe_set_attribute(const std::string &attribute) -> bool;
 auto expected_variable_name(
 	const std::string &scope,

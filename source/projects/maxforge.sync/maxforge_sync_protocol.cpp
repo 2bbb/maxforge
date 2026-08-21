@@ -151,6 +151,20 @@ auto has_maxpat_extension(const std::string &path) -> bool {
 	return true;
 }
 
+auto evaluate_save_completion(
+	bool dirty,
+	bool has_filepath,
+	bool destination_matches,
+	bool timed_out
+) -> save_completion_state
+{
+	if(!dirty && has_filepath && destination_matches) {
+		return save_completion_state::succeeded;
+	}
+	if(timed_out) return save_completion_state::timed_out;
+	return save_completion_state::pending;
+}
+
 auto is_safe_set_attribute(const std::string &attribute) -> bool {
 	if(attribute.empty()) return false;
 	const auto first = static_cast<unsigned char>(attribute.front());

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cmath>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -110,6 +111,13 @@ struct patch_snapshot {
 struct resolved_patch_path {
 	short path_id{};
 	std::array<char, c74::max::MAX_FILENAME_CHARS> filename{};
+	std::array<char, c74::max::MAX_PATH_CHARS> conformed_path{};
+};
+
+struct pending_patch_save {
+	std::string request_id;
+	std::optional<resolved_patch_path> destination;
+	std::chrono::steady_clock::time_point deadline;
 };
 
 auto make_instance_id(const void *address) -> std::string {
@@ -261,15 +269,39 @@ auto resolve_patch_path(const std::string &path) -> resolved_patch_path {
 		throw std::runtime_error("patch path must end with .maxpat");
 	}
 	resolved_patch_path result;
-	const auto error = c74::max::path_frompathname(
+	const auto conform_error = c74::max::path_nameconform(
 		path.c_str(),
+		result.conformed_path.data(),
+		c74::max::PATH_STYLE_MAX,
+		c74::max::PATH_TYPE_ABSOLUTE
+	);
+	if(conform_error != 0 || result.conformed_path.front() == '\0') {
+		throw std::runtime_error("Max could not normalize patch path: " + path);
+	}
+	// Save As targets do not exist yet, so use Max's potential-path resolver.
+	const auto resolve_error = c74::max::path_frompotentialpathname(
+		result.conformed_path.data(),
 		&result.path_id,
 		result.filename.data()
 	);
-	if(error != 0 || result.filename.front() == '\0') {
-		throw std::runtime_error("Max could not resolve patch path: " + path);
+	if(resolve_error != 0 || result.filename.front() == '\0') {
+		throw std::runtime_error(
+			"Max could not resolve patch path: " + path +
+			" (normalized: " + result.conformed_path.data() +
+			", error: " + std::to_string(resolve_error) + ")"
+		);
 	}
 	return result;
+}
+
+auto same_patch_path(
+	const resolved_patch_path &left,
+	const resolved_patch_path &right
+) -> bool
+{
+	return
+		left.path_id == right.path_id &&
+		std::string{left.filename.data()} == right.filename.data();
 }
 
 auto patch_path_exists(const resolved_patch_path &path) -> bool {
@@ -1854,6 +1886,7 @@ public:
 	~maxforge_sync() {
 		observation_timer_.stop();
 		observation_release_timer_.stop();
+		save_timer_.stop();
 		for(auto *patcher : observed_patchers_) {
 			c74::max::object_detach_byptr(maxobj(), patcher);
 		}
@@ -1923,6 +1956,14 @@ private:
 		}
 	};
 
+	c74::min::timer<c74::min::timer_options::defer_delivery> save_timer_{
+		this,
+		MIN_FUNCTION {
+			check_pending_save();
+			return {};
+		}
+	};
+
 	bool transport_open_{false};
 	bool registration_sent_{false};
 	bool edit_observation_suppressed_{true};
@@ -1931,6 +1972,7 @@ private:
 	std::string last_observed_structure_token_;
 	std::string last_transport_error_;
 	std::string instance_id_;
+	std::optional<pending_patch_save> pending_patch_save_;
 
 	auto transport_status_label() const -> const char * {
 		switch(websocket_client_.state()) {
@@ -2136,6 +2178,18 @@ private:
 		const std::string &notification,
 		c74::max::t_object *source
 	) {
+		if(
+			pending_patch_save_ &&
+			registration == "patchernotify" &&
+			(
+				notification == "dirty" ||
+				notification == "filepath" ||
+				notification == "filename" ||
+				notification == "savefilepath"
+			)
+		) {
+			save_timer_.delay(0);
+		}
 		if(notification == "free" && source) {
 			observed_patchers_.erase(source);
 		}
@@ -2153,6 +2207,56 @@ private:
 			)
 		);
 		observation_timer_.delay(75);
+	}
+
+	void check_pending_save() {
+		if(!pending_patch_save_) return;
+		const auto request_id = pending_patch_save_->request_id;
+		try {
+			auto *root_patcher = top_level_patcher();
+			const auto filepath = symbol_string(
+				c74::max::jpatcher_get_filepath(root_patcher)
+			);
+			bool destination_matches{true};
+			if(pending_patch_save_->destination) {
+				destination_matches = false;
+				if(!filepath.empty()) {
+					try {
+						destination_matches = same_patch_path(
+							*pending_patch_save_->destination,
+							resolve_patch_path(filepath)
+						);
+					} catch(...) {
+						destination_matches = false;
+					}
+				}
+			}
+			const auto completion = sync_protocol::evaluate_save_completion(
+				c74::max::jpatcher_get_dirty(root_patcher) != 0,
+				!filepath.empty(),
+				destination_matches,
+				pending_patch_save_->deadline <= std::chrono::steady_clock::now()
+			);
+			if(completion == sync_protocol::save_completion_state::pending) {
+				save_timer_.delay(25);
+				return;
+			}
+			pending_patch_save_.reset();
+			if(completion == sync_protocol::save_completion_state::timed_out) {
+				send_error(
+					"Max did not complete patch save before timeout",
+					request_id
+				);
+				return;
+			}
+			send_patch_saved_event(request_id, root_patcher);
+		} catch(const std::exception &exception) {
+			pending_patch_save_.reset();
+			send_error(exception.what(), request_id);
+		} catch(...) {
+			pending_patch_save_.reset();
+			send_error("unknown patch save completion error", request_id);
+		}
 	}
 
 	void begin_agent_mutation() {
@@ -2451,6 +2555,9 @@ private:
 				}
 
 				if(message_type == "maxforge.save_patch.request") {
+					if(pending_patch_save_) {
+						throw std::runtime_error("another patch save is still pending");
+					}
 					auto *root_patcher = top_level_patcher();
 					std::string destination;
 					const auto has_destination = dictionary_optional_string(
@@ -2459,27 +2566,41 @@ private:
 						destination
 					);
 					const auto overwrite = dictionary_long(dictionary, "overwrite") != 0;
-					c74::max::t_max_err write_error{};
+					std::optional<resolved_patch_path> resolved_destination;
 					if(has_destination) {
-						const auto resolved_path = resolve_patch_path(destination);
-						if(!overwrite && patch_path_exists(resolved_path)) {
+						resolved_destination = resolve_patch_path(destination);
+						if(!overwrite && patch_path_exists(*resolved_destination)) {
 							throw std::runtime_error(
 								"save destination already exists; set overwrite=true: " +
 								destination
 							);
 						}
-						c74::max::t_atom argument{};
-						c74::max::atom_setsym(
-							&argument,
-							c74::max::gensym(destination.c_str())
-						);
-						write_error = c74::max::object_method_typed(
+						pending_patch_save_ = pending_patch_save{
+							request_id,
+							resolved_destination,
+							std::chrono::steady_clock::now() +
+								std::chrono::seconds{4}
+						};
+						// "write" ignores destination arguments. "saveto" takes
+						// owner, filename, path ID, and flags as untyped arguments.
+						const auto save_result = c74::max::object_method(
 							root_patcher,
-							c74::max::gensym("write"),
-							1,
-							&argument,
-							nullptr
+							c74::max::gensym("saveto"),
+							nullptr,
+							resolved_destination->filename.data(),
+							resolved_destination->path_id,
+							0
 						);
+						const auto save_error = static_cast<c74::max::t_max_err>(
+							reinterpret_cast<c74::max::t_ptr_int>(save_result)
+						);
+						if(save_error != c74::max::MAX_ERR_NONE) {
+							pending_patch_save_.reset();
+							throw std::runtime_error(
+								"Max rejected patch save request (error: " +
+								std::to_string(save_error) + ")"
+							);
+						}
 					} else {
 						if(symbol_string(
 							c74::max::jpatcher_get_filepath(root_patcher)
@@ -2488,23 +2609,28 @@ private:
 								"unsaved patch requires an explicit save path"
 							);
 						}
-						write_error = c74::max::object_method_typed(
+						pending_patch_save_ = pending_patch_save{
+							request_id,
+							std::nullopt,
+							std::chrono::steady_clock::now() +
+								std::chrono::seconds{4}
+						};
+						const auto write_error = c74::max::object_method_typed(
 							root_patcher,
 							c74::max::gensym("write"),
 							0,
 							nullptr,
 							nullptr
 						);
+						if(write_error != c74::max::MAX_ERR_NONE) {
+							pending_patch_save_.reset();
+							throw std::runtime_error(
+								"Max rejected patch write request (error: " +
+								std::to_string(write_error) + ")"
+							);
+						}
 					}
-					if(write_error != c74::max::MAX_ERR_NONE) {
-						throw std::runtime_error("Max rejected patch write request");
-					}
-					if(c74::max::jpatcher_get_dirty(root_patcher) != 0) {
-						throw std::runtime_error(
-							"Max did not complete patch save synchronously"
-						);
-					}
-					send_patch_saved_event(request_id, root_patcher);
+					save_timer_.delay(0);
 					return;
 				}
 
