@@ -1648,9 +1648,9 @@ export class MaxforgePatchService {
     if (!intent || intent.revision === current.revision) return;
     throw new Error(
       `Max patch "${request.patcherId}" scope "${request.scope}" contains ` +
-      "previously merged manual edits. Use maxforge_reconcile_patch and apply " +
-      "with manualChanges set to merge, or provide a complete currentDsl that " +
-      "includes the preserved edits."
+      "previously merged manual edits. Use maxforge_prepare_change with " +
+      "manualChanges set to merge, or provide the exact retained source as " +
+      "currentDsl (MCP callers can use currentSourceRef)."
     );
   }
 

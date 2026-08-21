@@ -565,7 +565,7 @@ const HELP_CONTENT = {
       "Send complete desired DSL once to maxforge_prepare_change with the exact inspected structure token. Review warnings, every destructive operation, and every replacement; bulk create/connect/rollback operations remain behind the receipt.",
       "Apply only the returned receiptId with maxforge_apply_prepared_change. Do not resend or recompile the DSL.",
       "Treat native mutation as acknowledged only when acknowledgement.revision equals targetRevision. When verification is present, require verification.revision to match; when it is absent or baselineCaptured is false, inspect before further mutation instead of retrying the apply.",
-      "After apply, retain sourceRef rather than copying complete DSL through agent context. Call maxforge_get_working_source only when the exact source is needed for authoring or recovery. While workingDslRequiredAsCurrent is true, pass that fetched exact source as currentDsl to the next prepare call until a successful apply realigns intent state.",
+      "After apply, retain sourceRef rather than copying complete DSL through agent context. Query only matching source regions for local edits and request full source only for broad rewrites or recovery. While workingDslRequiredAsCurrent is true, pass currentSourceRef to the next inline prepare call, or use that sourceRef as baseSourceRef for line edits, until a successful apply realigns intent state.",
       "Use maxforge_save_patch explicitly after successful mutation; apply changes live state but does not save the document.",
     ],
     rules: [
@@ -719,7 +719,7 @@ export function createMaxforgeMcpServer(
     },
     {
       instructions:
-        "Call maxforge_help with topic 'workflow' before the first live mutation. " +
+        "Use maxforge_help only when this compact receipt workflow is unavailable, unfamiliar, or recovering from an error; do not spend a normal mutation call on redundant help. " +
         "Before using a project external or abstraction, confirm it with " +
         "maxforge_catalog; membership is metadata, not a Max runtime probe. " +
         "Always select patcherId and scope from maxforge_list_patches, inspect the " +
@@ -747,7 +747,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Maxforge MCP workflow help",
       description:
-        "Return agent-oriented instructions for safe live patch workflow, setup, recovery, or safety. Call this before the first mutation and whenever an apply is rejected or ambiguous.",
+        "Return fallback agent-oriented instructions for safe live patch workflow, setup, recovery, or safety. Call it when the compact receipt workflow is unavailable or unfamiliar, and whenever an apply is rejected or ambiguous; omit the redundant call during a normal skill-guided mutation.",
       inputSchema: z.object({
         topic: helpTopicSchema.optional().describe(
           "Help topic; defaults to workflow"
@@ -1585,7 +1585,7 @@ export function createMaxforgeMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
-        idempotentHint: true,
+        idempotentHint: false,
       },
     },
     async ({ receiptId }) => {

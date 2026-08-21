@@ -76,26 +76,34 @@ for i in 0..7 {
 6. For live managed patching, generate a plan with `maxforge plan` and apply it
    to the native `maxforge.sync` external. Do not invent raw thispatcher commands
    when the target contains nested patchers.
-7. When MCP tools are available, call `maxforge_help` with `topic: "workflow"`
-   first, then list patches, select the explicit `patcherId`, and require its
+7. When MCP tools are available, prefer the dedicated `maxforge-mcp` skill.
+   A normal skill-guided edit does not need a redundant `maxforge_help` call;
+   use help when the compact receipt contract is unavailable, unfamiliar, or
+   in recovery. List patches, select the explicit `patcherId`, and require its
    `versionCompatible` field to be true before mutation. The loaded
    `externalVersion` must exactly match
    `maxforge_status.bridge.expectedExternalVersion`; a patch path does not prove
-   which external Max loaded. Then inspect it,
-   preview with `maxforge_compile_plan`, and apply the complete desired state
-   with `maxforge_apply_dsl`. If managed manual edits exist, use
+   which external Max loaded. Inspect it, then call `maxforge_prepare_change`
+   with complete `desiredDsl` once, or with retained `baseSourceRef` plus small
+   half-open line edits. Review compact counts, all deletes/disconnects,
+   replacements, warnings, and conflicts; apply only its one-time receipt with
+   `maxforge_apply_prepared_change`. Never resend the DSL at apply time. Retain
+   `sourceRef`, query bounded snippets with `maxforge_get_working_source`
+   `detail: "matches"`, and request full source only for broad rewrites or
+   recovery. If managed manual edits exist, use
    `maxforge_review_live_changes` to separate observed evidence from inferred
-   intent. Interpret related changes through `review.editClusters`, inspect the
-   raw entries named by `changeIndexes`, and treat `interpretationRisks` as
+   intent. Its default summary avoids bulk raw rows/snapshot/DSL; request
+   `detail: "full"` only for exact before/after evidence. Interpret related
+   changes through `review.editClusters` and treat `interpretationRisks` as
    prompts rather than conclusions. Use `maxforge_get_live_edit_history` first
    when recent edit order matters; check retention/drop metadata and never
    describe the observations as Max undo actions or proven human intent. Adopt
    an accepted current baseline with its exact structure token,
-   or use `maxforge_reconcile_patch` and apply with `manualChanges: "merge"`
-   only when it reports `canApply: true`. Update the complete working DSL after
-   either path. Use `maxforge_create_patch` when isolation in a
-   new Max window is required. Prefer the dedicated `maxforge-mcp` skill for
-   sustained live control. Never treat a timeout as success. Inspection reports
+   or prepare the concrete next state with `manualChanges: "merge"` and apply
+   only when it reports `canApply: true`. Use `maxforge_create_patch` when
+   isolation in a new Max window is required. Never treat a timeout as success;
+   receipts are consumed before native mutation and cannot be retried.
+   Inspection reports
    text/comments plus bounded scalar or flat-array box/patch-cord attributes;
    it intentionally omits volatile values, opaque attributes, and nested data.
    A failed apply attempts generated reverse operations but is not transactional;

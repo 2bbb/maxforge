@@ -148,6 +148,10 @@ describe("maxforge MCP protocol surface", () => {
         definitions.find((tool) => tool.name === "maxforge_apply_prepared_change")
           ?.description
       ).toContain("Do not retry");
+      expect(
+        definitions.find((tool) => tool.name === "maxforge_apply_prepared_change")
+          ?.annotations?.idempotentHint
+      ).toBe(false);
       expect(JSON.stringify(
         definitions.find((tool) => tool.name === "maxforge_inspect_patch")
           ?.outputSchema
