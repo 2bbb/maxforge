@@ -65,6 +65,7 @@ describe("agent skills", () => {
 
     expect(skill).toContain("--package=maxforge@X.Y.Z");
     expect(skill).not.toContain("--package=maxforge@latest");
+    expect(skill).toContain("starts with `v0.5.0`");
     expect(skill).not.toMatch(/maxforge@\d+\.\d+\.\d+/);
     expect(skill).toContain("never copy a version number from this skill");
     expect(skill).toContain("maxforge broker status");
@@ -73,6 +74,21 @@ describe("agent skills", () => {
     expect(alignment).toContain("maxforge-vX.Y.Z.zip");
     expect(alignment).toContain("Do not fall back");
     expect(alignment).toContain("versionCompatible: true");
+  });
+
+  it("keeps skill commands off the moving npm latest tag", () => {
+    const offlineSkill = readFileSync("skills/maxforge/SKILL.md", "utf8");
+    const liveSkill = readFileSync("skills/maxforge-mcp/SKILL.md", "utf8");
+    const alignment = readFileSync(
+      "skills/maxforge-mcp/references/native-version-alignment.md",
+      "utf8"
+    );
+
+    expect(offlineSkill).not.toMatch(/npx[^\n]*maxforge@latest/);
+    expect(offlineSkill).toContain("maxforge@X.Y.Z");
+    expect(liveSkill).toMatch(/Releases\s+through `v0\.4\.4`/);
+    expect(alignment).toContain("available from release `v0.5.0`");
+    expect(alignment).toContain("never use `maxforge@latest`");
   });
 
   it("rejects known fabricated Max signal object names in agent guidance", () => {

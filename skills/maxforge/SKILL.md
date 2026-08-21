@@ -12,10 +12,18 @@ Use `maxforge` as an unofficial text-first DSL compiler for Max/MSP `.maxpat` pa
 Use the published CLI without global install:
 
 ```bash
-npx maxforge@latest validate input.maxdsl
-npx maxforge@latest compile input.maxdsl -o output.maxpat
-npx maxforge@latest plan input.maxdsl --scope voices --compact -o plan.json
+npx maxforge@X.Y.Z validate input.maxdsl
+npx maxforge@X.Y.Z compile input.maxdsl -o output.maxpat
+npx maxforge@X.Y.Z plan input.maxdsl --scope voices --compact -o plan.json
 ```
+
+Replace `X.Y.Z` with one intended release and keep that exact version for the
+task. Resolve it from the project manifest or the user's installed MCP/native
+set; if neither exists, npm's `latest` dist-tag may be queried once for
+discovery, but copy the resulting semantic version into subsequent commands.
+Never leave Agent instructions, automation, or live MCP configuration on
+`maxforge@latest`: the Node frontend, broker, and loaded `maxforge.sync` binary
+must remain an exact version set.
 
 In this repository, use the local build while developing:
 
@@ -185,9 +193,9 @@ for i in 0..7 {
 - When changing the catalog locally, run
   `python3 scripts/audit-object-catalog.py` against Max 9 and add a unit case for
   every `argRule` entry.
-- Search metadata with `npx maxforge@latest catalog <query> --json`; an
+- Search metadata with `npx maxforge@X.Y.Z catalog <query> --json`; an
   unfiltered call lists project declarations and `--all` includes all built-ins.
-- Use `npx maxforge@latest bundle input.maxdsl -o package-directory` only when
+- Use `npx maxforge@X.Y.Z bundle input.maxdsl -o package-directory` only when
   every referenced custom dependency has a declared package path.
 
 ## Report reproducible defects

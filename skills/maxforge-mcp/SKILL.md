@@ -24,6 +24,11 @@ release; never copy a version number from this skill. Do not keep live MCP
 configuration on npm's moving `latest` dist-tag. The skill may align a mismatched
 native package from the exact versioned GitHub Release, but it does not install
 the npm runtime or mutate the Max package before mismatch evidence exists.
+The automated exact-asset alignment contract starts with `v0.5.0`. Releases
+through `v0.4.4` use the legacy unversioned Max-package asset and cannot be
+repaired by this installer. Do not fall back silently: upgrade the npm runtime,
+broker, and native package together to one release with versioned assets, or
+report that legacy installation remains a manual migration.
 
 The detached broker can outlive the frontend that started it. During an update,
 inspect and restart it with the package version being installed:

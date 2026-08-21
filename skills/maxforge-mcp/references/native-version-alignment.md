@@ -6,6 +6,13 @@ Use this procedure when `maxforge_list_patches` reports
 exact npm frontend version, not whichever old broker happens to be running and
 not another version merely because it is newer.
 
+This installer contract is available from release `v0.5.0`. Releases through
+`v0.4.4` published a legacy unversioned native archive, so an exact legacy
+asset will not exist under the filename required below. Do not reinterpret that
+as permission to use `latest`: migrate the npm frontend, broker, and complete
+native package together to one versioned release, or stop and report that a
+manual legacy migration is required.
+
 ## 1. Establish the exact target and destination
 
 1. Record the exact `X.Y.Z` pinned in the MCP frontend configuration. If status
@@ -74,8 +81,9 @@ perform alignment after the user already requested it.
    all Max search paths. Never keep a renamed `.mxo` or backup package beside
    the active copy; Max may still discover it.
 2. Pin MCP and broker commands to the same exact `maxforge@X.Y.Z`. npm's
-   `latest` dist-tag may be used to discover a release, but is not a stable live
-   configuration.
+   `latest` dist-tag may be queried once to discover the current published
+   version, but never use `maxforge@latest` as the live command or saved
+   configuration. Copy the discovered semantic version and pin it explicitly.
 3. Restart the broker with that exact package version if its runtime differs.
 4. Start Max, reopen the controller patch, and reconnect the MCP frontend.
 5. Call `maxforge_status`, then `maxforge_list_patches`. Continue only when the
