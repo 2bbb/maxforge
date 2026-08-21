@@ -224,85 +224,65 @@ jobs:
       - name: Verify Max package
         run: python3 scripts/verify-max-package.py --package dist/maxforge
 
-      - name: Create macOS-preserving archive
+      - name: Resolve versioned archive name
+        id: package-version
         shell: bash
         run: |
           set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          archive="maxforge-v${version}.zip"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_EVENT_NAME}" == "release" && "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} does not match package version v${version}"
+            exit 1
+          fi
+
+      - name: Create macOS-preserving archive
+        shell: bash
+        env:
+          ARCHIVE_NAME: ${{ steps.package-version.outputs.archive }}
+        run: |
+          set -euo pipefail
           cd dist
-          ditto -c -k --keepParent maxforge maxforge.zip
+          ditto -c -k --keepParent maxforge "$ARCHIVE_NAME"
 
       - name: Verify archive
-        run: python3 scripts/verify-max-package.py --archive dist/maxforge.zip
+        env:
+          ARCHIVE_NAME: ${{ steps.package-version.outputs.archive }}
+        run: python3 scripts/verify-max-package.py --archive "dist/$ARCHIVE_NAME"
 
       - name: Notarize and verify public archive
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         shell: bash
         env:
+          ARCHIVE_NAME: ${{ steps.package-version.outputs.archive }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           APPLE_API_PRIVATE_KEY_P8_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_P8_BASE64 }}
-        run: .github/scripts/macos-direct-distribution.sh notarize-and-verify dist/maxforge.zip maxforge
+        run: .github/scripts/macos-direct-distribution.sh notarize-and-verify "dist/$ARCHIVE_NAME" maxforge
 
       - name: Generate archive checksum
         shell: bash
-        run: .github/scripts/macos-direct-distribution.sh checksum dist/maxforge.zip
+        env:
+          ARCHIVE_NAME: ${{ steps.package-version.outputs.archive }}
+        run: .github/scripts/macos-direct-distribution.sh checksum "dist/$ARCHIVE_NAME"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
-          name: maxforge-latest
+          name: maxforge-package-${{ steps.package-version.outputs.version }}
           path: |
-            dist/maxforge.zip
-            dist/maxforge.zip.sha256
+            dist/${{ steps.package-version.outputs.archive }}
+            dist/${{ steps.package-version.outputs.archive }}.sha256
           if-no-files-found: error
-
-      - name: Update latest package release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cat > latest-release-notes.md <<EOF
-          Latest successful main build for maxforge.
-
-          Commit: ${GITHUB_SHA}
-          Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-
-          The archive contains the universal macOS maxforge.sync.mxo and x64 Windows maxforge.sync.mxe64, plus Max help, reference, documentation, and examples. The macOS external is Developer ID signed, and this exact ZIP was accepted by Apple's notarization service.
-          EOF
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f latest "$GITHUB_SHA"
-          git push origin refs/tags/latest --force
-
-          if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest \
-              dist/maxforge.zip#maxforge.zip \
-              dist/maxforge.zip.sha256#maxforge.zip.sha256 \
-              --clobber
-            gh release edit latest \
-              --title "maxforge latest" \
-              --notes-file latest-release-notes.md \
-              --target "$GITHUB_SHA" \
-              --latest
-          else
-            gh release create latest \
-              dist/maxforge.zip#maxforge.zip \
-              dist/maxforge.zip.sha256#maxforge.zip.sha256 \
-              --title "maxforge latest" \
-              --notes-file latest-release-notes.md \
-              --target "$GITHUB_SHA" \
-              --latest
-          fi
 
       - name: Upload to versioned release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            dist/maxforge.zip
-            dist/maxforge.zip.sha256
+            dist/${{ steps.package-version.outputs.archive }}
+            dist/${{ steps.package-version.outputs.archive }}.sha256
           fail_on_unmatched_files: true
