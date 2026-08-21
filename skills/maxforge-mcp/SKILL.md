@@ -15,16 +15,15 @@ For Codex, a typical stdio entry is:
 ```toml
 [mcp_servers.maxforge]
 command = "npx"
-args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
+args = ["-y", "--package=maxforge@X.Y.Z", "maxforge-mcp"]
 ```
 
 This starts only the Node.js side. Max must separately load the matching native
-`maxforge.sync` external in a controller patch. The skill itself installs
-neither component. Treat `@latest` as bootstrap/update configuration, not a
-stable deployment pin. After status identifies the version embedded in the
-external Max actually loaded, replace `latest` with that exact `X.Y.Z` version
-when reproducible startup matters. Update the npm package and native external
-together; never copy a version number from this skill.
+`maxforge.sync` external in a controller patch. Replace `X.Y.Z` with one intended
+release; never copy a version number from this skill. Do not keep live MCP
+configuration on npm's moving `latest` dist-tag. The skill may align a mismatched
+native package from the exact versioned GitHub Release, but it does not install
+the npm runtime or mutate the Max package before mismatch evidence exists.
 
 The detached broker can outlive the frontend that started it. During an update,
 inspect and restart it with the package version being installed:
@@ -97,11 +96,14 @@ accessibility automation, Max JavaScript, `node.script`, or invented
    and filenames are display metadata, not target identities. Before any
    mutation, require the target's `versionCompatible` to be `true`. Its
    `externalVersion` is embedded in the binary Max actually loaded and must
-   exactly match `maxforge_status.bridge.expectedExternalVersion`. If it does
-   not, stop: install the matching external in an installed Max package or an
-   explicitly configured project search path, remove stale same-named copies,
+    exactly match `maxforge_status.bridge.expectedExternalVersion`. If it does
+   not, stop mutation and follow
+   [`references/native-version-alignment.md`](references/native-version-alignment.md).
+   Align the complete Max package from the exact `vX.Y.Z` release, back up the
+   replaced package outside Max search paths, remove confirmed stale copies,
    restart Max, reopen the patch, and list it again. A patch `filepath` and a
-   nearby external do not prove which binary Max resolved.
+   nearby external do not prove which binary Max resolved. Never fall back to a
+   moving latest release or overwrite multiple candidate copies by guesswork.
 5. If a separate window is required, call `maxforge_create_patch` with a unique
    `patcherId`, scope, and title. To manage an existing `.maxpat`, use
    `maxforge_open_patch` with an absolute path on the Max host. Opening injects

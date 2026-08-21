@@ -176,7 +176,7 @@
         <ol class="docs-steps">
           <li>
             <span>01</span>
-            <div>Download <a href="https://github.com/bbb-max-externals/maxforge/releases/download/latest/maxforge.zip"><code>maxforge.zip</code></a>.</div>
+            <div>Choose the matching <a href="https://github.com/bbb-max-externals/maxforge/releases"><code>maxforge-vX.Y.Z.zip</code></a>.</div>
           </li>
           <li>
             <span>02</span>
@@ -454,13 +454,19 @@ source[1] -&gt; destination[2]</code></pre>
       "command": "npx",
       "args": [
         "-y",
-        "--package=maxforge@latest",
+        "--package=maxforge@X.Y.Z",
         "maxforge-mcp"
       ]
     }
   }
 }</code></pre>
         </div>
+        <p>
+          Replace <code>X.Y.Z</code> with one exact release and install its
+          matching <code>maxforge-vX.Y.Z.zip</code>. Do not keep live MCP control
+          on npm's moving <code>latest</code> dist-tag: the frontend, broker, and
+          loaded native external must match exactly.
+        </p>
         <p>
           The first stdio frontend starts a detached broker; later frontends
           attach to it instead of competing for project state or ports. The

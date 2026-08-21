@@ -59,13 +59,20 @@ describe("agent skills", () => {
 
   it("keeps live-control version guidance release-independent", () => {
     const skill = source("skills/maxforge-mcp/SKILL.md");
+    const alignment = source(
+      "skills/maxforge-mcp/references/native-version-alignment.md"
+    );
 
-    expect(skill).toContain("--package=maxforge@latest");
     expect(skill).toContain("--package=maxforge@X.Y.Z");
+    expect(skill).not.toContain("--package=maxforge@latest");
     expect(skill).not.toMatch(/maxforge@\d+\.\d+\.\d+/);
     expect(skill).toContain("never copy a version number from this skill");
     expect(skill).toContain("maxforge broker status");
     expect(skill).toContain("maxforge broker restart");
+    expect(skill).toContain("references/native-version-alignment.md");
+    expect(alignment).toContain("maxforge-vX.Y.Z.zip");
+    expect(alignment).toContain("Do not fall back");
+    expect(alignment).toContain("versionCompatible: true");
   });
 
   it("rejects known fabricated Max signal object names in agent guidance", () => {

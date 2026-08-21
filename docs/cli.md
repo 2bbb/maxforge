@@ -136,7 +136,7 @@ explicit upgrade, but pending operations remain non-interruptible. Use the new
 package executable when replacing an old broker:
 
 ```bash
-npx -y --package=maxforge@latest maxforge broker restart \
+npx -y --package=maxforge@X.Y.Z maxforge broker restart \
   --config /absolute/path/maxforge.config.json --force
 ```
 

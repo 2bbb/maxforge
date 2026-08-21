@@ -26,7 +26,7 @@ MAXFORGE_CONFIG path/project.id:
 
 ## Release gate
 
-通常のrelease candidateでは、macOSでH01〜H06とH09を実行する。LAN関連を変更した場合はH07、project catalog/config関連を変更した場合はH08、built-in catalogを変更した場合はH10、native external・package構成・CI toolchainを変更した場合はH09のWindows項目も実行する。
+通常のrelease candidateでは、macOSでH01〜H06とH09を実行する。LAN関連を変更した場合はH07、project catalog/config関連を変更した場合はH08、built-in catalogを変更した場合はH10、native package alignment skillを変更した場合はH11、native external・package構成・CI toolchainを変更した場合はH09のWindows項目も実行する。
 
 ### H01 — Native externalの検出と登録
 
@@ -128,7 +128,7 @@ MAXFORGE_CONFIG path/project.id:
 
 1. clean temporary directoryで、`npx -y --package=maxforge@<version> maxforge --help`を使って公開済みの正確なversionを実行する。続いてMCP test clientから`npx -y --package=maxforge@<version> maxforge-mcp`をinitializeする。
 2. `node dist/...`を直接実行した場合だけでなく、npm bin link経由でMCP initialize responseが返ることを確認する。
-3. 対応するGitHub Releaseから`maxforge.zip`をdownloadし、展開前に記録済みchecksumと一致することを確認する。
+3. 対応するversioned GitHub Releaseから`maxforge-v<version>.zip`をdownloadし、同名の`.sha256`と展開前に一致することを確認する。moving `latest` release/tagやunversioned assetを使ってはいけない。
 4. Maxが対応するpackage/search-pathの方法でpackageをinstallする。
 5. macOSでは、必要ならdocumented security actionを実施した後、universal externalがloadされることを確認する。Windowsではx64 `.mxe64`がMaxでloadされることを確認する。
 6. 同梱help patchを開き、H01のversion-compatible registration checkを繰り返す。
@@ -147,6 +147,20 @@ MAXFORGE_CONFIG path/project.id:
 6. `objectfile` mappingしか根拠がない名称をcatalogへ追加していないことを確認する。`s~` / `r~`をsignal objectとして扱わず、`send~` / `receive~`を使う。
 
 **合格条件:** catalog identityはreference、object index、database、またはsaved patcherの一次資料で裏付けられ、変更したport shapeが実際のMaxと一致する。
+
+### H11 — Skillによるnative package version alignment
+
+**前提:** 現行npm runtimeとversionが異なる、破棄可能な旧`maxforge` Max package。未保存patchをすべて保存または閉じられること。
+
+1. 旧externalをloadした状態で`maxforge_status`と`maxforge_list_patches`を呼び、`expectedExternalVersion`、旧`externalVersion`、`versionCompatible: false`を記録する。
+2. `maxforge-mcp` skillのalignment手順を実行させる。Agentがpatch filepathだけでbinary pathを断定せず、標準package rootとproject/configured search pathを確認することを確認する。
+3. activeなcandidateを2個用意した場合、Agentが両方を無断上書きせず、残すpathを一度だけ確認することを確認する。選ばれなかったcopyはMax search path外へ移す。
+4. Maxを閉じ、skill同梱scriptへexact versionと選択したabsolute package rootを渡す。`maxforge-v<version>.zip`と`.sha256`だけを取得し、checksum、package structure、`package-info.json` version、macOS署名を検証することを確認する。
+5. 旧package全体のbackupが`~/.maxforge/backups/native`へ作られ、active pathに旧binary、rename済みcopy、backup packageが残らないことを確認する。
+6. Maxとcontroller patchを開き直し、MCP frontendも同じexact npm versionへ固定して再接続する。status/listでfrontend、broker、expected external、loaded externalが一致し、`versionCompatible: true`になることを確認する。
+7. 存在しないversionを`--verify-only`で指定し、moving latestや別versionへfallbackせず失敗することを確認する。
+
+**合格条件:** Skillがversion不一致を検出だけで終わらせず、曖昧な複数copyを破壊せずにexact releaseを検証・backup・完全置換し、再登録後の一致まで確認する。
 
 ## Cleanup
 

@@ -83,7 +83,9 @@ for i in 0..7 {
    `versionCompatible` field to be true before mutation. The loaded
    `externalVersion` must exactly match
    `maxforge_status.bridge.expectedExternalVersion`; a patch path does not prove
-   which external Max loaded. Inspect it, then call `maxforge_prepare_change`
+   which external Max loaded. On mismatch, use the dedicated `maxforge-mcp`
+   skill's exact-version native alignment procedure; do not download a moving
+   latest artifact or replace only the external binary. Inspect it, then call `maxforge_prepare_change`
    with complete `desiredDsl` once, or with retained `baseSourceRef` plus small
    half-open line edits. Review compact counts, all deletes/disconnects,
    replacements, warnings, and conflicts; apply only its one-time receipt with

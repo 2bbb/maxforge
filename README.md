@@ -91,13 +91,15 @@ Codex configuration:
 ```toml
 [mcp_servers.maxforge]
 command = "npx"
-args = ["-y", "--package=maxforge@latest", "maxforge-mcp"]
+args = ["-y", "--package=maxforge@X.Y.Z", "maxforge-mcp"]
 ```
 
-Install the Max package from
-[GitHub Releases](https://github.com/bbb-max-externals/maxforge/releases), then open a patch
-containing one `maxforge.sync` object. The server listens on
-`127.0.0.1:8766` by default.
+Replace `X.Y.Z` with one exact release and install its matching
+`maxforge-vX.Y.Z.zip` Max package from
+[GitHub Releases](https://github.com/bbb-max-externals/maxforge/releases). Do
+not leave a live MCP configuration on `@latest`: the npm runtime and loaded
+native external must match exactly. Then open a patch containing one
+`maxforge.sync` object. The server listens on `127.0.0.1:8766` by default.
 
 Each MCP invocation is a thin stdio frontend. The first frontend starts a
 detached project broker; later sessions attach to that broker instead of
@@ -121,8 +123,10 @@ documents ownership, revisions, rollback limits, and failure handling.
   npx skills add bbb-max-externals/maxforge --skill maxforge-mcp
   ```
 
-Skills provide agent instructions only. They do not install the npm server or
-the native external.
+Skills do not install the npm server. When live inspection proves that the
+native version is mismatched, the `maxforge-mcp` skill can download, verify,
+back up, and replace the complete matching Max package after obtaining the
+required host permissions.
 
 ## Documentation
 

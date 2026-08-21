@@ -54,7 +54,7 @@ Published-package MCP configuration:
       "command": "npx",
       "args": [
         "-y",
-        "--package=maxforge@latest",
+        "--package=maxforge@X.Y.Z",
         "maxforge-mcp"
       ]
     }
@@ -62,9 +62,11 @@ Published-package MCP configuration:
 }
 ```
 
-The npm package installs the `maxforge-mcp` Node.js executable. It does not
-install the native `maxforge.sync` external into Max. A working live setup needs
-both processes and at least one open, registered Max patch.
+Replace `X.Y.Z` with one exact release; do not keep a live configuration on
+npm's moving `latest` dist-tag. The npm package installs the `maxforge-mcp`
+Node.js executable. It does not itself install the native `maxforge.sync`
+external into Max. A working live setup needs both processes and at least one
+open, registered Max patch.
 
 Environment variables:
 
@@ -99,8 +101,8 @@ only after all three counts are zero for `MAXFORGE_BROKER_IDLE_MS`:
 Inspect or manage it with the package version you intend to run:
 
 ```bash
-npx -y --package=maxforge@latest maxforge broker status --config /absolute/path/maxforge.config.json
-npx -y --package=maxforge@latest maxforge broker restart --config /absolute/path/maxforge.config.json
+npx -y --package=maxforge@X.Y.Z maxforge broker status --config /absolute/path/maxforge.config.json
+npx -y --package=maxforge@X.Y.Z maxforge broker restart --config /absolute/path/maxforge.config.json
 ```
 
 `stop` and `restart` refuse a broker with connected MCP or Max clients. Close
@@ -129,7 +131,7 @@ path because a client's launch directory is not a reliable project root:
   "mcpServers": {
     "maxforge": {
       "command": "npx",
-      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"],
+      "args": ["-y", "--package=maxforge@X.Y.Z", "maxforge-mcp"],
       "env": {
         "MAXFORGE_CONFIG": "/projects/show/maxforge.config.json"
       }
@@ -162,7 +164,7 @@ to all interfaces:
   "mcpServers": {
     "maxforge": {
       "command": "npx",
-      "args": ["-y", "--package=maxforge@latest", "maxforge-mcp"],
+      "args": ["-y", "--package=maxforge@X.Y.Z", "maxforge-mcp"],
       "env": { "MAXFORGE_WS_TOKEN": "studio-session_1" }
     }
   }
@@ -320,9 +322,12 @@ against `maxforge_status.bridge.expectedExternalVersion`.
 `externalVersion` is compiled into the `maxforge.sync` binary that registered
 with the bridge. This is stronger than searching from the patch's `filepath`:
 Max resolves externals through its search paths and can load a stale duplicate
-from somewhere else. Put the matching release external in an installed Max
-package or an explicitly configured project search path, remove obsolete
-same-named copies, restart Max, reopen the patch, and list it again. Merely
+from somewhere else. On mismatch, the `maxforge-mcp` skill downloads only the
+exact tag's `maxforge-vX.Y.Z.zip` and `.sha256`, validates the complete package
+and embedded version, backs up the old package outside Max search paths, and
+replaces the selected package root while Max is closed. It never falls back to
+a moving latest artifact or overwrites multiple candidate copies by guessing.
+After replacement, restart Max, reopen the patch, and list it again. Merely
 placing a binary beside a `.maxpat` does not prove that Max loaded that copy.
 
 ### `maxforge_create_patch`

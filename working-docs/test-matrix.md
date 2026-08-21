@@ -31,6 +31,7 @@ Status meanings:
 | A11 | Max package source, help, macOS universal binary, Windows external, release zip | CI / Partial | generated-artifact tests bind help patch and managed plan to DSL sources; package verifier plus macOS/Windows build jobs check assembly | H09 checks Max search paths, loading, and OS security behavior after download |
 | A12 | Documentation links and GitHub Pages assets | CI | `npm run docs:check`, Pages verifier, JavaScript syntax check | Visual browser review only when site presentation changes |
 | A13 | Authenticated LAN bind and token rejection | CI / Partial | bridge and entrypoint tests cover bind/token protocol behavior | H07 checks routing/firewall behavior between physical hosts |
+| A14 | Skill-driven native package alignment | CI / Partial | `tests/native-package-aligner.test.ts` verifies exact versioned ZIP/checksum naming, archive structure/version validation, and destination rejection without network or installation | H11 checks GitHub download, duplicate search paths, Max shutdown, backup/replacement, macOS signature, and real re-registration |
 
 ## Scenario coverage for stateful editing
 
@@ -53,6 +54,7 @@ not reliable CI gates yet:
 - Max Console severity/color and OS security prompts;
 - Codex's MCP-process restart control and user approval prompts;
 - Max package discovery when duplicate externals exist in search paths;
+- replacement of the active native package and Max's post-restart binary resolution;
 - LAN firewall, address selection, and a second machine's route.
 
 Treat an agent-driven local run as **human evidence**, because a person still

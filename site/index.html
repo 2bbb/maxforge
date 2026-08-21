@@ -44,7 +44,7 @@
         <div class="hero-actions">
           <a class="button button-primary" href="docs/">Read the docs</a>
           <a class="button button-secondary" href="#quickstart">Start with npx</a>
-          <a class="button button-secondary" href="https://github.com/bbb-max-externals/maxforge/releases/download/latest/maxforge.zip">Max package</a>
+          <a class="button button-secondary" href="https://github.com/bbb-max-externals/maxforge/releases">Versioned Max packages</a>
         </div>
         <p class="disclaimer">Unofficial software. Not affiliated with, endorsed by, or sponsored by Cycling '74.</p>
       </div>
@@ -181,6 +181,7 @@
         <div>
           <h3>MCP configuration</h3>
           <p>Run the published server directly with npx. Node.js 20 or newer is required.</p>
+          <p>Replace <code>X.Y.Z</code> with one exact release. The npm MCP runtime and loaded native external must match; do not keep live control on a moving latest version.</p>
         </div>
         <div class="code-window">
           <div class="panel-bar"><span>mcp.json</span><span class="panel-state">JSON</span></div>
@@ -190,7 +191,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "--package=maxforge@latest",
+        "--package=maxforge@X.Y.Z",
         "maxforge-mcp"
       ]
     }
@@ -226,7 +227,7 @@
           <div class="install-tag">MACOS UNIVERSAL + WINDOWS X64</div>
           <h3>Max package</h3>
           <p>Use for native <code>maxforge.sync</code> live inspection and mutation. Includes help, reference, docs, and examples.</p>
-          <a class="button button-primary" href="https://github.com/bbb-max-externals/maxforge/releases/download/latest/maxforge.zip">Download maxforge.zip</a>
+          <a class="button button-primary" href="https://github.com/bbb-max-externals/maxforge/releases">Choose maxforge-vX.Y.Z.zip</a>
           <small>macOS builds are ad-hoc signed and not notarized.</small>
         </article>
 
