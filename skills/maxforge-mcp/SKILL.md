@@ -10,15 +10,21 @@ external. Treat the DSL as complete desired state and preserve revision safety.
 
 ## Mandatory version preflight
 
-On the first maxforge-related task in an Agent session, run:
+On the first maxforge-related task in an Agent session, refresh the tracked
+skills before checking runtime versions:
 
 ```bash
+node <skill-directory>/scripts/refresh-skills.mjs --json
 node <skill-directory>/scripts/check-version.mjs --json
 ```
 
-Do not repeat it in the same session unless the user asks, the MCP configuration
-or Max package changes, or an update is being prepared. Remote GitHub/npm data
-is cached for 24 hours, while local configuration and package metadata are read
+If refresh reports `reloadRequired: true`, read the newly installed skill and
+this preflight again before continuing. The Skills CLI has no check-only mode,
+so changed tracked skills are updated. A failed upstream check remains
+`unknown`; never cache or report it as current. Do not repeat the preflight in
+the same session unless the user asks, configuration/package state changes, or
+an update is being prepared. Successful skill checks and remote GitHub/npm data
+are cached for 24 hours, while local configuration and package metadata are read
 on every run. Do not run it for an unrelated Max/MSP question.
 
 - `update-available`: report the exact coherent version once. A check does not
@@ -34,6 +40,12 @@ After the stdio server is available, `maxforge_status` and
 `maxforge_list_patches` remain authoritative for the running broker and loaded
 external. A local file scan cannot establish what Max actually loaded.
 
+When the user requests an update, read and follow
+[`references/update-workflow.md`](references/update-workflow.md). The required
+order is refreshed skill instructions, one coherent release target, MCP pin,
+detached broker, complete Max package, conditional restart prompts, then live
+version verification. Never omit the broker merely because the config changed.
+
 ## Tool availability and setup
 
 For Codex, a typical stdio entry is:
@@ -48,8 +60,9 @@ This starts only the Node.js side. Max must separately load the matching native
 `maxforge.sync` external in a controller patch. Replace `X.Y.Z` with one intended
 release; never copy a version number from this skill. Do not keep live MCP
 configuration on npm's moving `latest` dist-tag. The skill may align a mismatched
-native package from the exact versioned GitHub Release, but it does not install
-the npm runtime or mutate the Max package before mismatch evidence exists.
+native package from the exact versioned GitHub Release, or perform an explicitly
+requested coherent-set update. Merely discovering a newer release does not
+authorize configuration or package mutation.
 The automated exact-asset alignment contract starts with `v0.5.0`. Releases
 through `v0.4.4` use the legacy unversioned Max-package asset and cannot be
 repaired by this installer. Do not fall back silently: upgrade the npm runtime,

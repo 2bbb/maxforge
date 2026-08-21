@@ -15,10 +15,13 @@ manual legacy migration is required.
 
 ## 1. Establish the exact target and destination
 
-1. Record the exact `X.Y.Z` pinned in the MCP frontend configuration. If status
-   reports `VERSION_MISMATCH`, close/disconnect clients as required and restart
-   the broker with that exact package first. Only then require
-   `bridge.expectedExternalVersion` to equal `X.Y.Z`.
+1. For mismatch repair, record the exact `X.Y.Z` pinned in the MCP frontend
+   configuration. For an explicitly requested full update, use only the coherent
+   target established by [`update-workflow.md`](update-workflow.md), after its
+   MCP pin and broker steps. If status reports `VERSION_MISMATCH`,
+   close/disconnect clients as required and restart the broker with that exact
+   package first. Only then require `bridge.expectedExternalVersion` to equal
+   `X.Y.Z`.
 2. Locate active `maxforge` package roots in bounded Max search locations:
    - the current user's `Documents/Max <major>/Packages/maxforge`;
    - package roots explicitly configured in Max;

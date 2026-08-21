@@ -9,16 +9,22 @@ Use `maxforge` as an unofficial text-first DSL compiler for Max/MSP `.maxpat` pa
 
 ## Mandatory version preflight
 
-On the first maxforge-related task in an Agent session, run:
+On the first maxforge-related task in an Agent session, refresh the tracked
+skills before checking runtime versions:
 
 ```bash
+node <skill-directory>/scripts/refresh-skills.mjs --json
 node <skill-directory>/scripts/check-version.mjs --json
 ```
 
-Do not repeat it in the same session unless the user asks, the MCP configuration
-or Max package changes, or an update is being prepared. The script caches only
-GitHub/npm release metadata for 24 hours; it re-reads local MCP and Max package
-versions every time. Do not run it for an unrelated Max/MSP question.
+If refresh reports `reloadRequired: true`, read the newly installed skill before
+running its version checker or continuing the task. The Skills CLI has no
+check-only mode, so changed tracked skills are updated. A failed check is
+`unknown`, never "up to date". Do not repeat the preflight in the same session
+unless the user asks, configuration/package state changes, or an update is being
+prepared. Successful skill checks and GitHub/npm release metadata are cached for
+24 hours; local MCP and Max package versions are re-read every time. Do not run
+it for an unrelated Max/MSP question.
 
 - `update-available`: report the exact coherent version once, then continue on
   the existing version unless the user requested an update or needs a newer

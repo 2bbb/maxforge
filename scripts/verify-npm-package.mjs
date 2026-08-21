@@ -46,11 +46,15 @@ try {
     "skills/maxforge/SKILL.md",
     "skills/maxforge/agents/openai.yaml",
     "skills/maxforge/scripts/check-version.mjs",
+    "skills/maxforge/scripts/refresh-skills.mjs",
     "skills/maxforge-mcp/SKILL.md",
     "skills/maxforge-mcp/agents/openai.yaml",
     "skills/maxforge-mcp/references/native-version-alignment.md",
+    "skills/maxforge-mcp/references/update-workflow.md",
     "skills/maxforge-mcp/scripts/align-native-package.mjs",
     "skills/maxforge-mcp/scripts/check-version.mjs",
+    "skills/maxforge-mcp/scripts/refresh-skills.mjs",
+    "skills/maxforge-mcp/scripts/set-codex-mcp-version.mjs",
   ]) {
     if (!packedFiles.has(path)) throw new Error(`npm package is missing skill artifact: ${path}`);
   }

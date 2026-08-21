@@ -10,15 +10,24 @@ Max/MSPパッチを記述する非公式DSL。生JSONの代わりにコンパク
 利用中のskillに同梱されたversion preflightを実行する。
 
 ```bash
+node <skill-directory>/scripts/refresh-skills.mjs --json
 node <skill-directory>/scripts/check-version.mjs --json
 ```
 
-GitHub Releaseとnpmの情報は24時間キャッシュするが、MCP設定とMax packageは
-毎回読み直す。`update-available`は更新通知であり、無断インストールの許可ではない。
+最初にSkills lockのsource/hashを確認し、差分があればskillを更新する。
+`reloadRequired`なら更新後の`SKILL.md`を読み直してからversion確認へ進む。
+Skills CLIがupstream確認に失敗した場合は、exit codeが0でも最新版とは扱わない。
+成功したskill確認とGitHub Release/npm情報は24時間キャッシュするが、MCP設定と
+Max packageは毎回読み直す。`update-available`は更新通知であり、無断インストールの許可ではない。
 `unknown`/`stale`ならローカル作業を継続できるが、最新版を断定しない。
 `LOCAL_VERSION_MISMATCH`または`MCP_MOVING_VERSION`がある状態ではlive mutationを
 行わない。`npx skills update`はskillの指示を更新するだけで、MCP設定やMax packageを
 自動更新しない。
+
+ユーザーが更新を依頼した場合は、skill更新後に対象releaseを確定し、MCP pin、
+常駐broker、Max package全体の順に揃える。skillまたはMCP設定が変わったらCodexの
+再起動（またはMCP再接続と新しいAgent session）を促す。Maxは更新前に起動していた
+場合だけ再起動を促し、起動していなかった場合は不要と明記する。
 
 ## Quick Start
 
