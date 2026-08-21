@@ -29,4 +29,17 @@ describe("native release contract", () => {
     expect(releasing).toContain("one-to-one npm version, Git tag, and native package");
     expect(releasing).toContain("Only then publish npm");
   });
+
+  it("does not contradict the signed and notarized release workflow", () => {
+    const workflow = source(".github/workflows/build-max-package.yml");
+    const publicGuidance = [
+      source("README.md"),
+      source("site/index.html"),
+      source("site/docs/index.html"),
+    ].join("\n");
+
+    expect(workflow).toContain("Notarize and verify public archive");
+    expect(publicGuidance).toContain("Developer ID signed and notarized");
+    expect(publicGuidance.toLowerCase()).not.toContain("not notarized");
+  });
 });

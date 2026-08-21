@@ -193,7 +193,7 @@
         </div>
         <div class="docs-callout docs-callout-warning">
           <strong>macOS signing</strong>
-          <p>The macOS external is ad-hoc signed but not notarized. It must not be treated as Gatekeeper-safe.</p>
+          <p>Versioned release archives are Developer ID signed and notarized by CI. Local builds remain ad-hoc signed and are not equivalent release artifacts.</p>
         </div>
       </section>
 
@@ -683,7 +683,7 @@ source[1] -&gt; destination[2]</code></pre>
           <li>Reconciliation preserves observed edits to existing managed identities. Arbitrary object attributes omitted from structural inspection cannot be merged.</li>
           <li>Moving a managed box to another patcher path is not merged as a move; express the intended delete/add in complete DSL and resolve the conflict explicitly.</li>
           <li>MCP apply plans carry the inspected structure token. If a box or cord changes before native mutation, <code>maxforge.sync</code> rejects the stale plan.</li>
-          <li>The macOS external is not notarized.</li>
+          <li>Only CI-produced versioned macOS release archives are Developer ID signed and notarized. Local builds remain ad-hoc signed.</li>
         </ul>
       </section>
 

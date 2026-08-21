@@ -152,7 +152,9 @@ required host permissions.
   design.
 - Live control manages only its declared scope. It does not guarantee complete
   rollback of runtime state after a failed mutation.
-- The macOS external is ad-hoc signed and not notarized.
+- Local macOS builds are ad-hoc signed. Published versioned release archives
+  are Developer ID signed and notarized by CI; do not redistribute a local
+  build as if it were a release artifact.
 
 The detailed documents state narrower limits for each subsystem. Those limits
 are part of the contract, not optional caveats.

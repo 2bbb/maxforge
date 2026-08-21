@@ -211,8 +211,11 @@ def verify_site(site_directory: Path) -> list[str]:
             errors.append(f"docs/index.html is missing section: {missing_id}")
         if "complete desired" not in documentation_html.lower():
             errors.append("docs/index.html is missing desired-state safety guidance")
-        if "not notarized" not in documentation_html.lower():
-            errors.append("docs/index.html is missing macOS notarization status")
+        lowered_documentation = documentation_html.lower()
+        if "developer id signed and notarized" not in lowered_documentation:
+            errors.append("docs/index.html is missing macOS release signing status")
+        if "not notarized" in lowered_documentation:
+            errors.append("docs/index.html contains stale macOS notarization guidance")
         for required_catalog_term in [
             "maxforge.config.json",
             "maxforge_catalog",
