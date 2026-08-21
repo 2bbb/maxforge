@@ -6,6 +6,20 @@ Max/MSPパッチを記述する非公式DSL。生JSONの代わりにコンパク
 
 ユーザーがMaxパッチの生成・作成を要求したとき。`.maxdsl` ファイルを書いてコンパイルする。
 
+一般的なMax/MSPの質問ではなく、maxforgeを使う作業のセッション初回にだけ、
+利用中のskillに同梱されたversion preflightを実行する。
+
+```bash
+node <skill-directory>/scripts/check-version.mjs --json
+```
+
+GitHub Releaseとnpmの情報は24時間キャッシュするが、MCP設定とMax packageは
+毎回読み直す。`update-available`は更新通知であり、無断インストールの許可ではない。
+`unknown`/`stale`ならローカル作業を継続できるが、最新版を断定しない。
+`LOCAL_VERSION_MISMATCH`または`MCP_MOVING_VERSION`がある状態ではlive mutationを
+行わない。`npx skills update`はskillの指示を更新するだけで、MCP設定やMax packageを
+自動更新しない。
+
 ## Quick Start
 
 ```

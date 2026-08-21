@@ -45,10 +45,12 @@ try {
   for (const path of [
     "skills/maxforge/SKILL.md",
     "skills/maxforge/agents/openai.yaml",
+    "skills/maxforge/scripts/check-version.mjs",
     "skills/maxforge-mcp/SKILL.md",
     "skills/maxforge-mcp/agents/openai.yaml",
     "skills/maxforge-mcp/references/native-version-alignment.md",
     "skills/maxforge-mcp/scripts/align-native-package.mjs",
+    "skills/maxforge-mcp/scripts/check-version.mjs",
   ]) {
     if (!packedFiles.has(path)) throw new Error(`npm package is missing skill artifact: ${path}`);
   }

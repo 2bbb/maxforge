@@ -1,11 +1,38 @@
 ---
 name: maxforge
-description: Use maxforge to generate, validate, compile, decompile, or clipboard-convert Max/MSP .maxpat/.maxhelp patches from concise .maxdsl text. Use when the user wants Max patch creation, repeated/generative Max object wiring, for/if/arithmetic DSL expansion, or .maxpat JSON output without hand-editing Max JSON.
+description: Use maxforge to generate, validate, compile, decompile, or clipboard-convert Max/MSP .maxpat/.maxhelp patches from concise .maxdsl text. Use for maxforge-related Max patch creation, repeated/generative object wiring, for/if/arithmetic DSL expansion, or .maxpat JSON output without hand-editing Max JSON. On the first maxforge-related task in a session, check the latest coherent release and local version set with the bundled preflight; do not trigger merely for unrelated general Max/MSP questions.
 ---
 
 # maxforge
 
 Use `maxforge` as an unofficial text-first DSL compiler for Max/MSP `.maxpat` patches. Prefer `.maxdsl` when the user wants many repeated objects or connections; generating raw `.maxpat` JSON by hand is the fallback, not the default.
+
+## Mandatory version preflight
+
+On the first maxforge-related task in an Agent session, run:
+
+```bash
+node <skill-directory>/scripts/check-version.mjs --json
+```
+
+Do not repeat it in the same session unless the user asks, the MCP configuration
+or Max package changes, or an update is being prepared. The script caches only
+GitHub/npm release metadata for 24 hours; it re-reads local MCP and Max package
+versions every time. Do not run it for an unrelated Max/MSP question.
+
+- `update-available`: report the exact coherent version once, then continue on
+  the existing version unless the user requested an update or needs a newer
+  feature. A check does not authorize replacement.
+- `blocked`: inspect issue codes. Published-version or asset incoherence blocks
+  upgrading, not unrelated local work. `LOCAL_VERSION_MISMATCH` and
+  `MCP_MOVING_VERSION` block live mutation until the runtime set is aligned.
+- `unknown` or `stale`: continue local/offline work, but do not claim what the
+  latest release is.
+
+When MCP tools are active, also compare the frontend/broker/native versions
+reported by `maxforge_status` and `maxforge_list_patches`; filesystem metadata
+does not prove which external Max loaded. Use the `maxforge-mcp` alignment
+workflow for a confirmed mismatch.
 
 ## Install / run
 

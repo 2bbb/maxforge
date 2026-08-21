@@ -126,7 +126,10 @@ documents ownership, revisions, rollback limits, and failure handling.
 Skills do not install the npm server. When live inspection proves that the
 native version is mismatched, the `maxforge-mcp` skill can download, verify,
 back up, and replace the complete matching Max package after obtaining the
-required host permissions.
+required host permissions. On the first maxforge-related task in an Agent
+session, both skills run a cached release/version preflight. Generic Max/MSP
+questions do not trigger it. `npx skills update` updates instructions only; it
+does not rewrite an existing MCP entry or replace a Max package.
 
 ## Documentation
 

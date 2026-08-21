@@ -1,12 +1,38 @@
 ---
 name: maxforge-mcp
-description: Operate and collaboratively edit live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use when an AI agent must inspect the currently registered Max patch, interpret and adopt human edits, create an isolated patch window, preview and apply complete maxforge DSL, verify revision acknowledgements, or recover from broker restart, timeout, controller, registration, baseline, or managed-drift errors. Do not use for offline .maxpat compilation when no live Max connection is required; use the maxforge skill instead.
+description: Operate and collaboratively edit live Max/MSP patches through the maxforge MCP tools without screenshots, Max JavaScript, node.script, or raw thispatcher commands. Use for maxforge-related live inspection, human-edit adoption, isolated patch creation, desired-DSL preview/apply, acknowledgement verification, or broker/controller/recovery failures. On the first maxforge-related task in a session, check the latest coherent release and local version set with the bundled preflight; do not trigger merely for unrelated general Max/MSP questions. Use the maxforge skill for offline compilation.
 ---
 
 # Maxforge MCP
 
 Control a live Max patch through `maxforge-mcp` and the native `maxforge.sync`
 external. Treat the DSL as complete desired state and preserve revision safety.
+
+## Mandatory version preflight
+
+On the first maxforge-related task in an Agent session, run:
+
+```bash
+node <skill-directory>/scripts/check-version.mjs --json
+```
+
+Do not repeat it in the same session unless the user asks, the MCP configuration
+or Max package changes, or an update is being prepared. Remote GitHub/npm data
+is cached for 24 hours, while local configuration and package metadata are read
+on every run. Do not run it for an unrelated Max/MSP question.
+
+- `update-available`: report the exact coherent version once. A check does not
+  authorize replacement. Do not silently
+  replace a working exact set; continue unless the user requested an update or
+  the task requires the newer release.
+- `blocked`: published-version or release-asset incoherence blocks upgrading.
+  `LOCAL_VERSION_MISMATCH` or `MCP_MOVING_VERSION` blocks live mutation.
+- `unknown` or `stale`: continue offline diagnosis without claiming a latest
+  version.
+
+After the stdio server is available, `maxforge_status` and
+`maxforge_list_patches` remain authoritative for the running broker and loaded
+external. A local file scan cannot establish what Max actually loaded.
 
 ## Tool availability and setup
 

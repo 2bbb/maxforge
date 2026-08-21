@@ -91,6 +91,23 @@ describe("agent skills", () => {
     expect(alignment).toContain("never use `maxforge@latest`");
   });
 
+  it("requires a bounded once-per-session version preflight", () => {
+    for (const skillName of ["maxforge", "maxforge-mcp"]) {
+      const skill = source(`skills/${skillName}/SKILL.md`);
+      const description = frontmatterField(skill, "description");
+
+      expect(description).toContain("first maxforge-related task in a session");
+      expect(description).toContain("unrelated general Max/MSP questions");
+      expect(skill).toContain("scripts/check-version.mjs --json");
+      expect(skill).toContain("24 hours");
+      expect(skill).toMatch(/A check does not\s+authorize replacement/);
+
+      expect(source(`skills/${skillName}/scripts/check-version.mjs`)).toContain(
+        "MAXFORGE_VERSION_CHECK_NO_HOME_DISCOVERY"
+      );
+    }
+  });
+
   it("rejects known fabricated Max signal object names in agent guidance", () => {
     const guidance = [
       source("skills/maxforge/SKILL.md"),

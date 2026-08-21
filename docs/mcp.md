@@ -216,6 +216,22 @@ Use the separate `maxforge` skill for offline DSL authoring and `.maxpat`
 compilation. A skill supplies instructions only: it does not install or start
 `maxforge-mcp`, and it does not install the native external.
 
+At the first maxforge-related task in an Agent session, the skill runs its
+bundled `scripts/check-version.mjs --json`. The checker compares the latest
+stable GitHub Release, npm's published version, exact release assets, the Codex
+MCP pin, and bounded Max package locations. Remote metadata is cached for 24
+hours; local configuration and package metadata are never cached. It does not
+run merely because an unrelated Max/MSP topic was mentioned, and network
+failure does not block local diagnosis. Filesystem results are advisory: after
+connection, `maxforge_status` and `maxforge_list_patches` identify the running
+broker and the external Max actually loaded.
+
+`npx skills update` cannot update a client MCP configuration or Max package; it
+only replaces skill files. An update remains an explicit alignment operation.
+Never interpret an available update as permission to replace a working exact
+set. Published GitHub/npm disagreement or missing versioned assets blocks the
+upgrade rather than permitting a fallback to a moving version.
+
 The compact live sequence is fixed:
 
 1. use `maxforge_help` only when the installed skill/tool contract is missing,
