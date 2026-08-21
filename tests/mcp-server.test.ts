@@ -546,6 +546,7 @@ describe("maxforge MCP protocol surface", () => {
           sourceRef: (applied as unknown as {
             result: { structuredContent: { sourceRef: string } };
           }).result.structuredContent.sourceRef,
+          detail: "full",
         },
       });
       expect(source).toMatchObject({
@@ -556,6 +557,32 @@ describe("maxforge MCP protocol surface", () => {
           },
         },
       });
+
+      const sourceMatches = await client.request(313, "tools/call", {
+        name: "maxforge_get_working_source",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "voices",
+          detail: "matches",
+          queries: ["osc"],
+          contextLines: 0,
+        },
+      });
+      expect(sourceMatches).toMatchObject({
+        result: {
+          structuredContent: {
+            matchCount: 1,
+            snippets: [{
+              startLine: 1,
+              endLineExclusive: 2,
+              source: "osc = cycle~ 440",
+            }],
+          },
+        },
+      });
+      expect((sourceMatches as unknown as {
+        result: { structuredContent: Record<string, unknown> };
+      }).result.structuredContent).not.toHaveProperty("source");
 
       const bulkDsl = [
         "for i in 0..999 {",

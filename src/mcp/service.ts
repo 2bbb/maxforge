@@ -71,6 +71,22 @@ export interface ApplyPreparedChangeRequest {
   readonly catalogDigest: string;
 }
 
+export interface WorkingSourceEdit {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly replacement: string;
+}
+
+export interface PrepareSourceEditRequest {
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly baseSourceRef: string;
+  readonly edits: readonly WorkingSourceEdit[];
+  readonly manualChanges?: "reject" | "merge";
+  readonly expectedStructureToken?: string;
+  readonly catalogDigest: string;
+}
+
 export interface PreparedOperationCounts {
   readonly disconnect: number;
   readonly delete: number;
@@ -423,6 +439,26 @@ export class MaxforgePatchService {
       prepared,
       elapsedMilliseconds(startedAt, performance.now())
     );
+  }
+
+  async prepareSourceEdit(
+    request: PrepareSourceEditRequest
+  ): Promise<PrepareChangeOutcome> {
+    const current = this.getWorkingSource(
+      request.patcherId,
+      request.scope,
+      request.baseSourceRef
+    );
+    const desiredDsl = applyWorkingSourceEdits(current.source, request.edits);
+    return this.prepareChange({
+      patcherId: request.patcherId,
+      scope: request.scope,
+      currentDsl: current.source,
+      desiredDsl,
+      manualChanges: request.manualChanges,
+      expectedStructureToken: request.expectedStructureToken,
+      catalogDigest: request.catalogDigest,
+    });
   }
 
   async applyPreparedChange(
@@ -1700,6 +1736,57 @@ function sourceReference(source: string): string {
 
 function operationIdentity(targetPath: readonly string[], id: string): string {
   return `${targetPath.join("\0")}\0${id}`;
+}
+
+function applyWorkingSourceEdits(
+  source: string,
+  edits: readonly WorkingSourceEdit[]
+): string {
+  if (edits.length === 0) {
+    throw new Error("At least one working source edit is required");
+  }
+  const originalLines = source.split("\n");
+  const normalized = [...edits].sort((left, right) =>
+    left.startLine - right.startLine || left.endLine - right.endLine
+  );
+  let previousEnd = 0;
+  let previousStart = 0;
+  for (const edit of normalized) {
+    if (
+      !Number.isSafeInteger(edit.startLine) ||
+      !Number.isSafeInteger(edit.endLine) ||
+      edit.startLine < 1 ||
+      edit.startLine > originalLines.length + 1 ||
+      edit.endLine < edit.startLine ||
+      edit.endLine > originalLines.length + 1
+    ) {
+      throw new Error(
+        `Invalid working source edit range ${edit.startLine}..${edit.endLine}; ` +
+        `valid half-open line boundaries are 1..${originalLines.length + 1}`
+      );
+    }
+    if (
+      edit.startLine < previousEnd ||
+      (previousStart !== 0 && edit.startLine === previousStart)
+    ) {
+      throw new Error("Working source edit ranges must not overlap");
+    }
+    previousStart = edit.startLine;
+    previousEnd = edit.endLine;
+  }
+
+  const nextLines = [...originalLines];
+  for (const edit of normalized.reverse()) {
+    const replacementLines = edit.replacement.length === 0
+      ? []
+      : edit.replacement.split("\n");
+    nextLines.splice(
+      edit.startLine - 1,
+      edit.endLine - edit.startLine,
+      ...replacementLines
+    );
+  }
+  return nextLines.join("\n");
 }
 
 function elapsedMilliseconds(startedAt: number, endedAt: number): number {

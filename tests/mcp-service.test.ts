@@ -472,6 +472,69 @@ describe("MaxforgePatchService", () => {
     })).rejects.toThrow("already been consumed");
   });
 
+  it("prepares small line edits against retained source without resending it", async () => {
+    const transport = new FakeTransport();
+    const initialDsl = "osc = cycle~ 440 at(50, 50)";
+    const nextDsl = `${initialDsl}\ngain = *~ 0.5 at(50, 100)`;
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    transport.snapshotAfterApply = snapshotForDsl(initialDsl, "voices");
+    const service = createService(transport);
+    const initial = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: initialDsl,
+      catalogDigest: "c".repeat(64),
+    });
+    if (!initial.canApply) throw new Error("expected initial prepared change");
+    await service.applyPreparedChange({
+      receiptId: initial.receiptId,
+      catalogDigest: "c".repeat(64),
+    });
+    const inspection = await service.inspectPatch("patch-a", "voices");
+
+    await expect(service.prepareSourceEdit({
+      patcherId: "patch-a",
+      scope: "voices",
+      baseSourceRef: initial.sourceRef,
+      edits: [
+        { startLine: 1, endLine: 2, replacement: "osc = cycle~ 660" },
+        { startLine: 1, endLine: 1, replacement: "# duplicate boundary" },
+      ],
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("must not overlap");
+
+    const edited = await service.prepareSourceEdit({
+      patcherId: "patch-a",
+      scope: "voices",
+      baseSourceRef: initial.sourceRef,
+      edits: [{ startLine: 2, endLine: 2, replacement: "gain = *~ 0.5 at(50, 100)" }],
+      expectedStructureToken: inspection.snapshot.structureToken,
+      catalogDigest: "c".repeat(64),
+    });
+    if (!edited.canApply) throw new Error("expected edited prepared change");
+    expect(edited).toMatchObject({
+      operationCount: 1,
+      operationCounts: { create: 1 },
+      sourceCharacters: nextDsl.length,
+    });
+    expect(edited.sourceRef).toBe(
+      createHash("sha256").update(nextDsl).digest("hex")
+    );
+
+    transport.snapshotAfterApply = snapshotForDsl(nextDsl, "voices");
+    await service.applyPreparedChange({
+      receiptId: edited.receiptId,
+      catalogDigest: "c".repeat(64),
+    });
+    await expect(service.prepareSourceEdit({
+      patcherId: "patch-a",
+      scope: "voices",
+      baseSourceRef: initial.sourceRef,
+      edits: [{ startLine: 1, endLine: 2, replacement: "osc = cycle~ 880" }],
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("Working source changed");
+  });
+
   it("rejects a prepared receipt after another receipt advances the target", async () => {
     const transport = new FakeTransport();
     transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };

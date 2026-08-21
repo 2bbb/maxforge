@@ -184,24 +184,6 @@ const helpResultSchema = z.object({
   relatedTools: z.array(z.string()),
 });
 
-const dslRequestSchema = z.object({
-  patcherId: patcherIdSchema.describe(
-    "Registered target Max patch ID copied from maxforge_list_patches; never infer it from a title"
-  ),
-  desiredDsl: z.string().min(1).describe(
-    "Complete desired maxforge DSL state. Managed objects omitted from this source are deleted."
-  ),
-  scope: scopeSchema.describe(
-    "Exact managed scope advertised by the selected patch"
-  ),
-  currentDsl: z
-    .string()
-    .optional()
-    .describe(
-      "Exact previous complete DSL. Normally restored from persistent MCP state; required only when persistence was disabled or the matching state file is unavailable. Never guess or substitute empty state."
-    ),
-});
-
 const sourceRefSchema = revisionSchema.describe(
   "SHA-256 reference to an exact retained complete working source"
 );
@@ -210,7 +192,34 @@ const receiptIdSchema = z.string().uuid().describe(
   "One-time prepared change receipt returned by maxforge_prepare_change"
 );
 
-const prepareChangeRequestSchema = dslRequestSchema.extend({
+const prepareChangeRequestSchema = z.object({
+  patcherId: patcherIdSchema.describe(
+    "Registered target Max patch ID copied from maxforge_list_patches; never infer it from a title"
+  ),
+  scope: scopeSchema.describe(
+    "Exact managed scope advertised by the selected patch"
+  ),
+  desiredDsl: z.string().min(1).optional().describe(
+    "Complete desired maxforge DSL state, sent once for a new source or broad rewrite"
+  ),
+  baseSourceRef: sourceRefSchema.optional().describe(
+    "Exact retained source to edit without retransmitting the complete DSL"
+  ),
+  edits: z.array(z.object({
+    startLine: z.number().int().positive().describe(
+      "1-based inclusive start boundary"
+    ),
+    endLine: z.number().int().positive().describe(
+      "1-based exclusive end boundary; equal to startLine for insertion"
+    ),
+    replacement: z.string(),
+  })).min(1).max(64).optional(),
+  currentDsl: z.string().optional().describe(
+    "Recovery-only exact previous complete DSL when retained broker state is unavailable"
+  ),
+  currentSourceRef: sourceRefSchema.optional().describe(
+    "Retained exact current source to use without retransmitting currentDsl"
+  ),
   manualChanges: z
     .enum(["reject", "merge"])
     .optional()
@@ -220,6 +229,33 @@ const prepareChangeRequestSchema = dslRequestSchema.extend({
   expectedStructureToken: structureTokenSchema.optional().describe(
     "Exact token from the latest inspection or live-change review for this target. When omitted, preparation requests one fresh inspection."
   ),
+}).superRefine((value, context) => {
+  const inline = value.desiredDsl !== undefined;
+  const sourceEdit = value.baseSourceRef !== undefined || value.edits !== undefined;
+  if (inline === sourceEdit) {
+    context.addIssue({
+      code: "custom",
+      message: "Provide either desiredDsl or both baseSourceRef and edits",
+    });
+  }
+  if (sourceEdit && (value.baseSourceRef === undefined || value.edits === undefined)) {
+    context.addIssue({
+      code: "custom",
+      message: "baseSourceRef and edits must be provided together",
+    });
+  }
+  if (value.currentDsl !== undefined && value.currentSourceRef !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "Provide currentDsl or currentSourceRef, not both",
+    });
+  }
+  if (sourceEdit && (value.currentDsl !== undefined || value.currentSourceRef !== undefined)) {
+    context.addIssue({
+      code: "custom",
+      message: "Source-edit mode already uses baseSourceRef as exact currentDsl",
+    });
+  }
 });
 
 const operationCountsSchema = z.object({
@@ -1425,9 +1461,38 @@ export function createMaxforgeMcpServer(
     },
     async (request) => {
       try {
+        if (request.baseSourceRef !== undefined && request.edits !== undefined) {
+          return toolResult({
+            ...await options.service.prepareSourceEdit({
+              patcherId: request.patcherId,
+              scope: request.scope,
+              baseSourceRef: request.baseSourceRef,
+              edits: request.edits,
+              manualChanges: request.manualChanges,
+              expectedStructureToken: request.expectedStructureToken,
+              catalogDigest: options.getCatalog().digest,
+            }),
+          });
+        }
+        let currentDsl = request.currentDsl;
+        if (request.currentSourceRef !== undefined) {
+          currentDsl = options.service.getWorkingSource(
+            request.patcherId,
+            request.scope,
+            request.currentSourceRef
+          ).source;
+        }
+        if (request.desiredDsl === undefined) {
+          throw new Error("desiredDsl is required outside source-edit mode");
+        }
         return toolResult({
           ...await options.service.prepareChange({
-            ...request,
+            patcherId: request.patcherId,
+            scope: request.scope,
+            desiredDsl: request.desiredDsl,
+            ...(currentDsl !== undefined ? { currentDsl } : {}),
+            manualChanges: request.manualChanges,
+            expectedStructureToken: request.expectedStructureToken,
             catalogDigest: options.getCatalog().digest,
           }),
         });
@@ -1494,6 +1559,13 @@ export function createMaxforgeMcpServer(
         patcherId: patcherIdSchema,
         scope: scopeSchema,
         sourceRef: sourceRefSchema.optional(),
+        detail: z.enum(["metadata", "matches", "full"])
+          .optional()
+          .default("metadata"),
+        queries: z.array(z.string().min(1)).min(1).max(20).optional().describe(
+          "Exact DSL names or text fragments to locate when detail=matches"
+        ),
+        contextLines: z.number().int().min(0).max(5).optional().default(1),
       }),
       outputSchema: z.object({
         patcherId: patcherIdSchema,
@@ -1501,7 +1573,13 @@ export function createMaxforgeMcpServer(
         sourceRef: sourceRefSchema,
         sourceCharacters: z.number().int().nonnegative(),
         lineCount: z.number().int().positive(),
-        source: z.string(),
+        matchCount: z.number().int().nonnegative().optional(),
+        snippets: z.array(z.object({
+          startLine: z.number().int().positive(),
+          endLineExclusive: z.number().int().positive(),
+          source: z.string(),
+        })).optional(),
+        source: z.string().optional(),
       }),
       annotations: {
         readOnlyHint: true,
@@ -1509,11 +1587,31 @@ export function createMaxforgeMcpServer(
         idempotentHint: true,
       },
     },
-    async ({ patcherId, scope, sourceRef }) => {
+    async ({ patcherId, scope, sourceRef, detail, queries, contextLines }) => {
       try {
-        return toolResult({
-          ...options.service.getWorkingSource(patcherId, scope, sourceRef),
-        });
+        const result = options.service.getWorkingSource(
+          patcherId,
+          scope,
+          sourceRef
+        );
+        const metadata = {
+          patcherId: result.patcherId,
+          scope: result.scope,
+          sourceRef: result.sourceRef,
+          sourceCharacters: result.sourceCharacters,
+          lineCount: result.lineCount,
+        };
+        if (detail === "full") return toolResult({ ...result });
+        if (detail === "matches") {
+          if (!queries) {
+            throw new Error("queries are required when detail is matches");
+          }
+          return toolResult({
+            ...metadata,
+            ...sourceSnippets(result.source, queries, contextLines),
+          });
+        }
+        return toolResult(metadata);
       } catch (error) {
         return toolError(error);
       }
@@ -1562,6 +1660,45 @@ function responseWithout(
   const result = { ...value };
   for (const key of keys) delete result[key];
   return result;
+}
+
+function sourceSnippets(
+  source: string,
+  queries: readonly string[],
+  contextLines: number
+): {
+  matchCount: number;
+  snippets: Array<{
+    startLine: number;
+    endLineExclusive: number;
+    source: string;
+  }>;
+} {
+  const lines = source.split("\n");
+  const matchingLines = lines
+    .map((line, index) => queries.some((query) => line.includes(query)) ? index : -1)
+    .filter((index) => index >= 0);
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const index of matchingLines) {
+    const next = {
+      start: Math.max(0, index - contextLines),
+      end: Math.min(lines.length, index + contextLines + 1),
+    };
+    const previous = ranges.at(-1);
+    if (previous && next.start <= previous.end) {
+      previous.end = Math.max(previous.end, next.end);
+    } else {
+      ranges.push(next);
+    }
+  }
+  return {
+    matchCount: matchingLines.length,
+    snippets: ranges.map(({ start, end }) => ({
+      startLine: start + 1,
+      endLineExclusive: end + 1,
+      source: lines.slice(start, end).join("\n"),
+    })),
+  };
 }
 
 function toolError(error: unknown) {
