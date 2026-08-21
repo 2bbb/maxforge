@@ -214,9 +214,10 @@ Use the separate `maxforge` skill for offline DSL authoring and `.maxpat`
 compilation. A skill supplies instructions only: it does not install or start
 `maxforge-mcp`, and it does not install the native external.
 
-The safe live sequence is fixed:
+The compact live sequence is fixed:
 
-1. `maxforge_help` (`workflow`)
+1. use `maxforge_help` only when the installed skill/tool contract is missing,
+   unfamiliar, or in recovery; do not add this round trip to every normal edit
 2. `maxforge_status` when connection/process state is uncertain
 3. `maxforge_catalog` before using a custom external or abstraction
 4. `maxforge_list_patches`
@@ -230,21 +231,21 @@ The safe live sequence is fixed:
 8. when edit order matters, call `maxforge_get_live_edit_history` before
    interpreting the current snapshot; check `supported`, `droppedEvents`, and
    every entry's `comparisonBasis`
-9. if live changes exist, call `maxforge_review_live_changes`; interpret related
-   changes together through `review.editClusters`, use `interpretationRisks` to
-   locate ambiguity, and treat every result as evidence rather than a claim
-   about the human's intent
+9. if live changes exist, call `maxforge_review_live_changes`; its default
+   summary omits the full snapshot, raw rows, duplicate signals, and proposed
+   DSL. Request `detail: "full"` only for exact before/after evidence
 10. either adopt accepted managed edits with the exact returned structure token,
-   or reconcile them with the next complete desired DSL; never do both blindly
-11. require `canAdopt: true` or `canApply: true`, then review conflicts, warnings,
-   and destructive operations
-12. use `maxforge_compile_plan` for the ordinary no-drift/adopted-baseline path
-13. `maxforge_apply_dsl` with the same target, desired DSL, and the exact
-    structure token from inspect/reconcile; set `manualChanges: "merge"` only
-    after successful reconciliation
-14. verify acknowledgement and post-apply verification revisions; inspect again
-    only when verification is unavailable or full topology is needed, and call
-    `maxforge_save_patch` only when persistence is intended
+    or prepare the concrete next state with `manualChanges: "merge"`
+11. call `maxforge_prepare_change` with complete `desiredDsl` once, or use the
+    latest `sourceRef` as `baseSourceRef` plus small half-open line `edits`
+12. require `canApply: true`; review counts, every delete/disconnect,
+    replacement, warning, and conflict. Bulk create/connect/rollback operations
+    stay behind the returned one-time receipt
+13. call `maxforge_apply_prepared_change` with only `receiptId`; never resend DSL
+    and never retry the consumed receipt after an ambiguous result
+14. retain returned `sourceRef`; fetch matching snippets for local edits and full
+    source only for broad rewrites/recovery. Verify acknowledgement and
+    post-apply revision, then save only when persistence is intended
 
 Do not collapse this into a direct apply. Titles are not identities, DSL is not
 an imperative edit, and a timeout is not proof that Max remained unchanged.
@@ -255,7 +256,8 @@ an imperative edit, and a timeout is not proof that Max remained unchanged.
 
 Returns structured agent instructions for one of the four topics above. It does
 not require Max to be running and is safe to call before any target registers.
-Call `recovery` before retrying an ambiguous failure.
+It is fallback documentation, not a mandatory normal-path call. Call `recovery`
+after an ambiguous failure; do not retry a consumed receipt.
 
 ### `maxforge_status`
 
@@ -549,23 +551,24 @@ baseline. If snapshot-derived managed state requires a revision change, Maxforge
 durably records a recovery-in-progress transition before sending a token-bound
 zero-operation revision transition. If Max applies it but its acknowledgement is
 lost, the next inspection exposes the active recovery DSL plus the abandoned
-apply under `supersededApply`; ordinary compile/review/reconcile calls stay
+apply under `supersededApply`; ordinary prepare/review calls stay
 blocked until explicit recovery finishes. Do not use guessed DSL or delete the
 state file as a substitute.
 
 ### `maxforge_review_live_changes`
 
 Inspects the target and converts changes since the comparison baseline into a
-structured, neutral review. Signals include layout, object configuration,
-annotation, box attributes, ownership, object addition/removal, routing, and
-connection attributes. The result also includes the raw changes, managed and
-unmanaged runtime IDs, `canAdopt`, conflicts, the exact `structureToken`, and
-`proposedWorkingDsl` when the reviewed managed graph round-trips losslessly.
+structured, neutral review. The default `detail: "summary"` includes counts,
+managed/unmanaged identities, `canAdopt`, conflicts, exact `structureToken`,
+edit clusters, and interpretation guidance. It deliberately omits the complete
+snapshot, raw change rows, duplicate top-level signals, and proposed complete
+DSL. `detail: "full"` adds those fields when exact before/after values or a
+lossless adoption preview is actually required.
 
 `review.editClusters` correlates raw changes when they occur in the same patcher
 path and share a managed object ID or unmanaged runtime ID. Each cluster carries:
 
-- the exact `changeIndexes` back into the raw change array;
+- `changeIndexes` that identify raw rows available in full detail;
 - separate managed and unmanaged identities;
 - all observed runtime IDs, kept separate from stable managed identities;
 - combined `signalKinds` describing the observed effects;
@@ -611,162 +614,122 @@ changes, deletions, or rewiring that already happened in Max. A zero-operation
 acknowledgement is therefore valid only through this token-bound adoption path;
 it is not a general way to bypass revision validation.
 
-After adoption, update the working complete DSL to represent every adopted
-managed edit before the next desired-state apply by replacing the working source
-with the returned `workingDsl`. The service generates this source from the
-adopted graph and verifies that recompilation produces the exact same revision.
-Explicit `at(x, y, width, height)` preserves human resize edits. Adoption
-updates persisted PatchGraph state but cannot rewrite an agent's source file or
-chat state itself. If the returned DSL is ignored, a later complete apply can
-request the human's accepted changes be removed.
+After adoption, retain the returned `sourceRef`. It identifies complete working
+DSL generated from the adopted graph and verified to recompile to the same
+revision. Query only the source regions needed for the next edit through
+`maxforge_get_working_source`; do not inject the full source into agent context
+unless a broad rewrite or recovery requires it. Explicit
+`at(x, y, width, height)` preserves human resize edits.
 
 Adoption has no reliable source-level representation of edits made directly in
-Max. Its `workingDsl` is therefore canonical explicit managed state rather than
-a reproduction of the original authoring text: `for`/`if` macros are expanded,
+Max. Its broker-retained working source is therefore canonical explicit managed
+state rather than a reproduction of the original authoring text: `for`/`if` macros are expanded,
 and patch-level title/description/size are omitted because protocol v1 does not
 manage those fields. Ordinary no-drift apply does preserve the submitted authored
-DSL exactly. Use returned `workingDsl` as the revision-safe next source in both
-cases.
+DSL exactly. Use the returned `sourceRef` as the revision-safe handle.
 
 Use adoption when the human's current managed patch should become the baseline
-before the agent plans the next step. Use `maxforge_reconcile_patch` instead when
-the agent already has a concrete next complete DSL and needs to merge live edits
-with that desired change in one preview/apply cycle.
+before the agent plans the next step. When the agent already has a concrete next
+state, use `maxforge_prepare_change` with `manualChanges: "merge"` instead.
 
-### `maxforge_reconcile_patch`
+### `maxforge_prepare_change`
 
-The result includes the exact `structureToken` used for the preview. Pass it to
-`maxforge_apply_dsl.expectedStructureToken` with the same desired DSL so apply
-can reuse the reconciled snapshot while native validation still catches races.
+Prepares one complete desired-state change without mutating Max. The broker keeps
+the full ordered `PatchPlan` and rollback data behind a one-time `receiptId`; the
+response returns only:
 
-Performs a read-only three-way merge between:
+- operation totals split by disconnect/delete/create/set/connect;
+- every destructive disconnect/delete operation;
+- identities that are structurally replaced;
+- warnings, merge conflicts, source metadata, and the inspected structure token.
 
-1. the agent's previous desired managed graph;
-2. the current live Max snapshot;
-3. the next complete `desiredDsl`.
+This deliberately prevents large generated patches from flooding agent context
+with thousands of create/connect/rollback rows. Preparation accepts exactly one
+source mode:
 
-It preserves a live edit when desired DSL did not change the same field, and
-preserves a desired edit when Max did not change that field. For example, a
-human can move `osc` while the agent changes its arguments, or change `osc`
-while the agent adds an unrelated `gain` box. A different live and desired
-change to the same field is a conflict. Deleting a box on one side while the
-other side changes it is also a conflict.
+1. `desiredDsl` for a new source or broad rewrite. It is complete desired state,
+   not an imperative fragment.
+2. `baseSourceRef` plus `edits` for a local change. Each edit is a 1-based,
+   half-open `[startLine, endLine)` range against the original retained source;
+   equal boundaries insert. Ranges must not overlap. The broker reconstructs and
+   compiles the complete desired DSL, and rejects a stale source reference.
 
-A live reserved managed identity missing from the acknowledged graph can be
-recovered only when complete `desiredDsl` explicitly declares that identity.
-The resolved live box and every managed cord touching recovered identities must
-exactly match desired DSL. Duplicate identities, box/configuration/layout
-mismatches, non-matching managed cords, cords to unmanaged boxes, and graphs
-that cannot round-trip remain conflicts. A successful recovery normally emits
-a zero-operation plan because the structure already exists in Max; the native
-acknowledgement advances it to the desired revision.
+Use `maxforge_get_working_source` with `detail: "matches"` to locate semantic DSL
+names or text before constructing local edits. Requesting `detail: "full"` for
+every edit defeats this optimization.
 
-Max may report transient display/value text while inspecting native UI classes
-such as `number` and `flonum`. Reconciliation excludes that runtime text from
-managed graph identity because those DSL objects have no serialized `text`
-field. Structural text remains significant for `newobj`, `message`, and
-`comment` boxes.
+Pass `expectedStructureToken` from the latest inspection/review when available.
+Otherwise preparation performs a fresh inspection. In both cases the retained
+plan carries that token, and `maxforge.sync` recomputes it immediately before
+native mutation. Any intervening box or cord edit fails closed.
 
-The result contains `canApply`, a structured `conflicts` array, and an ordered
-plan only when the merge is safe. This tool never mutates Max. Do not convert
-`canApply: false` into an overwrite: inspect the conflict and make the intended
-winner explicit in Max or in the next baseline/DSL.
+`manualChanges` defaults to `"reject"`. Set it to `"merge"` only after reviewing
+managed live edits. Preparation then performs a read-only three-way merge of:
 
-`canApply` also requires the merged graph to serialize and compile back to the
-same revision. An `unrepresentable_graph` conflict is therefore reported during
-preview instead of allowing apply to fail later. Numeric-looking string
-attributes are quoted in canonical DSL so Max-normalized abstraction arguments
-such as the symbol `"0"` remain strings rather than becoming numeric atoms.
+1. previous agent intent;
+2. current live Max structure;
+3. the next complete desired state.
 
-The acknowledged merged graph is tracked separately and supplies concrete live
-metadata plus the native `baseRevision`. Plan operations describe the actual
-live graph to merged graph transition. This split is required because manual
-Max edits do not advance `@revision_state`, while the agent's previous DSL may
-intentionally omit a human edit preserved by an earlier merge.
+A live edit is retained when desired state did not change the same field, and a
+desired edit is retained when Max did not change it. Same-field changes,
+change-vs-delete, ownership ambiguity, unrepresentable graph state, and unmanaged
+cord destruction remain explicit conflicts. `canApply: false` has no receipt and
+must never be converted into an overwrite.
 
-### `maxforge_compile_plan`
+When a previous merge reports `workingDslRequiredAsCurrent: true`, use its
+`sourceRef` as `currentSourceRef` for inline `desiredDsl`, or as `baseSourceRef`
+for source edits. Do not resend or reconstruct the complete aligned source.
 
-Compiles complete `desiredDsl` into a read-only `PatchPlan`.
+Receipts are bound to the active catalog digest, patcher/scope, managed and live
+base revisions, and native structure token. They are process-local, one-time,
+and bounded to the latest 64 preparations. They do not survive broker restart.
+Preparing does not reserve the patch; a later human or agent edit makes the
+receipt stale.
 
-Arguments:
+### `maxforge_apply_prepared_change`
 
-- `patcherId` — registered target whose remembered/live state is used.
-- `scope` — managed namespace.
-- `desiredDsl` — complete desired state, not an imperative edit.
-- `currentDsl` — optional current desired state. When omitted, the tool uses
-  the graph remembered by this broker runtime; it uses empty state only when the
-  scope is not initialized.
+Consumes one `receiptId`, sends its retained plan, and waits for exact native
+revision acknowledgement. It does not accept DSL and does not recompile.
+Consumption happens before native mutation, so the tool is intentionally
+non-idempotent: never retry the same receipt after rejection, timeout, disconnect,
+or warning. Inspect current state and prepare a new receipt.
 
-### `maxforge_apply_dsl`
+Success requires `acknowledgement.revision === targetRevision`. After
+acknowledgement, the service captures a verification snapshot and persists the
+new graph/source state. `baselineCaptured: false` means mutation already
+succeeded but follow-up inspection failed; it is not permission to repeat apply.
+`statePersisted: false` likewise requires diagnosis rather than replay.
 
-Compiles a diff, sends the raw plan to Max, and returns only after
-`maxforge.sync` acknowledges the exact target revision.
+The compact result contains operation count, acknowledgement, verification,
+source reference/size, warnings, persistence state, and timing stages. It does
+not return the full plan, rollback operations, or working DSL. Use timings to
+separate compilation/preflight, persistence, native round trip, and post-apply
+inspection instead of blaming the agent generically.
 
-`patcherId` and `scope` are both required. Graph state and inspection baselines
-are keyed by both values, so two windows may use the same scope without sharing
-state.
-
-Pass `expectedStructureToken` from the latest inspection or reconciliation for
-the same target. The service reuses that exact observed snapshot instead of
-requesting it again. This does not weaken race protection: the native external
-still recomputes the live structure token immediately before mutation and rejects
-any intervening box or cord change.
-
-The remembered graph advances only after that acknowledgement. A timeout,
-disconnect, parse error, validation error, or Max mutation error leaves the
-MCP graph state unchanged.
-
-After acknowledgement, the service requests another live snapshot, verifies the
-managed revision, returns its token/counts as `verification`, and records it as
-the next comparison baseline. A successful verification replaces the routine
-extra post-apply inspect. If that second read fails, the apply still
-returns success with `baselineCaptured: false` and `baselineWarning`; reporting
-the already-applied mutation as a failure would invite an unsafe retry.
-
-The result also includes `timings` in milliseconds. `preflightMs` covers DSL
-compilation, diff/reconciliation, and drift checks;
-`pendingStatePersistenceMs` is the crash-recovery write before mutation;
-`nativeApplyMs` is the Max round trip; `postApplyInspectionMs` covers the
-verification snapshot and graph check; `finalStatePersistenceMs` is the final
-state write. `totalMs` covers the complete service call. Use these fields to
-identify the slow stage instead of guessing from the agent's wall-clock time.
-
-`manualChanges` defaults to `"reject"`, retaining the strict behavior: any
-manual structural change touching a managed box or one of its patch cords
-rejects mutation. After `maxforge_reconcile_patch` returns `canApply: true` for
-the exact same target and DSL, pass `manualChanges: "merge"` to preserve the
-non-conflicting live changes. The apply reuses the exact cached inspection when
-its token is supplied and repeats reconciliation against that snapshot; it does
-not trust an unbound preview. The resulting plan carries the inspected
-`baseStructureToken`; `maxforge.sync` recomputes it immediately before native
-validation and rejects the request if any box or cord changed in the interval.
-`manualChangesMerged` reports the managed change count used by that apply.
-
-Every successful apply returns a complete, revision-aligned `workingDsl`.
-Ordinary no-merge apply returns the submitted authored DSL unchanged, preserving
-compact `for`/`if` structure. Merge mode returns explicit graph-derived DSL
-because direct Max edits cannot be mapped safely back into arbitrary source
-macros. Use it as the next complete source. This is mandatory after merge mode
-because it contains human edits preserved in the merged graph even when they
-were not present in the submitted `desiredDsl`. When
-`workingDslRequiredAsCurrent: true`, include that exact source as `currentDsl`
-in every subsequent preview and apply request until a successful apply returns
-the flag as false. Read-only compile/reconcile calls do not persist alignment;
-passing it only to the preview and omitting it from apply keeps the stale-source
-guard active.
-
-The service tracks the acknowledged merged graph separately from the agent's
-last submitted desired graph. This prevents a later ordinary apply using stale
-DSL from silently reverting a previously preserved human edit. While those
-graphs differ, ordinary compile/apply is rejected; use reconciliation again, or
-provide a complete `currentDsl` that already includes every preserved edit.
-The returned `workingDsl` is that aligned source; do not keep editing the stale
-pre-merge DSL.
+Ordinary no-merge preparation preserves authored `for`/`if` source in broker
+state. Adoption and merge may retain canonical explicit graph-derived DSL because
+direct Max edits cannot be mapped safely back into source macros. Keep the
+returned `sourceRef`. When `workingDslRequiredAsCurrent` is true, use that ref in
+the next preparation until a successful apply realigns intent state.
 
 Standalone unmanaged edits remain outside the managed graph. A cord between an
 unmanaged box and a managed box is preserved while that managed box remains in
-place. Reconciliation rejects a desired deletion or structural recreation that
-would destroy such a cord.
+place. Merge preparation rejects a desired deletion or structural recreation
+that would destroy such a cord.
+
+### `maxforge_get_working_source`
+
+Reads the exact revision-aligned source retained for one `patcherId`/`scope`.
+Pass the latest `sourceRef` to reject stale reads. Detail modes are:
+
+- `metadata` (default): source hash, character count, and line count only;
+- `matches`: bounded snippets around up to 20 exact names/text fragments, with
+  half-open source line boundaries suitable for subsequent edits;
+- `full`: complete source, reserved for broad rewrites or recovery.
+
+This tool is the source cache boundary. Normal status, adoption, prepare, and
+apply responses return references rather than duplicating complete DSL through
+agent context.
 
 ## Tool call examples
 
@@ -782,7 +745,7 @@ Inspect a target selected from `maxforge_list_patches`:
 }
 ```
 
-Preview and then apply the same complete desired state:
+Prepare a complete desired state once:
 
 ```json
 {
@@ -792,12 +755,11 @@ Preview and then apply the same complete desired state:
 }
 ```
 
-If inspection reported managed edits, pass this same object to
-`maxforge_reconcile_patch`. Apply only when it returns `canApply: true`; then
-pass the same object to `maxforge_apply_dsl` with `manualChanges` added:
+If inspection reported accepted managed edits, add merge mode to that prepare
+request and require `canApply: true`:
 
 ```json
-{ "manualChanges": "merge" }
+{ "manualChanges": "merge", "expectedStructureToken": "<review token>" }
 ```
 
 To accept the current human edits before authoring the next DSL, review and
@@ -820,14 +782,48 @@ Pass the returned token without modification:
 }
 ```
 
-On success, retain the returned `workingDsl` as the complete source for the next
-edit. Do not reconstruct it from summaries or apply the pre-adoption DSL again.
-
-Review `plan.operations` and `warnings` from `maxforge_compile_plan`. A
-successful `maxforge_apply_dsl` result has this top-level shape:
+On adoption success, retain returned `sourceRef`. Locate only the next edit area:
 
 ```json
 {
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "sourceRef": "<sourceRef from adoption/apply>",
+  "detail": "matches",
+  "queries": ["button_0", "value_0"],
+  "contextLines": 1
+}
+```
+
+Prepare a local insertion without resending complete source. Line ranges are
+1-based and half-open; equal boundaries insert:
+
+```json
+{
+  "patcherId": "generated_patch",
+  "scope": "generated",
+  "baseSourceRef": "<same sourceRef>",
+  "edits": [{
+    "startLine": 5,
+    "endLine": 5,
+    "replacement": "status = comment Ready at(40, 140)"
+  }]
+}
+```
+
+Review compact operation counts, all destructive operations, replacements,
+warnings, and conflicts. Apply only the receipt returned by a successful
+prepare:
+
+```json
+{ "receiptId": "<receiptId from maxforge_prepare_change>" }
+```
+
+A successful `maxforge_apply_prepared_change` result has this top-level shape:
+
+```json
+{
+  "receiptId": "<one-time receipt UUID>",
   "patcherId": "generated_patch",
   "scope": "generated",
   "baseRevision": "<64 lowercase hex characters>",
@@ -845,7 +841,8 @@ successful `maxforge_apply_dsl` result has this top-level shape:
     "boxCount": 12,
     "connectionCount": 8
   },
-  "workingDsl": "<complete authored or reconciled DSL for the acknowledged graph>",
+  "sourceRef": "<64 lowercase hex characters>",
+  "sourceCharacters": 214,
   "workingDslRequiredAsCurrent": false,
   "manualChangesMerged": 0,
   "warnings": []
@@ -861,7 +858,8 @@ Treat success as all of the following:
 
 If `baselineCaptured` is `false`, the acknowledged apply still succeeded. Read
 `baselineWarning`, inspect explicitly, and do not repeat the apply merely to
-obtain a comparison baseline.
+obtain a comparison baseline. The receipt was already consumed regardless of
+success or failure; any further attempt requires a fresh inspection/prepare.
 
 ## Max patch object
 
@@ -972,9 +970,10 @@ optimistic concurrency.
 | Pending scope appears in status | Apply acknowledgement was lost | Reconnect that exact patch; Maxforge resolves the recorded base or target revision automatically |
 | Pending apply reports a third live revision | A different valid patch revision replaced both recorded outcomes | Call `maxforge_inspect_pending_apply`; rebase only with exact trusted `currentDsl`, `liveRevision`, and `structureToken` via `maxforge_recover_pending_apply` |
 | Current DSL revision does not match Max | `currentDsl`, scope, or target is wrong | Stop; recover the exact prior DSL instead of forcing empty state |
-| Managed manual changes block ordinary apply | `manualChanges` defaults to `reject` | Call `maxforge_reconcile_patch`; apply the same DSL with `manualChanges: "merge"` only when `canApply` is true |
+| Managed manual changes block ordinary prepare | `manualChanges` defaults to `reject` | Review the live changes, then prepare the concrete next state with `manualChanges: "merge"`; apply only the returned receipt when `canApply` is true |
 | Reconciliation reports conflicts | Both sides changed the same field, one changed a box the other deleted, a new reserved identity appeared, or a desired replacement would destroy an unmanaged cord | Resolve the listed conflict explicitly; do not force or retry the apply |
-| Apply times out or transport disconnects | Acknowledgement is missing; Max may be unchanged, applied, or partially mutated | Do not retry; call status and inspect first |
+| Prepared receipt is missing or consumed | It was applied, rejected, evicted after 64 newer receipts, or the broker restarted | Inspect current state and prepare again; never recreate or retry the old receipt |
+| Apply times out or transport disconnects | Acknowledgement is missing; Max may be unchanged, applied, or partially mutated, and the receipt is consumed | Do not retry; call status and inspect before preparing a new change |
 | `baselineCaptured: false` | Max acknowledged apply but the follow-up snapshot failed | Treat apply as successful, inspect explicitly, and do not repeat solely for baseline capture |
 | `comparisonAvailable: false` | No persisted comparison baseline is available | Use the full snapshot; do not invent historical changes |
 

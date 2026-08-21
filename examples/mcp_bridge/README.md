@@ -120,15 +120,15 @@ MCP server configuration or native external installation above.
    ~/Library/Application Support/Cycling '74/Max 9/Logs/Max.log
    ```
 
-3. Call `maxforge_help` with `topic: "workflow"`. This returns the current
-   agent-facing mutation and verification rules without requiring a live target.
+3. Confirm the compact receipt tools are available. Call `maxforge_help` only
+   if the installed skill/tool contract is missing, unfamiliar, or in recovery.
 4. Call `maxforge_list_patches`; it must report `maxforge_bridge` with scope
    `agent_demo` and `controller: true`.
 5. To work in the controller itself, call `maxforge_inspect_patch` with
    `patcherId: maxforge_bridge` and scope `agent_demo`. This reads the live
    patch graph without looking at the Max window. Before the first apply,
    `comparisonAvailable` is false.
-6. Call `maxforge_compile_plan` with the following arguments, replacing the
+6. Call `maxforge_prepare_change` with the following arguments, replacing the
    placeholder with the full contents of `desired.maxdsl`:
 
    ```json
@@ -139,9 +139,11 @@ MCP server configuration or native external installation above.
    }
    ```
 
-7. Inspect every operation and warning, then call `maxforge_apply_dsl` with the
-   same arguments. Do not reduce `desiredDsl` to only the new object; it owns the
-   complete managed scope.
+7. Inspect operation counts, every delete/disconnect and replacement, warnings,
+   and conflicts. When `canApply` is true, call
+   `maxforge_apply_prepared_change` with only its `receiptId`. Do not resend DSL;
+   it owns the complete managed scope even though the full plan remains in the
+   broker.
 8. Confirm eight managed toggle/number pairs appear and all of these are true:
    `acknowledgement.revision === targetRevision`, acknowledgement operations
    equal `operationCount`, and `baselineCaptured` is true.
@@ -149,20 +151,23 @@ MCP server configuration or native external installation above.
 10. Move, edit, connect, create, or delete a box manually, then call
     `maxforge_inspect_patch` again. The response reports the exact structural
     change and whether it touches maxforge-managed state.
-11. Pass the next complete desired DSL to `maxforge_reconcile_patch`. Continue
-    only when `canApply` is true and every returned operation is intended.
-12. Call `maxforge_apply_dsl` with the same target and DSL plus
-    `manualChanges: "merge"`. Inspect again and verify that the human edit and
-    the agent's independent additions both remain.
+11. Call `maxforge_review_live_changes`. Request `detail: "full"` only when exact
+    raw before/after values are needed. Pass the next complete desired DSL to
+    `maxforge_prepare_change` with `manualChanges: "merge"`. Continue only when
+    `canApply` is true and every destructive summary entry is intended.
+12. Apply only the new receipt. Inspect again and verify that the human edit and
+    the agent's independent additions both remain. Retain returned `sourceRef`;
+    for the next local edit, use `maxforge_get_working_source` with
+    `detail: "matches"` and prepare `baseSourceRef` plus half-open line edits.
 
 Inspection alone does not adopt a managed manual change. Reconciliation performs
 a three-way merge against the previous agent intent and reports same-field,
 change-vs-delete, ownership, and unmanaged-cord conflicts instead of silently
-choosing a winner. Apply repeats inspection and binds the resulting plan to its
+choosing a winner. Preparation binds the retained plan to its
 `baseStructureToken`; if the patch changes again before native mutation,
 `maxforge.sync` rejects the stale plan. On timeout, transport error, baseline
-warning, or token rejection, inspect again rather than blindly repeating the
-mutation.
+warning, or token rejection, the receipt is already consumed. Inspect and
+prepare a new change rather than blindly repeating the mutation.
 
 To work in a separate window instead, call `maxforge_create_patch`:
 

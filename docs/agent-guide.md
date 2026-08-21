@@ -228,83 +228,54 @@ maxforge plan next.maxdsl --scope voices --current current.maxdsl -o plan.json
 
 MCPクライアントからMaxを変更する場合は、次の順序を崩さない。
 
-1. 初回操作では`maxforge_help`へ`topic: "workflow"`を渡し、serverが返す
-   最新の操作規約を読む。失敗後は`topic: "recovery"`を読む。
-2. custom externalまたはabstractionを使う場合は`maxforge_catalog`で、
-   MCP brokerが実際に読み込んだ定義を確認する。設定ファイルを変更した
-   場合は`maxforge_reload_catalog`を呼び、新digestを確認する。reload失敗時は
-   旧catalogがそのまま有効であり、部分更新とは扱わない。
-3. `maxforge_list_patches`で登録済み`patcherId`とscopeを確認する。
-4. 別ウィンドウが必要なら`maxforge_create_patch`で一意な`patcherId`、
-   scope、titleを指定し、既存`.maxpat`を対象にするなら
-   `maxforge_open_patch`へMax host上の絶対pathを指定して登録完了まで待つ。
-5. `maxforge_inspect_patch`のsummaryで対象`patcherId`のrevision、structure token、
-   box/cord数、差分を読む。周辺topology全体が必要な場合だけfullを要求する。
-   `maxforge_status`にpending scopeがあり、base/target以外の第三revisionで通常操作が
-   拒否された場合は`maxforge_inspect_pending_apply`を使う。返されたrevisionと
-   structure token、およびそのrevisionを生成した完全な`currentDsl`が揃う場合だけ
-   `maxforge_recover_pending_apply`の`rebase_live`を実行する。state file削除やDSL推測で
-   回避しない。`supersededApply`が返る場合は、復旧apply自体の応答が失われた状態であり、
-   active targetと元の未確定target/intentの両方を保持したまま、同じ明示的復旧手順を完了する。
-6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。layout、object設定、
-   annotation、ownership、routing等のsignalは「何が変わったか」の証拠であり、
-   人間の意図そのものと断定しない。`review.editClusters`単位で関連差分をまとめて読み、
-   `interpretationRisks`を曖昧性の手掛かりにする。
-   `clarificationRecommendedFor`に含まれていても機械的に質問せず、複数の解釈が
-   次の操作を変える場合だけ確認する。
-7. 現在のmanaged graphを次の基準にするなら、reviewが返した正確な
-   structure tokenで`maxforge_adopt_live_changes`を呼ぶ。次の完全なdesired DSLが
-   既にあるなら`maxforge_reconcile_patch`へ渡す。`canAdopt: true`または
-   `canApply: true`でなければ進めない。unmanaged追加を暗黙に所有しない。
-   acknowledged graphに無いreserved managed identityは、完全なdesired DSLに同一boxと
-   関連managed cordが明示され、liveと完全一致する場合だけzero-operation recovery
-   できる。duplicate、field/cord不一致、unmanaged cordを上書きで回避しない。
-8. adopt後は返された`workingDsl`でworking sourceを置き換える。要約から再構築
-   しない。通常経路では
-   `maxforge_compile_plan`、手動変更の統合経路ではreconcileが
-   返したplanを確認する。
-9. `maxforge_apply_dsl`へ同じ対象と完全なdesired DSLを渡す。reconcile済みの
-   場合だけ`manualChanges: "merge"`を指定する。直前のinspectまたはreconcileが返した
-   `structureToken`を`expectedStructureToken`として渡し、同じ全snapshotを再取得させない。
-10. `maxforge.applied` acknowledgementのrevisionがtargetRevisionと一致した
-   結果だけを成功扱いし、返された`workingDsl`を次の完全なsourceとして保持する。
-   通常applyでは送信した`for`/`if`を含むauthoring sourceがそのまま保持される。
-   Max上の人手編集をadopt/mergeした場合だけ、sourceへ安全に逆写像できないため
-   graph由来の明示DSLへ展開される。
-   `workingDslRequiredAsCurrent: true`なら、成功したapplyがflagをfalseにするまで、
-   previewとapplyの両方でそのsourceを`currentDsl`として渡す。read-only previewは
-   alignmentを永続化しない。
-11. `verification.revision`とtargetRevision、box/cord数を確認する。verificationが無い、
-   baseline取得に失敗した、または完全な事後topologyが必要な場合だけ再度inspectする。
-   遅い場合は感覚で原因を決めず、`timings`の`preflightMs`、
-   `pendingStatePersistenceMs`、`nativeApplyMs`、`postApplyInspectionMs`、
-   `finalStatePersistenceMs`を比較する。
-12. 永続化が必要な場合だけ`maxforge_save_patch`を呼ぶ。applyは自動保存しない。
-    dirty patchのcloseは、保存するか`maxforge_close_patch`へ明示的に
-    `discard: true`を渡すまで拒否される。
+1. `maxforge_prepare_change`、`maxforge_apply_prepared_change`、
+   `maxforge_get_working_source`が利用可能か確認する。skillでこの契約が既知なら、
+   毎回の`maxforge_help`呼び出しは不要。tool不足、契約不明、失敗復旧時だけhelpを使う。
+2. custom external/abstractionを使う場合は`maxforge_catalog`で実際の定義を確認する。
+   設定変更後は`maxforge_reload_catalog`を呼び、新digestを確認する。失敗時は旧catalogが
+   そのまま有効であり、部分更新とは扱わない。
+3. `maxforge_list_patches`から正確な`patcherId`とscopeを選び、
+   `versionCompatible: true`を必須とする。titleやfilepathから対象を推測しない。
+4. 別windowが必要なら`maxforge_create_patch`、既存`.maxpat`ならMax host上の絶対pathで
+   `maxforge_open_patch`を使う。
+5. `maxforge_inspect_patch`のsummaryでrevision、structure token、box/cord数、差分を読む。
+   全topologyが必要な場合だけfullを要求する。第三revisionを伴うpending applyは通常操作を
+   止め、`maxforge_inspect_pending_apply`とtoken-bound recoveryを使う。state削除やDSL推測で
+   回避しない。
+6. live changeがあれば`maxforge_review_live_changes`を呼ぶ。default summaryはagent負荷を
+   下げるためsnapshot、raw changes、重複signal、完全DSLを返さない。正確なbefore/afterが
+   必要な場合だけ`detail: "full"`を要求する。cluster/riskは意図の証明ではない。
+7. 現在のmanaged graphを基準にするならreviewの正確なtokenで
+   `maxforge_adopt_live_changes`を呼び、返された`sourceRef`を保持する。次のdesired stateが
+   既にあるなら、後述のprepareへ`manualChanges: "merge"`を指定する。
+8. source転送を最小化する。新規作成・広範な書換えでは完全な`desiredDsl`を一度だけ送る。
+   局所変更では`maxforge_get_working_source`の`detail: "matches"`で意味のあるDSL名や文字列を
+   検索し、必要なsnippetだけ読む。`detail: "full"`は広範な書換えまたは復旧に限定する。
+9. `maxforge_prepare_change`へ、完全な`desiredDsl`、または最新`baseSourceRef`と`edits`の
+   どちらか一方を渡す。edit rangeは1-based half-open `[startLine, endLine)`で、同値ならinsert。
+   全rangeは元source基準で重複不可。これは転送差分であり、DSLのfull desired-state semanticsは
+   変わらない。`workingDslRequiredAsCurrent: true`ならinline時は`currentSourceRef`、局所編集時は
+   `baseSourceRef`としてそのrefを使う。
+10. `canApply: true`を必須とし、operation count、全delete/disconnect、replacement、warning、
+    conflictを確認する。bulk create/connect/rollback planはbroker内に保持され、agentへ返らない。
+11. 変更前に対象、operation数、破壊操作、停止条件を明示し、
+    `maxforge_apply_prepared_change`へ`receiptId`だけを渡す。receiptはcatalog/revision/structureに
+    結び付いた一回限りのprocess-local値で、native mutation前に消費される。timeout、拒否、warning
+    後に再送せず、status/inspect後に新しいreceiptをprepareする。
+12. acknowledgement revisionとtargetRevisionの一致を成功条件とする。verificationがあれば同じ
+    revisionとbox/cord数を確認する。返された`sourceRef`とsourceCharactersだけを保持し、次の局所
+    編集時に必要な範囲だけ取得する。applyは自動保存しないため、永続化する場合だけ
+    `maxforge_save_patch`を呼ぶ。
 
-stdio frontendだけの再起動では共有broker stateは失われない。brokerをstate persistence
-無しで再起動し、Max側scopeが初期化済みなら、以前の完全なDSLを`currentDsl`として
-一度渡す。revision hashだけから現在graphを推測してはいけない。
+stdio frontendだけの再起動では共有broker stateは失われない。broker再起動後もpersist済みの
+working sourceは復元されるが、未使用prepared receiptは復元されない。stateが本当に無い場合だけ
+以前の完全なDSLを`currentDsl`として一度渡す。revision hashからgraphを推測してはいけない。
 
-managed manual changeをinspectしただけではbaselineは更新されない。
-`maxforge_review_live_changes`は差分を中立的なsignalへ分類するが、意図を捏造しない。
-同一patcher pathで同じobject identityを共有する差分は`editClusters`へまとめられる。
-例えば、objectの設定変更、移動、meter追加、そこへの接続が同じidentityを介して
-いれば一つの編集クラスタとして読める。一方、同じ種類のlayout変更でも対象が独立
-していれば別クラスタのままである。各クラスタの`changeIndexes`からraw before/afterへ
-戻り、signal summaryだけで具体的変更を推測してはいけない。
-現在のlive managed graphを受け入れる場合は、同じstructure tokenが有効な間だけ
-`maxforge_adopt_live_changes`で採用できる。既にMax上にある編集は再実行せず、
-zero-operation planでnative revisionを進める。返された`workingDsl`は同一revisionへ
-round-trip検証済みなので、次の完全なdesired sourceとして保持する。protocol v1で
-管理しないpatch-cord metadataは採用を拒否し、黙って失わない。
-`maxforge_reconcile_patch`は前回graph・live snapshot・次のdesired DSLを三者比較し、
-非競合変更だけを保持する。同一fieldの競合やchange-vs-deleteは明示的に解消する。
-apply側は再inspectした構造tokenをplanへ埋め込み、native externalが変更直前に
-再照合する。その間にboxまたはcordが変わった場合は上書きせず拒否される。
-timeout、transport error、`baselineCaptured: false`を理由に
-同じapplyを即時再送してはいけない。statusとlive inspectを先に行う。
+managed manual changeをinspectしただけではbaselineは更新されない。採用はexact token付きadopt、
+次状態との統合は`manualChanges: "merge"`付きprepareで明示する。同一field競合、change-vs-delete、
+ownership、unmanaged cord破壊はfail-closedで解消する。prepare後に人間がbox/cordを変えた場合、
+native externalがstructure tokenを変更直前に再照合して拒否する。receiptは既に消費済みなので、
+同じapplyを即時再送してはいけない。
 
 Max側は`examples/mcp_bridge/`の通り、接続設定を持つnative
 `maxforge.sync`を1個だけ置く。接続、再接続、登録、request/eventの

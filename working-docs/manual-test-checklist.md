@@ -47,10 +47,11 @@ MAXFORGE_CONFIG path/project.id:
 1. 対象をsummary detailとfull detailでinspectし、structure tokenを記録する。
 2. Max UI上で、managed objectを1個移動し、`button`を1個追加し、既存patch cordを1本つなぎ替える。何を変更したかはAgentへ伝えない。
 3. Agentにlive changesのinspect/reviewと変更内容の説明を依頼する。画面ではなくMCP stateから説明させる。
-4. `maxforge_get_live_edit_history`と`maxforge_review_live_changes`が、move、addition、rewireをevidenceとして説明し、必要なinterpretation riskも返していることを確認する。
-5. 現在の正確なstructure tokenを使い、受け入れるmanaged editsをadoptする。
-6. Agentにcomplete desired DSLを使ってobjectとconnectionをもう1組追加させる。planをpreviewしてからapplyする。
-7. 再度inspectする。3つの人間編集がすべて残り、reviewしたAgent差分だけが追加されていることを確認する。
+4. `maxforge_get_live_edit_history`と`maxforge_review_live_changes`のdefault summaryが、move、addition、rewireをevidenceとして説明しつつ、full snapshot/raw changes/完全DSLを返していないことを確認する。正確なbefore/afterが必要な箇所だけ`detail: "full"`で再取得する。
+5. 現在の正確なstructure tokenを使い、受け入れるmanaged editsをadoptする。完全DSLではなく`sourceRef`が返ることを確認する。
+6. `maxforge_get_working_source`の`detail: "matches"`で必要なsemantic name周辺だけを取得し、`baseSourceRef`とhalf-open line editsでobjectとconnectionをもう1組prepareする。compact responseがoperation count、全破壊操作、replacement、warningを含み、bulk create/connect/rollback planを含まないことを確認する。
+7. `maxforge_apply_prepared_change`へreceiptだけを渡す。acknowledgement後に同じreceiptの再利用が拒否されることを確認する。
+8. 再度inspectする。3つの人間編集がすべて残り、reviewしたAgent差分だけが追加されていることを確認する。
 
 **即時失敗条件:** Agentがreviewしていない編集を上書きする、windowの見た目に依存する、stale tokenを使う、またはedit-historyの推論を人間の意図として断定する。
 
@@ -60,7 +61,7 @@ MAXFORGE_CONFIG path/project.id:
 
 1. 一意な`patcherId`、scope、titleを指定し、`maxforge_create_patch`で新規patchを作成する。
 2. そのpatchが、`maxforge.sync`を1個だけ含む独立したtargetとしてregisterされることを確認する。
-3. `button`、`counter`、`print`を含む小さなdesired DSLをapplyし、connectionをinspectionで検証する。
+3. `button`、`counter`、`print`を含む小さなdesired DSLをprepareし、返されたreceiptだけをapplyしてconnectionをinspectionで検証する。
 4. `maxforge_save_patch`でabsolute temporary `.maxpat` pathへ保存する。Maxがclean patchを報告し、ファイルが存在することを確認する。
 5. `maxforge_close_patch`でcloseし、target listから消えることを確認する。
 6. 保存したファイルをMaxから通常の方法で開き直す。すでに`maxforge.sync`を含むため、`maxforge_open_patch`へ渡してはいけない。自動的にregisterされ、期待するgraphとsaved pathを保持していることを確認する。
@@ -72,10 +73,10 @@ MAXFORGE_CONFIG path/project.id:
 
 **前提:** H03で保存したpatchと、固定された`project.id`。
 
-1. broker PID、current DSL、graph revision、edit-history persistence status、saved pathを記録する。
+1. broker PID、working `sourceRef`、graph revision、edit-history persistence status、saved pathを記録する。
 2. MCP entryだけを再起動する。同じbroker PIDへattachし、targetを引き続きinspectできることを確認する。
 3. すべてのMCP entryとMax clientを閉じ、意図的に短く設定した`MAXFORGE_BROKER_IDLE_MS`を超えるまで待つ。`maxforge broker status`が接続できなくなることを確認する。
-4. patchとMCP entryを開き直す。新しいbrokerがprojectを所有し、writer-lock errorなしで保存済みsource、baseline、historyを復元することを確認する。
+4. patchとMCP entryを開き直す。新しいbrokerがprojectを所有し、writer-lock errorなしで保存済みsource、baseline、historyを復元することを確認する。再起動前の未使用receiptはprocess-localなので失効し、復元した`sourceRef`から新しくprepareできることを確認する。
 5. brokerを停止せずMaxを終了し、Maxと保存済みpatchを開き直す。native retry registrationによってinspectionが復旧することを確認する。
 6. outer MCP host（例: Codex）を一度再起動する。設定済みMaxforge entryがinitializeし、同じtargetをlistできることを確認する。
 
@@ -107,7 +108,7 @@ MAXFORGE_CONFIG path/project.id:
 
 1. broker machineで、人間が決めた`MAXFORGE_WS_TOKEN`を設定する。effective bindがnon-loopback、または明示指定したLAN addressであることを確認する。
 2. Max machineの`maxforge.sync`に、broker machineのLAN address、port、一致するtokenを設定する。
-3. registration、inspection、preview済みapplyを1回、acknowledgementまで確認する。
+3. registration、inspection、prepare済みreceipt applyを1回、acknowledgementまで確認する。
 4. Max側tokenを誤った値へ変更する。設定したtokenをlogへ漏らさず、registrationとmutationがrejectされることを確認する。
 5. non-loopback bindを要求したままtokenを削除する。startupがrejectされることを確認する。このplaintext WebSocketをInternetへ直接公開してはいけない。
 

@@ -346,7 +346,8 @@ was created.
 - Manage only exact `maxforge_<scope>_obj_...` scripting names.
 - Preview nontrivial changes before apply.
 - Review managed human edits before interpreting them. Adopt an accepted live
-  baseline or reconcile it with a concrete next DSL; both paths are opt-in.
+  baseline or prepare a concrete next state with merge enabled; both paths are
+  opt-in.
 - Never remove or fabricate `baseStructureToken`; it prevents stale inspected
   state from being mutated after a concurrent human edit.
 - Keep the default unauthenticated WebSocket bridge on loopback. For trusted-LAN

@@ -529,16 +529,16 @@ source[1] -&gt; destination[2]</code></pre>
         <h2>Do not apply blind</h2>
         <p>Use this sequence for every unfamiliar or ambiguous live session:</p>
         <ol class="docs-steps docs-steps-long">
-          <li><span>01</span><div>Call <code>maxforge_help</code> with <code>{ "topic": "workflow" }</code>.</div></li>
+          <li><span>01</span><div>Use <code>maxforge_help</code> only when the compact receipt contract is unavailable, unfamiliar, or in recovery; do not add a redundant call to every normal edit.</div></li>
           <li><span>02</span><div>Call <code>maxforge_status</code> when process or connection state is uncertain.</div></li>
           <li><span>03</span><div>Before using a custom object, call <code>maxforge_catalog</code> and confirm the loaded definition.</div></li>
           <li><span>04</span><div>Call <code>maxforge_list_patches</code>; select an exact <code>patcherId</code> and <code>scope</code>.</div></li>
           <li><span>05</span><div>Call <code>maxforge_inspect_patch</code>. Titles are display metadata, not identities.</div></li>
           <li><span>06</span><div>When recent order matters, call <code>maxforge_get_live_edit_history</code>. Check <code>supported</code>, <code>persistence</code>, <code>droppedEvents</code>, session identity, and <code>comparisonBasis</code>; this is structural evidence, not undo history.</div></li>
-          <li><span>07</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Read related changes through <code>review.editClusters</code>, follow their <code>changeIndexes</code> to raw before/after values, and treat <code>interpretationRisks</code> as ambiguity prompts rather than proven human intent.</div></li>
-          <li><span>08</span><div>Adopt an accepted current baseline with <code>maxforge_adopt_live_changes</code> and the exact reviewed token, or reconcile it with a concrete next complete DSL.</div></li>
-          <li><span>09</span><div>After adoption, replace the working source with returned <code>workingDsl</code>. Otherwise call <code>maxforge_compile_plan</code> and review warnings, deletes, and structural recreation.</div></li>
-          <li><span>10</span><div>Call <code>maxforge_apply_dsl</code> with the same target and DSL. Verify the revision and retain returned <code>workingDsl</code>; use <code>manualChanges: "merge"</code> only after successful reconciliation.</div></li>
+          <li><span>07</span><div>If live edits exist, call <code>maxforge_review_live_changes</code>. Its default summary omits the snapshot, raw rows, duplicate signals, and full DSL; request <code>detail: "full"</code> only for exact evidence.</div></li>
+          <li><span>08</span><div>Adopt an accepted current baseline with the exact reviewed token, or prepare a concrete next state with <code>manualChanges: "merge"</code>.</div></li>
+          <li><span>09</span><div>Call <code>maxforge_prepare_change</code> with complete DSL once, or use retained <code>baseSourceRef</code> plus small half-open line edits. Review counts, every destructive operation, replacements, warnings, and conflicts.</div></li>
+          <li><span>10</span><div>Call <code>maxforge_apply_prepared_change</code> with only the one-time <code>receiptId</code>. Verify the revision, retain <code>sourceRef</code>, and never retry a consumed receipt.</div></li>
         </ol>
         <div class="docs-callout docs-callout-danger">
           <strong>Desired state, not commands</strong>
@@ -567,11 +567,11 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td><code>maxforge_get_patch_history_identity</code></td><td>Inspect canonical project history identity, aliases, explicit decisions, and logical-forget state without requiring the old patch to be connected.</td></tr>
               <tr><td><code>maxforge_resolve_patch_history_identity</code></td><td>After human confirmation and source closure, append a rekey, merge, or logical-forget decision. It does not rewrite live routing or erase original evidence.</td></tr>
               <tr><td><code>maxforge_erase_project_history</code></td><td>After explicit human confirmation and full Max disconnection, delete retained edit-history chunks and the identity ledger and clear their in-memory copy. Secure overwrite and deletion of project source/state files are out of scope.</td></tr>
-              <tr><td><code>maxforge_review_live_changes</code></td><td>Classify structural evidence, correlate related changes into identity-bound edit clusters, expose interpretation risks and clarification candidates, and provide proposed working DSL when lossless.</td></tr>
-              <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return round-trip-checked <code>workingDsl</code>.</td></tr>
-              <tr><td><code>maxforge_reconcile_patch</code></td><td>Three-way merge previous agent intent, live human edits, and next desired DSL without mutating Max.</td></tr>
-              <tr><td><code>maxforge_compile_plan</code></td><td>Compile desired DSL to a read-only ordered PatchPlan.</td></tr>
-              <tr><td><code>maxforge_apply_dsl</code></td><td>Compile, send, acknowledge, and capture a new inspection baseline.</td></tr>
+              <tr><td><code>maxforge_review_live_changes</code></td><td>Return compact structural evidence and edit clusters by default; full snapshot/raw rows/proposed DSL are opt-in.</td></tr>
+              <tr><td><code>maxforge_adopt_live_changes</code></td><td>Accept a reviewed managed graph with an exact token, advance revision without replay, and return a retained source reference.</td></tr>
+              <tr><td><code>maxforge_prepare_change</code></td><td>Compile or three-way merge complete desired state, retain the bulk plan, and return a compact one-time receipt plus destructive summary.</td></tr>
+              <tr><td><code>maxforge_apply_prepared_change</code></td><td>Consume a receipt, apply without DSL retransmission/recompilation, acknowledge, verify, and retain source state.</td></tr>
+              <tr><td><code>maxforge_get_working_source</code></td><td>Read source metadata, bounded matching snippets, or explicitly requested full retained DSL.</td></tr>
             </tbody>
           </table>
         </div>
@@ -637,7 +637,7 @@ source[1] -&gt; destination[2]</code></pre>
               <tr><td>Apply timed out</td><td>Do not retry. Call <code>maxforge_help</code> with <code>recovery</code>, inspect the live patch, and determine whether Max applied the revision.</td></tr>
               <tr><td>Broker restarted</td><td>Check <code>maxforge_status</code>, restored state path/revision, then inspect. Restarting only a stdio frontend leaves broker state intact. Exact <code>currentDsl</code> is required only when persistence was disabled or unavailable.</td></tr>
               <tr><td>Max or the patch restarted</td><td>Wait for registration, then status → list → inspect before compiling another plan.</td></tr>
-              <tr><td>Managed manual edit detected</td><td>Review first. Adopt the accepted current baseline with its exact token and retain returned <code>workingDsl</code>, or reconcile with a concrete next DSL.</td></tr>
+              <tr><td>Managed manual edit detected</td><td>Review first. Adopt the accepted current baseline with its exact token and retain returned <code>sourceRef</code>, or prepare a concrete next state with <code>manualChanges: "merge"</code>.</td></tr>
               <tr><td>Unmanaged manual edit detected</td><td>Review it. Unmanaged-only edits are reported but do not block managed mutation.</td></tr>
             </tbody>
           </table>

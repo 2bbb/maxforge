@@ -21,8 +21,8 @@ Status meanings:
 | A01 | DSL parsing, blocks, `for`, `if`, arithmetic, diagnostics | CI | `tests/block.test.ts`, `tests/expander.test.ts`, `tests/compiler.test.ts` | None for language semantics |
 | A02 | Built-in/project catalog, known-invalid names, argument-dependent ports | CI / Partial | CI checks catalog structure, reviewed regressions, and argument rules; it does not prove every built-in name exists | H08 proves declared custom objects in Max; H10 audits built-ins against installed Max resources |
 | A03 | Patch graph conversion, diff, merge, layout, patch-cord metadata | CI | `tests/patch-graph.test.ts`, `tests/patch-merge.test.ts`, `tests/reconcile.test.ts`, `tests/thispatcher.test.ts` | H02 checks the native Max result |
-| A04 | MCP schemas, help, tool responses, target routing | CI | `tests/mcp-server.test.ts`, `tests/mcp-service.test.ts`, `tests/mcp-bridge.test.ts` | H02–H04 check one real MCP host and Max session |
-| A05 | Human-edit evidence, review/adopt/reconcile, stale tokens | CI / Partial | Service tests model an opaque changing token and reject an edit between cached inspection and apply; authoritative native CTest separately fixes the FNV token vector | H02 supplies edits through the Max UI rather than synthetic snapshots |
+| A04 | MCP schemas, compact review/prepare/apply responses, source refs/edits, target routing | CI | `tests/mcp-server.test.ts`, `tests/mcp-service.test.ts`, `tests/mcp-bridge.test.ts`; a 1,000-object prepare response is bounded below 10 KB and omits bulk plans | H02–H04 check one real MCP host and Max session |
+| A05 | Human-edit evidence, review/adopt/merge preparation, stale tokens and one-time receipts | CI / Partial | Service tests cover source-ref staleness, receipt consumption/eviction/catalog/revision races, and native structure change between prepare and apply; authoritative native CTest fixes the FNV token vector | H02 supplies edits through the Max UI rather than synthetic snapshots |
 | A06 | State/history persistence, torn records, migration, writer lease | CI / Partial | `tests/mcp-state-store.test.ts`, `tests/mcp-edit-history-store.test.ts`, `tests/process-lease.test.ts` | H04 checks recovery across actual application/client restarts |
 | A07 | Broker sharing, idle exit, dead owner, version/config mismatch | CI | `tests/mcp-broker.test.ts`, `tests/mcp-broker-lifecycle.test.ts` | H05 checks the MCP host's reconnect control |
 | A08 | Broker replacement and forced restart | CI / Partial | CI checks stale diagnostic refresh, disappearance, compatible replacement, diagnostic-only tools, and old-frontend exit | H05 confirms that the real MCP host exposes full tools only after reconnect |
@@ -36,9 +36,10 @@ Status meanings:
 
 | Scenario | Automated assertion | Real-host assertion |
 |---|---|---|
-| Agent applies to an unchanged patch | plan, acknowledgement, revision, and verification baseline | H02 |
+| Agent applies to an unchanged patch | compact prepare receipt, acknowledgement, revision, and verification baseline | H02 |
 | Human edits after an agent apply | review clusters and structure tokens are derived from synthetic live evidence | H02 uses Max UI edits |
-| Agent adopts the human edit, then applies another DSL diff | stale-token and adopted-baseline behavior | H02 verifies that the human edit is preserved |
+| Agent adopts the human edit, then applies a source-ref edit | stale ref/token and adopted-baseline behavior | H02 verifies that the human edit is preserved |
+| Human edits after receipt preparation | native structure-token race rejects apply and consumes the receipt | H02 can repeat the race through the Max UI when this boundary changes |
 | Broker dies or is force-restarted | lease recovery and old frontend termination | H04/H05 verify MCP-host recovery |
 | Diagnostic frontend outlives a failed/old broker | every status call refreshes; compatible replacement yields `RECONNECT_REQUIRED`; tool list remains diagnostic | H05 reconnects the MCP entry and checks full tools |
 | Max closes and reopens a saved patch | bridge disconnect behavior and state rekeying are unit tested | H03/H04 verify native registration and saved-path identity |
@@ -62,7 +63,7 @@ provides the application session, permissions, and interpretation.
 Ranked by expected defect prevention rather than test count:
 
 1. Add a protocol-level fake Max client that runs longer mixed sequences:
-   register → inspect → human-edit event → reconcile → apply → disconnect →
+   register → inspect → human-edit event → review → prepare → apply → disconnect →
    reconnect. Existing tests cover these operations mostly in smaller groups.
 2. Run `npm run test:package` on Windows if npm `.cmd` entrypoint failures occur;
    the current CI smoke runs on Ubuntu while native artifacts build on both OSes.
