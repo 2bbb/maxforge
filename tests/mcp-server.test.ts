@@ -136,16 +136,16 @@ describe("maxforge MCP protocol surface", () => {
         "maxforge_resolve_patch_history_identity",
         "maxforge_erase_project_history",
         "maxforge_adopt_live_changes",
-        "maxforge_reconcile_patch",
-        "maxforge_compile_plan",
-        "maxforge_apply_dsl",
+        "maxforge_prepare_change",
+        "maxforge_apply_prepared_change",
+        "maxforge_get_working_source",
       ]);
       const definitions = toolDefinitions(tools);
       expect(definitions).toHaveLength(21);
       expect(definitions.every((tool) => tool.outputSchema?.type === "object"))
         .toBe(true);
       expect(
-        definitions.find((tool) => tool.name === "maxforge_apply_dsl")
+        definitions.find((tool) => tool.name === "maxforge_apply_prepared_change")
           ?.description
       ).toContain("Do not retry");
       expect(JSON.stringify(
@@ -280,7 +280,7 @@ describe("maxforge MCP protocol surface", () => {
       });
 
       const customPlan = await client.request(35, "tools/call", {
-        name: "maxforge_compile_plan",
+        name: "maxforge_prepare_change",
         arguments: {
           patcherId: "patch_a",
           scope: "custom",
@@ -290,13 +290,17 @@ describe("maxforge MCP protocol surface", () => {
       expect(customPlan).toMatchObject({
         result: {
           structuredContent: {
+            canApply: true,
             operationCount: 1,
-            plan: {
-              operations: [{
-                op: "create",
-                box: { text: "vendor.test~", numinlets: 2, numoutlets: 1 },
-              }],
+            operationCounts: {
+              disconnect: 0,
+              delete: 0,
+              create: 1,
+              set: 0,
+              connect: 0,
             },
+            destructiveOperations: [],
+            replacements: [],
           },
         },
       });
@@ -316,7 +320,7 @@ describe("maxforge MCP protocol surface", () => {
       });
 
       const reloadedPlan = await client.request(37, "tools/call", {
-        name: "maxforge_compile_plan",
+        name: "maxforge_prepare_change",
         arguments: {
           patcherId: "patch_a",
           scope: "reloaded",
@@ -326,12 +330,9 @@ describe("maxforge MCP protocol surface", () => {
       expect(reloadedPlan).toMatchObject({
         result: {
           structuredContent: {
-            plan: {
-              operations: [{
-                op: "create",
-                box: { text: "vendor.reloaded", numinlets: 1, numoutlets: 1 },
-              }],
-            },
+            canApply: true,
+            operationCount: 1,
+            operationCounts: { create: 1 },
           },
         },
       });
@@ -376,7 +377,7 @@ describe("maxforge MCP protocol surface", () => {
       });
 
       const result = await client.request(4, "tools/call", {
-        name: "maxforge_compile_plan",
+        name: "maxforge_prepare_change",
         arguments: {
           patcherId: "patch_a",
           scope: "voices",
@@ -386,11 +387,11 @@ describe("maxforge MCP protocol surface", () => {
       expect(result).toMatchObject({
         result: {
           structuredContent: {
+            canApply: true,
+            scope: "voices",
             operationCount: 1,
-            plan: {
-              scope: "voices",
-              operations: [{ op: "create" }],
-            },
+            operationCounts: { create: 1 },
+            destructiveOperations: [],
           },
         },
       });
@@ -475,12 +476,13 @@ describe("maxforge MCP protocol surface", () => {
       });
 
       const reconciliation = await client.request(32, "tools/call", {
-        name: "maxforge_reconcile_patch",
+        name: "maxforge_prepare_change",
         arguments: {
           patcherId: "patch_a",
           scope: "voices",
           desiredDsl: "osc = cycle~ 440",
           expectedStructureToken: "0000000000000000",
+          manualChanges: "merge",
         },
       });
       expect(reconciliation).toMatchObject({
@@ -491,17 +493,18 @@ describe("maxforge MCP protocol surface", () => {
             canApply: true,
             conflicts: [],
             operationCount: 1,
-            plan: { operations: [{ op: "create" }] },
+            operationCounts: { create: 1 },
           },
         },
       });
 
+      const preparedContent = (result as unknown as {
+        result: { structuredContent: { receiptId: string } };
+      }).result.structuredContent;
       const applied = await client.request(31, "tools/call", {
-        name: "maxforge_apply_dsl",
+        name: "maxforge_apply_prepared_change",
         arguments: {
-          patcherId: "patch_a",
-          scope: "voices",
-          desiredDsl: "osc = cycle~ 440",
+          receiptId: preparedContent.receiptId,
         },
       });
       expect(applied).toMatchObject({
@@ -519,7 +522,8 @@ describe("maxforge MCP protocol surface", () => {
             baselineCaptured: false,
             baselineWarning: expect.stringContaining("Max applied the patch"),
             manualChangesMerged: 0,
-            workingDsl: expect.stringContaining("osc = cycle~ 440"),
+            sourceRef: expect.stringMatching(/^[a-f0-9]{64}$/),
+            sourceCharacters: "osc = cycle~ 440".length,
             workingDslRequiredAsCurrent: false,
             timings: {
               preflightMs: expect.any(Number),
@@ -533,6 +537,43 @@ describe("maxforge MCP protocol surface", () => {
           },
         },
       });
+
+      const source = await client.request(311, "tools/call", {
+        name: "maxforge_get_working_source",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "voices",
+          sourceRef: (applied as unknown as {
+            result: { structuredContent: { sourceRef: string } };
+          }).result.structuredContent.sourceRef,
+        },
+      });
+      expect(source).toMatchObject({
+        result: {
+          structuredContent: {
+            source: "osc = cycle~ 440",
+            lineCount: 1,
+          },
+        },
+      });
+
+      const bulkDsl = [
+        "for i in 0..999 {",
+        "  button_${i} = button at(${20 + i * 30}, 20)",
+        "}",
+      ].join("\n");
+      const bulkPrepared = await client.request(312, "tools/call", {
+        name: "maxforge_prepare_change",
+        arguments: {
+          patcherId: "patch_a",
+          scope: "bulk",
+          desiredDsl: bulkDsl,
+        },
+      });
+      const bulkSerialized = JSON.stringify(bulkPrepared);
+      expect(bulkSerialized.length).toBeLessThan(10_000);
+      expect(bulkSerialized).not.toContain('"plan"');
+      expect(bulkSerialized).not.toContain('"rollbackOperations"');
 
       const created = await client.request(6, "tools/call", {
         name: "maxforge_create_patch",

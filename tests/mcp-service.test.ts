@@ -390,6 +390,7 @@ describe("MaxforgePatchService", () => {
       desiredDsl,
       catalogDigest: "c".repeat(64),
     });
+    if (!prepared.canApply) throw new Error("expected prepared change receipt");
 
     expect(prepared).toMatchObject({
       patcherId: "patch-a",
@@ -458,6 +459,7 @@ describe("MaxforgePatchService", () => {
       desiredDsl: "osc = cycle~ 440",
       catalogDigest: "c".repeat(64),
     });
+    if (!prepared.canApply) throw new Error("expected prepared change receipt");
 
     await expect(service.applyPreparedChange({
       receiptId: prepared.receiptId,
@@ -480,12 +482,14 @@ describe("MaxforgePatchService", () => {
       desiredDsl: "osc = cycle~ 440",
       catalogDigest: "c".repeat(64),
     });
+    if (!first.canApply) throw new Error("expected first prepared change receipt");
     const stale = await service.prepareChange({
       patcherId: "patch-a",
       scope: "voices",
       desiredDsl: "osc = cycle~ 660",
       catalogDigest: "c".repeat(64),
     });
+    if (!stale.canApply) throw new Error("expected stale prepared change receipt");
     transport.snapshotAfterApply = snapshotForDsl("osc = cycle~ 440", "voices");
     await service.applyPreparedChange({
       receiptId: first.receiptId,
@@ -1858,6 +1862,21 @@ describe("MaxforgePatchService", () => {
       canApply: false,
       conflicts: [{ kind: "box_field", id: "obj-osc", field: "text" }],
     });
+
+    const prepared = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 880 at(50, 50)",
+      manualChanges: "merge",
+      expectedStructureToken: preview.structureToken,
+      catalogDigest: "c".repeat(64),
+    });
+    expect(prepared).toMatchObject({
+      canApply: false,
+      conflicts: [{ kind: "box_field", id: "obj-osc", field: "text" }],
+      structureToken: preview.structureToken,
+    });
+    expect(prepared).not.toHaveProperty("receiptId");
 
     await expect(service.applyDsl({
       patcherId: "patch-a",

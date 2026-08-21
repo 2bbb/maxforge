@@ -85,6 +85,7 @@ export interface PreparedReplacement {
 }
 
 export interface PreparedChangeResult {
+  readonly canApply: true;
   readonly receiptId: string;
   readonly patcherId: string;
   readonly scope: string;
@@ -101,7 +102,25 @@ export interface PreparedChangeResult {
   readonly workingDslRequiredAsCurrent: boolean;
   readonly manualChangesMerged: number;
   readonly prepareMs: number;
+  readonly conflicts: readonly [];
 }
+
+export interface BlockedPreparedChangeResult {
+  readonly canApply: false;
+  readonly patcherId: string;
+  readonly scope: string;
+  readonly comparisonAvailable: boolean;
+  readonly managedChangeCount: number;
+  readonly unmanagedChangeCount: number;
+  readonly conflicts: readonly PatchReconciliationConflict[];
+  readonly warnings: readonly CompileWarning[];
+  readonly structureToken: string;
+  readonly prepareMs: number;
+}
+
+export type PrepareChangeOutcome =
+  | PreparedChangeResult
+  | BlockedPreparedChangeResult;
 
 export interface ApplyPreparedChangeResult {
   readonly receiptId: string;
@@ -347,10 +366,51 @@ export class MaxforgePatchService {
     };
   }
 
-  async prepareChange(request: PrepareChangeRequest): Promise<PreparedChangeResult> {
+  async prepareChange(request: PrepareChangeRequest): Promise<PrepareChangeOutcome> {
     this.assertMutationCompatible(request.patcherId, request.scope);
     const startedAt = performance.now();
-    const resolved = await this.resolveChange(request);
+    let resolved: ResolvedChange;
+    if (request.manualChanges === "merge") {
+      const reconciliation = await this.reconcilePlan(
+        request,
+        request.expectedStructureToken
+      );
+      if (
+        !reconciliation.canApply ||
+        !reconciliation.plan ||
+        !reconciliation.mergedGraph
+      ) {
+        return {
+          canApply: false,
+          patcherId: request.patcherId,
+          scope: request.scope,
+          comparisonAvailable: reconciliation.comparisonAvailable,
+          managedChangeCount: reconciliation.managedChangeCount,
+          unmanagedChangeCount: reconciliation.unmanagedChangeCount,
+          conflicts: reconciliation.conflicts,
+          warnings: reconciliation.warnings,
+          structureToken: reconciliation.structureToken,
+          prepareMs: elapsedMilliseconds(startedAt, performance.now()),
+        };
+      }
+      const workingDslRequiredAsCurrent =
+        reconciliation.mergedGraph.revision !==
+        reconciliation.intentGraph.revision;
+      resolved = {
+        plan: reconciliation.plan,
+        nextGraph: reconciliation.mergedGraph,
+        intentGraph: reconciliation.intentGraph,
+        warnings: reconciliation.warnings,
+        workingDsl: workingDslRequiredAsCurrent
+          ? this.patchAdapter.serialize(reconciliation.mergedGraph)
+          : request.desiredDsl,
+        intentDsl: request.desiredDsl,
+        workingDslRequiredAsCurrent,
+        manualChangesMerged: reconciliation.managedChangeCount,
+      };
+    } else {
+      resolved = await this.resolveChange(request);
+    }
     const receiptId = randomUUID();
     const prepared: PreparedChange = {
       ...resolved,
@@ -655,6 +715,7 @@ export class MaxforgePatchService {
         )
       );
     return {
+      canApply: true,
       receiptId: prepared.receiptId,
       patcherId: prepared.patcherId,
       scope: prepared.plan.scope,
@@ -671,6 +732,7 @@ export class MaxforgePatchService {
       workingDslRequiredAsCurrent: prepared.workingDslRequiredAsCurrent,
       manualChangesMerged: prepared.manualChangesMerged,
       prepareMs,
+      conflicts: [],
     };
   }
 
