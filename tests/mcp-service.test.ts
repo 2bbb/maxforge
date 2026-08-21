@@ -374,6 +374,135 @@ describe("MaxforgePatchService", () => {
     expect(second.workingDsl).toContain("osc_1 = cycle~ 660");
   });
 
+  it("prepares one token-bound receipt and applies it without retransmitting DSL", async () => {
+    const transport = new FakeTransport();
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    const service = createService(transport);
+    const desiredDsl = [
+      "for i in 0..63 {",
+      "  voice_${i} = cycle~ ${110 + i * 2}",
+      "}",
+    ].join("\n");
+
+    const prepared = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl,
+      catalogDigest: "c".repeat(64),
+    });
+
+    expect(prepared).toMatchObject({
+      patcherId: "patch-a",
+      scope: "voices",
+      operationCount: 64,
+      operationCounts: {
+        disconnect: 0,
+        delete: 0,
+        create: 64,
+        set: 0,
+        connect: 0,
+      },
+      destructiveOperations: [],
+      replacements: [],
+      sourceCharacters: desiredDsl.length,
+      workingDslRequiredAsCurrent: false,
+      manualChangesMerged: 0,
+    });
+    expect(prepared.sourceRef).toBe(
+      createHash("sha256").update(desiredDsl).digest("hex")
+    );
+    expect(transport.plans).toEqual([]);
+    expect(transport.inspectionCount).toBe(1);
+
+    transport.snapshotAfterApply = snapshotForDsl(desiredDsl, "voices");
+    const applied = await service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "c".repeat(64),
+    });
+
+    expect(transport.plans).toHaveLength(1);
+    expect(transport.inspectionCount).toBe(2);
+    expect(applied).toMatchObject({
+      receiptId: prepared.receiptId,
+      targetRevision: prepared.targetRevision,
+      operationCount: 64,
+      sourceRef: prepared.sourceRef,
+      sourceCharacters: desiredDsl.length,
+      baselineCaptured: true,
+    });
+    expect(service.getWorkingSource(
+      "patch-a",
+      "voices",
+      prepared.sourceRef
+    )).toEqual({
+      patcherId: "patch-a",
+      scope: "voices",
+      sourceRef: prepared.sourceRef,
+      sourceCharacters: desiredDsl.length,
+      lineCount: 3,
+      source: desiredDsl,
+    });
+    await expect(service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("already been consumed");
+  });
+
+  it("invalidates a prepared receipt when the object catalog changes", async () => {
+    const transport = new FakeTransport();
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    const service = createService(transport);
+    const prepared = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+      catalogDigest: "c".repeat(64),
+    });
+
+    await expect(service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "d".repeat(64),
+    })).rejects.toThrow("active catalog");
+    expect(transport.plans).toEqual([]);
+    await expect(service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("already been consumed");
+  });
+
+  it("rejects a prepared receipt after another receipt advances the target", async () => {
+    const transport = new FakeTransport();
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    const service = createService(transport);
+    const first = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+      catalogDigest: "c".repeat(64),
+    });
+    const stale = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 660",
+      catalogDigest: "c".repeat(64),
+    });
+    transport.snapshotAfterApply = snapshotForDsl("osc = cycle~ 440", "voices");
+    await service.applyPreparedChange({
+      receiptId: first.receiptId,
+      catalogDigest: "c".repeat(64),
+    });
+
+    await expect(service.applyPreparedChange({
+      receiptId: stale.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("stale");
+    expect(transport.plans).toHaveLength(1);
+    await expect(service.applyPreparedChange({
+      receiptId: stale.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("already been consumed");
+  });
+
   it("rejects an incompatible native external before recording a pending apply", async () => {
     const transport = new FakeTransport();
     transport.patches = [{
