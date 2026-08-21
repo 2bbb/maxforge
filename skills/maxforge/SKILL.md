@@ -163,6 +163,8 @@ for i in 0..7 {
 - Object: `name = object args... [@attr values...] [at(x, y[, width, height])]`
 - Escape a literal Max object-text attribute as `\@attr`; plain `@attr` is a maxforge box property.
 - Connection: `a -> b -> c`, or `src[1] -> dst[2]` for outlet/inlet indices.
+- Consecutive ports: `src[0..3] -> dst[2..5]` zip-connects inclusive ranges;
+  use exactly two equal-length ascending ranges, not a mixed or ranged chain.
 - Subpatcher: `fx = p name { ... }` with `inlet`/`outlet` objects inside.
 - Signal subpatch ports: `inlet signal` / `outlet signal`; never invent `inlet~` or `outlet~`.
 - `for i in 0..7 { ... }` is inclusive; `step` is supported.

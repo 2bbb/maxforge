@@ -181,11 +181,16 @@ vol[1] -> dac[1]
 # src の outlet 0 → dst の inlet 1
 src[0] -> dst[1]
 
+# 連続ポートをinclusive rangeでzip接続
+src[0..3] -> dst[2..5]
+
 # ポート番号は 0-indexed（左端 = 0）
 ```
 
 **注意事項:**
 - 接続先のオブジェクトは**先に定義**されている必要がある。
+- range接続は2オブジェクト間に限定し、左右を同じ本数にする。上の例はoutlet 0〜3をinlet 2〜5へ順番に4本接続する。
+- rangeとscalarの混在やrangeを含むchainは意図を推測せずエラーにする。decompile結果は個別接続へ展開され、range記法には戻らない。
 - 固定形状または引数解決済みオブジェクトのoutlet/inlet範囲はコンパイル時に検証される。`dynamicPorts`と`--allow-unknown`は根拠のない上限判定を行わない。
 - 同じ接続の重複は警告のみ（エラーではない）。
 
@@ -464,6 +469,7 @@ install、abstraction search path、binary architecture、内部dependencyの存
 | E007 | 構文エラー | 行を確認 |
 | E008 | 空のsubpatcher | inlet/outletを最低1つ追加 |
 | E009 | 予約属性キー | `@patching_rect` など構造キーを属性にしない |
+| E010 | ポートrangeが不正 | 昇順・同じ本数・2項間接続・100,000本以下にする |
 
 ### Warnings (コンパイル継続)
 

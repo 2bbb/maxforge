@@ -254,6 +254,9 @@ accessibility automation, Max JavaScript, `node.script`, or invented
 
 Use DSL as full scope ownership, not command syntax:
 
+- For direct consecutive port mapping, use inclusive equal-length ranges such
+  as `src[0..3] -> dst[2..5]`; do not mix a range with a scalar or chain ranges.
+
 ```maxdsl
 patch "Generated controls"
 

@@ -20,6 +20,7 @@ The offline toolchain can:
 
 - compile `.maxdsl` text to `.maxpat` JSON;
 - generate repeated structures with `for`, `if`, and numeric expressions;
+- zip-connect consecutive outlet and inlet ranges with concise port mapping;
 - validate objects and ports against built-in or project-supplied metadata;
 - decompile supported `.maxpat` structure back to DSL; and
 - emit Max clipboard text or a portable package directory.

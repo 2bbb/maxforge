@@ -229,13 +229,28 @@ function parseConnection(line: string, lineNum: number): ConnectionStmt | null {
 }
 
 function parsePortRef(text: string): PortRef | null {
-  const match = text.match(/^(\w+)(?:\[(\d+)(?::(\d+))?\])?$/);
+  const match = text.match(
+    /^(\w+)(?:\[(?:(\d+)\.\.(\d+)|(\d+)(?::(\d+))?)\])?$/
+  );
   if (!match) return null;
   if (!isIdentifier(match[1])) return null;
 
   const name = match[1];
-  const outlet = match[2] ? parseInt(match[2]) : undefined;
-  const inlet = match[3] ? parseInt(match[3]) : undefined;
+  if (match[2] !== undefined && match[3] !== undefined) {
+    const start = Number(match[2]);
+    const end = Number(match[3]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
+    return { name, range: [start, end] };
+  }
+
+  const outlet = match[4] !== undefined ? Number(match[4]) : undefined;
+  const inlet = match[5] !== undefined ? Number(match[5]) : undefined;
+  if (
+    (outlet !== undefined && !Number.isSafeInteger(outlet)) ||
+    (inlet !== undefined && !Number.isSafeInteger(inlet))
+  ) {
+    return null;
+  }
 
   return { name, outlet, inlet };
 }

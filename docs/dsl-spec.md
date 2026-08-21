@@ -43,8 +43,11 @@ subpatcher_def    ::= IDENT , '=' , 'p' , IDENT , { attribute } , [ position ] ,
 
 connection        ::= port_ref , { '->' , port_ref } , NEWLINE ;
 port_ref          ::= IDENT , [ '[' , port_spec , ']' ] ;
-port_spec         ::= INTEGER , [ ':' , INTEGER ] ;
-                  (* outlet_index [ : inlet_index ] *)
+port_spec         ::= scalar_port | port_range ;
+scalar_port       ::= INTEGER , [ ':' , INTEGER ] ;
+                  (* outgoing_index [ : incoming_index ] *)
+port_range        ::= INTEGER , '..' , INTEGER ;
+                  (* inclusive source outlet or destination inlet range *)
 
 for_block         ::= 'for' , IDENT , 'in' , expr , '..' , expr , [ 'step' , expr ] , '{' , { statement } , '}' ;
 if_block          ::= 'if' , expr , '{' , { statement } , '}' , [ else_block ] ;
@@ -131,11 +134,12 @@ ARROW ::= '-' , '>'
 ### 3.6 Port Specifiers
 
 ```
-port_spec ::= '[' INTEGER [ ':' INTEGER ] ']'
+port_spec ::= '[' ( INTEGER [ ':' INTEGER ] | INTEGER '..' INTEGER ) ']'
 ```
 
-- `[N]` — outlet N (inlet defaults to 0)
-- `[N:M]` — outlet N → inlet M
+- `[N]` — outlet N when used as a source; inlet N when used as a destination
+- `[N:M]` — outgoing outlet N and incoming inlet M on the same reference
+- `[A..B]` — inclusive outlet or inlet range, determined by its side of `->`
 - No spaces inside brackets: `a[1]` (not `a[ 1 ]`)
 - Indices are **0-based** (left-most = 0)
 
@@ -390,14 +394,29 @@ Compiles to:
 name -> name
 name -> name -> name -> name
 name[1] -> name
-name[1:2] -> name
+source[1] -> destination[2]
+source -> middle[1:2] -> destination
+source[0..3] -> destination[2..5]
 ```
 
 - Chain syntax: `a -> b -> c` is equivalent to `a -> b` + `b -> c`.
-- Each `->` creates ONE patchline.
+- Each scalar `->` creates one patchline.
 - Port defaults: outlet=0, inlet=0.
-- `[N]` = outlet N → inlet 0.
-- `[N:M]` = outlet N → inlet M.
+- `[N]` selects outlet N on the left of an arrow and inlet N on the right.
+- `[N:M]` assigns both roles to one reference: outgoing outlet N and incoming
+  inlet M. Thus `a -> b[1:2] -> c` connects `a[0] -> b[2]` and
+  `b[1] -> c[0]`.
+- `[A..B] -> [C..D]` zip-connects inclusive ranges. The example above creates
+  `source[0] -> destination[2]` through `source[3] -> destination[5]`.
+- A range connection must contain exactly two ranged references. Mixed
+  scalar/range connections and range chains are rejected rather than guessed.
+- Both ranges must be ascending and have equal lengths. A single statement is
+  limited to 100,000 expanded patchlines.
+- `${expr}` expansion runs first, so generated bounds such as
+  `source[0..${N}] -> destination[${M}..${M + N}]` are supported when those
+  expressions are in scope.
+- Decompile emits the resulting explicit patchlines; it does not reconstruct
+  the range shorthand.
 
 **Validation rules (enforced at compile time):**
 1. Every name in a connection must reference a defined object.
@@ -573,6 +592,7 @@ The compiler outputs a JSON object matching the Max `.maxpat` format:
 | E007 | `Syntax error at line {N}: {detail}` | Malformed statement |
 | E008 | `Subpatcher "{name}" has no inlets or outlets` | Empty subpatcher with no inlet/outlet objects |
 | E009 | `Reserved attribute cannot be set with @{key}` | Attribute would corrupt structural box JSON |
+| E010 | Port range validation error | Range shape, direction, length, or expansion limit is invalid |
 
 ### 8.2 Warnings (non-fatal)
 

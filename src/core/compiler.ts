@@ -17,6 +17,7 @@ import { CompiledBox, CompiledLine } from "./compiled-model.js";
 import {
   compiledLineKey,
   compileConnectionPair,
+  type ConnectionPairResult,
 } from "./connection-compiler.js";
 import { buildPatcherJSON } from "./patcher-json.js";
 import {
@@ -27,6 +28,8 @@ import {
   OUTLET_OBJECT_TYPES,
   parsePortObject,
 } from "./port-objects.js";
+
+const MAX_PORT_RANGE_CONNECTIONS = 100_000;
 
 export function compile(
   ast: ASTNode,
@@ -117,20 +120,80 @@ export function compile(
   }
 
   function compileConnection(stmt: ConnectionStmt) {
+    const rangedRefs = stmt.refs.filter((ref) => ref.range !== undefined);
+    if (rangedRefs.length > 0) {
+      compilePortRangeConnection(stmt, rangedRefs.length);
+      return;
+    }
+
     for (let i = 0; i < stmt.refs.length - 1; i++) {
-      const result = compileConnectionPair(
+      appendConnectionResult(compileConnectionPair(
         stmt.refs[i],
         stmt.refs[i + 1],
         stmt.line,
         nameMap,
         lineKeys
+      ));
+    }
+  }
+
+  function compilePortRangeConnection(stmt: ConnectionStmt, rangedRefCount: number) {
+    if (stmt.refs.length !== 2 || rangedRefCount !== 2) {
+      appendInvalidPortRange(
+        "Port range connections require exactly two references, both ranged"
       );
-      errors.push(...result.errors);
-      if (result.warning) warnings.push(result.warning);
-      if (result.line) {
-        lines.push(result.line);
-        lineKeys.add(compiledLineKey(result.line));
-      }
+      return;
+    }
+
+    const sourceRange = stmt.refs[0].range!;
+    const destinationRange = stmt.refs[1].range!;
+    if (sourceRange[0] > sourceRange[1] || destinationRange[0] > destinationRange[1]) {
+      appendInvalidPortRange("Port ranges must be ascending");
+      return;
+    }
+
+    const sourceCount = sourceRange[1] - sourceRange[0] + 1;
+    const destinationCount = destinationRange[1] - destinationRange[0] + 1;
+    if (sourceCount !== destinationCount) {
+      appendInvalidPortRange(
+        `Port ranges must have equal lengths (${sourceCount} !== ${destinationCount})`
+      );
+      return;
+    }
+    if (sourceCount > MAX_PORT_RANGE_CONNECTIONS) {
+      appendInvalidPortRange(
+        `Port range exceeds the ${MAX_PORT_RANGE_CONNECTIONS} connection limit`
+      );
+      return;
+    }
+
+    for (let offset = 0; offset < sourceCount; offset++) {
+      const result = compileConnectionPair(
+        { name: stmt.refs[0].name, outlet: sourceRange[0] + offset },
+        { name: stmt.refs[1].name, inlet: destinationRange[0] + offset },
+        stmt.line,
+        nameMap,
+        lineKeys
+      );
+      appendConnectionResult(result);
+      if (result.errors.length > 0) return;
+    }
+
+    function appendInvalidPortRange(message: string) {
+      errors.push({
+        code: ErrorCode.INVALID_PORT_RANGE,
+        message,
+        line: stmt.line,
+      });
+    }
+  }
+
+  function appendConnectionResult(result: ConnectionPairResult) {
+    errors.push(...result.errors);
+    if (result.warning) warnings.push(result.warning);
+    if (result.line) {
+      lines.push(result.line);
+      lineKeys.add(compiledLineKey(result.line));
     }
   }
 

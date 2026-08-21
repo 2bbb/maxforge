@@ -69,6 +69,26 @@ gain_ = *~ 0.5 at(120, 20, 60, 22)
     expect(compileGraph(workingDsl)).toEqual(graph);
   });
 
+  it("expands port ranges into explicit managed graph connections", () => {
+    const graph = compileGraph(`
+source = trigger b b b b
+destination = pack 0 0 0 0 0 0
+source[0..3] -> destination[2..5]
+`);
+
+    expect(graph.patcher.connections).toHaveLength(4);
+    expect(graph.patcher.connections.map((connection) => [
+      connection.source.port,
+      connection.destination.port,
+    ])).toEqual([[0, 2], [1, 3], [2, 4], [3, 5]]);
+
+    const workingDsl = patchGraphToDsl(graph);
+    expect(workingDsl).not.toContain("..");
+    expect(workingDsl).toContain("source -> destination[2]");
+    expect(workingDsl).toContain("source[3] -> destination[5]");
+    expect(compileGraph(workingDsl)).toEqual(graph);
+  });
+
   it("assigns stable managed varnames to generated and nested objects", () => {
     const graph = compileGraph(`
 for i in 0..1 {

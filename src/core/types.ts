@@ -172,11 +172,21 @@ export interface SubpatcherDefStmt {
   attrs?: Record<string, AttrValue[]>;
 }
 
-export interface PortRef {
+export interface ScalarPortRef {
   name: string;
-  outlet?: number;  // undefined = 0
-  inlet?: number;   // undefined = 0
+  outlet?: number;  // outgoing index; also the incoming index without inlet
+  inlet?: number;   // incoming index override for [outlet:inlet]
+  range?: never;
 }
+
+export interface PortRangeRef {
+  name: string;
+  range: [number, number]; // inclusive; outgoing on the left, incoming on the right
+  outlet?: never;
+  inlet?: never;
+}
+
+export type PortRef = ScalarPortRef | PortRangeRef;
 
 // Compile error types
 export enum ErrorCode {
@@ -189,6 +199,7 @@ export enum ErrorCode {
   SYNTAX_ERROR = "E007",
   EMPTY_SUBPATCHER = "E008",
   RESERVED_ATTRIBUTE = "E009",
+  INVALID_PORT_RANGE = "E010",
 }
 
 export enum WarningCode {

@@ -366,6 +366,24 @@ a[1] -> b
     }
   });
 
+  it("parses inclusive port ranges without changing scalar port semantics", () => {
+    const { ast, errors } = parse(`source[0..3] -> destination[2..5]`);
+    expect(errors).toHaveLength(0);
+    expect(ast.statements[0]).toEqual({
+      type: "connection",
+      line: 1,
+      refs: [
+        { name: "source", range: [0, 3] },
+        { name: "destination", range: [2, 5] },
+      ],
+    });
+
+    const scalar = parse(`source[1:2] -> destination`).ast.statements[0];
+    expect(scalar).toMatchObject({
+      refs: [{ name: "source", outlet: 1, inlet: 2 }, { name: "destination" }],
+    });
+  });
+
   it("handles comments and blank lines", () => {
     const source = `# comment line
 
@@ -484,6 +502,126 @@ a[4] -> b[3]
     expect(result.success).toBe(true);
     expect(result.output!.patcher.lines[0].patchline.source).toEqual(["obj-a", 4]);
     expect(result.output!.patcher.lines[0].patchline.destination).toEqual(["obj-b", 3]);
+  });
+
+  it("zip-connects inclusive outlet and inlet ranges", () => {
+    const source = `
+source = trigger b b b b
+destination = pack 0 0 0 0 0 0
+source[0..3] -> destination[2..5]
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines.map(({ patchline }) => ({
+      source: patchline.source,
+      destination: patchline.destination,
+    }))).toEqual([
+      { source: ["obj-source", 0], destination: ["obj-destination", 2] },
+      { source: ["obj-source", 1], destination: ["obj-destination", 3] },
+      { source: ["obj-source", 2], destination: ["obj-destination", 4] },
+      { source: ["obj-source", 3], destination: ["obj-destination", 5] },
+    ]);
+  });
+
+  it("preserves outgoing:incoming semantics for scalar chain references", () => {
+    const { ast, errors } = parse(`
+source = button
+middle = gate 2
+destination = number
+source -> middle[1:1] -> destination
+`);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines.map(({ patchline }) => ({
+      source: patchline.source,
+      destination: patchline.destination,
+    }))).toEqual([
+      { source: ["obj-source", 0], destination: ["obj-middle", 1] },
+      { source: ["obj-middle", 1], destination: ["obj-destination", 0] },
+    ]);
+  });
+
+  it("expands expressions before compiling port ranges", () => {
+    const source = `
+source = trigger b b b b
+destination = pack 0 0 0 0 0 0
+for upper in 3..3 {
+  source[0..\${upper}] -> destination[2..\${upper + 2}]
+}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines).toHaveLength(4);
+  });
+
+  it.each([
+    ["source[3..0] -> destination[2..5]", "Port ranges must be ascending"],
+    ["source[0..2] -> destination[2..5]", "Port ranges must have equal lengths"],
+    ["source[0..3] -> destination", "exactly two references"],
+    ["source[0..3] -> destination[2..5] -> third", "exactly two references"],
+  ])("rejects invalid port range mapping: %s", (connection, message) => {
+    const source = `
+source = trigger b b b b
+destination = pack 0 0 0 0 0 0
+third = number
+${connection}
+`;
+    const { ast, errors } = parse(source);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ code: "E010", line: 5 });
+    expect(result.errors[0].message).toContain(message);
+  });
+
+  it("rejects a port range above the per-statement expansion limit", () => {
+    const { ast, errors } = parse(`
+source = custom_source
+destination = custom_destination
+source[0..100000] -> destination[0..100000]
+`);
+    expect(errors).toHaveLength(0);
+    const result = compile(ast, db, true);
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([expect.objectContaining({
+      code: "E010",
+      message: "Port range exceeds the 100000 connection limit",
+    })]);
+  });
+
+  it.each([
+    ["source[0..4] -> destination[0..4]", "E004"],
+    ["source[0..3] -> destination[1..4]", "E005"],
+  ])("validates every expanded range port: %s", (connection, code) => {
+    const { ast } = parse(`
+source = trigger b b b b
+destination = pack 0 0 0 0
+${connection}
+`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([expect.objectContaining({ code })]);
+  });
+
+  it("deduplicates patchlines expanded from port ranges", () => {
+    const { ast } = parse(`
+source = trigger b b
+destination = pack 0 0
+source[0..1] -> destination[0..1]
+source[0..1] -> destination[0..1]
+`);
+    const result = compile(ast, db);
+    expect(result.success).toBe(true);
+    expect(result.output!.patcher.lines).toHaveLength(2);
+    expect(result.warnings).toHaveLength(2);
+    expect(result.warnings.every((warning) => warning.code === "W001")).toBe(true);
   });
 
   it("emits patch declaration metadata into patcher JSON", () => {
