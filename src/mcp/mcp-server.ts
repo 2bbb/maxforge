@@ -368,7 +368,7 @@ const editReviewSchema = z.object({
     objectIds: z.array(z.string()),
     changeIndexes: z.array(z.number().int().nonnegative()),
     summary: z.string(),
-  })),
+  })).optional(),
   editClusters: z.array(z.object({
     id: z.string(),
     targetPath: z.array(z.string()),
@@ -407,7 +407,7 @@ const liveChangeReviewSchema = z.object({
   comparisonAvailable: z.boolean(),
   managedChangeCount: z.number().int().nonnegative(),
   unmanagedChangeCount: z.number().int().nonnegative(),
-  changes: z.array(snapshotChangeSchema),
+  changes: z.array(snapshotChangeSchema).optional(),
   review: editReviewSchema,
   structureToken: structureTokenSchema,
   acknowledgedRevision: revisionSchema.optional(),
@@ -416,7 +416,23 @@ const liveChangeReviewSchema = z.object({
   adoptionBlockedReason: z.string().optional(),
   conflicts: z.array(reconciliationConflictSchema),
   proposedWorkingDsl: z.string().optional(),
-  snapshot: snapshotEventSchema,
+  snapshot: snapshotEventSchema.optional(),
+});
+
+const adoptedChangeSchema = z.object({
+  patcherId: patcherIdSchema,
+  scope: scopeSchema,
+  previousRevision: revisionSchema,
+  adoptedRevision: revisionSchema,
+  revisionAdvanced: z.boolean(),
+  acknowledgement: acknowledgementSchema.optional(),
+  structureToken: structureTokenSchema,
+  managedChangeCount: z.number().int().nonnegative(),
+  unmanagedChangeCount: z.number().int().nonnegative(),
+  statePersisted: z.boolean(),
+  stateWarning: z.string().optional(),
+  sourceRef: sourceRefSchema,
+  sourceCharacters: z.number().int().nonnegative(),
 });
 
 const pendingApplyInspectionSchema = z.object({
@@ -545,7 +561,7 @@ const HELP_CONTENT = {
       "If live edits exist, call maxforge_review_live_changes. Its signals are evidence of what changed, not certainty about why the human changed it.",
       "Interpret related changes together using review.editClusters. Treat interpretationRisks as prompts for reasoning, and use interpretationGuidance.clarificationRecommendedFor to identify clusters that may require a human question.",
       "To accept the current managed graph as the baseline, call maxforge_adopt_live_changes with the exact reviewed structure token. If a concrete next DSL is already ready, prepare it with manualChanges set to merge and require canApply=true.",
-      "After adoption, replace the working source with the returned workingDsl before preparing the next desired state.",
+      "After adoption, retain returned sourceRef and query or edit that broker-held source instead of copying complete DSL through agent context.",
       "Send complete desired DSL once to maxforge_prepare_change with the exact inspected structure token. Review warnings, every destructive operation, and every replacement; bulk create/connect/rollback operations remain behind the receipt.",
       "Apply only the returned receiptId with maxforge_apply_prepared_change. Do not resend or recompile the DSL.",
       "Treat native mutation as acknowledged only when acknowledgement.revision equals targetRevision. When verification is present, require verification.revision to match; when it is absent or baselineCaptured is false, inspect before further mutation instead of retrying the apply.",
@@ -618,7 +634,7 @@ const HELP_CONTENT = {
       "Use maxforge_get_live_edit_history when operation order or intermediate states could change the interpretation; account for droppedEvents and comparisonBasis.",
       "If saved-path warnings remain ambiguous, inspect both identities with maxforge_get_patch_history_identity. Only after the human confirms the relationship may you close the source and call maxforge_resolve_patch_history_identity.",
       "If broker startup reports an edit-history writer lease, inspect maxforge_status.broker first. A replacement broker automatically recovers a valid lease whose recorded process is dead, but never replaces a live or malformed lease.",
-      "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then replace the working source with its returned workingDsl.",
+      "If accepted managed edits should become the new baseline, call maxforge_adopt_live_changes with the exact reviewed structure token, then retain its sourceRef.",
       "If a concrete next desired DSL is ready, call maxforge_prepare_change with manualChanges set to merge instead.",
       "If preparation reports canApply=true, apply its receipt. Resolve reported conflicts explicitly instead of forcing a winner.",
       "After a timeout or transport error, call maxforge_status and maxforge_inspect_patch before deciding whether another apply is safe.",
@@ -1217,6 +1233,12 @@ export function createMaxforgeMcpServer(
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),
+        detail: z.enum(["summary", "full"])
+          .optional()
+          .default("summary")
+          .describe(
+            "summary omits the full snapshot, raw changes, signal duplicates, and proposed complete DSL; full returns all evidence"
+          ),
       }),
       outputSchema: liveChangeReviewSchema,
       annotations: {
@@ -1225,10 +1247,33 @@ export function createMaxforgeMcpServer(
         idempotentHint: true,
       },
     },
-    async ({ patcherId, scope }) => {
+    async ({ patcherId, scope, detail }) => {
       try {
         const result = await options.service.reviewLiveChanges(patcherId, scope);
-        return toolResult({ patcherId, scope, ...result });
+        if (detail === "full") {
+          return toolResult({ patcherId, scope, ...result });
+        }
+        const { signals: _signals, ...compactReview } = result.review;
+        return toolResult({
+          patcherId,
+          scope,
+          comparisonAvailable: result.comparisonAvailable,
+          managedChangeCount: result.managedChangeCount,
+          unmanagedChangeCount: result.unmanagedChangeCount,
+          review: compactReview,
+          structureToken: result.structureToken,
+          ...(result.acknowledgedRevision
+            ? { acknowledgedRevision: result.acknowledgedRevision }
+            : {}),
+          ...(result.observedManagedRevision
+            ? { observedManagedRevision: result.observedManagedRevision }
+            : {}),
+          canAdopt: result.canAdopt,
+          ...(result.adoptionBlockedReason
+            ? { adoptionBlockedReason: result.adoptionBlockedReason }
+            : {}),
+          conflicts: result.conflicts,
+        });
       } catch (error) {
         return toolError(error);
       }
@@ -1408,7 +1453,7 @@ export function createMaxforgeMcpServer(
     {
       title: "Adopt reviewed human edits",
       description:
-        "Accept the exact reviewed live structure as the next managed and agent-intent baseline without replaying the human's structural edits. Requires the structure token returned by maxforge_review_live_changes. Safe managed edits advance the native revision with a zero-operation, token-bound plan; conflicts and unrepresentable protocol-v1 patch-cord metadata are rejected. Returns lossless workingDsl for the next desired-state edit.",
+        "Accept the exact reviewed live structure as the next managed and agent-intent baseline without replaying the human's structural edits. Requires the structure token returned by maxforge_review_live_changes. Safe managed edits advance the native revision with a zero-operation, token-bound plan; conflicts and unrepresentable protocol-v1 patch-cord metadata are rejected. Returns a retained source reference instead of injecting complete DSL into agent context.",
       inputSchema: z.object({
         patcherId: patcherIdSchema.describe("Registered target Max patch ID"),
         scope: scopeSchema.describe("Exact managed scope of the target patch"),
@@ -1416,15 +1461,7 @@ export function createMaxforgeMcpServer(
           "Exact structureToken returned by the immediately preceding live-change review"
         ),
       }),
-      outputSchema: liveChangeReviewSchema.extend({
-        previousRevision: revisionSchema,
-        adoptedRevision: revisionSchema,
-        revisionAdvanced: z.boolean(),
-        acknowledgement: acknowledgementSchema.optional(),
-        statePersisted: z.boolean(),
-        stateWarning: z.string().optional(),
-        workingDsl: z.string(),
-      }),
+      outputSchema: adoptedChangeSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -1434,10 +1471,26 @@ export function createMaxforgeMcpServer(
     async (request) => {
       try {
         const result = await options.service.adoptLiveChanges(request);
+        const source = options.service.getWorkingSource(
+          request.patcherId,
+          request.scope
+        );
         return toolResult({
           patcherId: request.patcherId,
           scope: request.scope,
-          ...result,
+          previousRevision: result.previousRevision,
+          adoptedRevision: result.adoptedRevision,
+          revisionAdvanced: result.revisionAdvanced,
+          ...(result.acknowledgement
+            ? { acknowledgement: result.acknowledgement }
+            : {}),
+          structureToken: result.structureToken,
+          managedChangeCount: result.managedChangeCount,
+          unmanagedChangeCount: result.unmanagedChangeCount,
+          statePersisted: result.statePersisted,
+          ...(result.stateWarning ? { stateWarning: result.stateWarning } : {}),
+          sourceRef: source.sourceRef,
+          sourceCharacters: source.sourceCharacters,
         });
       } catch (error) {
         return toolError(error);

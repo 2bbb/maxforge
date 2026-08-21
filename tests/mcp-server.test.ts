@@ -440,13 +440,35 @@ describe("maxforge MCP protocol surface", () => {
             review: {
               affectedManagedIds: [],
               affectedUnmanagedRuntimeIds: [],
-              signals: [],
               editClusters: [],
               interpretationGuidance: {
                 mode: "evidence_only",
                 clarificationRecommendedFor: [],
               },
             },
+          },
+        },
+      });
+      const compactReview = (liveChangeReview as unknown as {
+        result: { structuredContent: Record<string, unknown> & {
+          review: Record<string, unknown>;
+        } };
+      }).result.structuredContent;
+      expect(compactReview).not.toHaveProperty("snapshot");
+      expect(compactReview).not.toHaveProperty("changes");
+      expect(compactReview).not.toHaveProperty("proposedWorkingDsl");
+      expect(compactReview.review).not.toHaveProperty("signals");
+
+      const fullLiveChangeReview = await client.request(511, "tools/call", {
+        name: "maxforge_review_live_changes",
+        arguments: { patcherId: "patch_a", scope: "voices", detail: "full" },
+      });
+      expect(fullLiveChangeReview).toMatchObject({
+        result: {
+          structuredContent: {
+            snapshot: { type: "maxforge.snapshot" },
+            changes: [],
+            review: { signals: [] },
           },
         },
       });
