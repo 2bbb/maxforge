@@ -570,6 +570,57 @@ describe("MaxforgePatchService", () => {
     })).rejects.toThrow("already been consumed");
   });
 
+  it("consumes a prepared receipt when Max changes before native apply", async () => {
+    const transport = new FakeTransport();
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    const service = createService(transport);
+    const prepared = await service.prepareChange({
+      patcherId: "patch-a",
+      scope: "voices",
+      desiredDsl: "osc = cycle~ 440",
+      catalogDigest: "c".repeat(64),
+    });
+    if (!prepared.canApply) throw new Error("expected prepared change receipt");
+    transport.snapshot = snapshotForDsl("human = button", "voices");
+
+    await expect(service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("live patch structure changed since inspection");
+    expect(transport.plans).toHaveLength(1);
+    await expect(service.applyPreparedChange({
+      receiptId: prepared.receiptId,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("already been consumed");
+  });
+
+  it("bounds prepared receipts and evicts the oldest unused receipt", async () => {
+    const transport = new FakeTransport();
+    transport.snapshot = { ...patcherSnapshot(), boxes: [], connections: [] };
+    const service = createService(transport);
+    const receipts: string[] = [];
+    for (let index = 0; index < 65; index++) {
+      const prepared = await service.prepareChange({
+        patcherId: "patch-a",
+        scope: "voices",
+        desiredDsl: `osc = cycle~ ${440 + index}`,
+        catalogDigest: "c".repeat(64),
+      });
+      if (!prepared.canApply) throw new Error("expected prepared change receipt");
+      receipts.push(prepared.receiptId);
+    }
+
+    await expect(service.applyPreparedChange({
+      receiptId: receipts[0]!,
+      catalogDigest: "c".repeat(64),
+    })).rejects.toThrow("missing or has already been consumed");
+    transport.snapshotAfterApply = snapshotForDsl("osc = cycle~ 504", "voices");
+    await expect(service.applyPreparedChange({
+      receiptId: receipts.at(-1)!,
+      catalogDigest: "c".repeat(64),
+    })).resolves.toMatchObject({ receiptId: receipts.at(-1) });
+  });
+
   it("rejects an incompatible native external before recording a pending apply", async () => {
     const transport = new FakeTransport();
     transport.patches = [{
