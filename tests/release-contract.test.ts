@@ -10,6 +10,8 @@ describe("native release contract", () => {
     const workflow = source(".github/workflows/build-max-package.yml");
 
     expect(workflow).toContain('archive="maxforge-v${version}.zip"');
+    expect(workflow).toContain('archive="maxforge-ci-${GITHUB_SHA}.zip"');
+    expect(workflow).toContain('artifact="maxforge-ci-${GITHUB_SHA}"');
     expect(workflow).toContain(
       'Release tag ${GITHUB_REF_NAME} does not match package version v${version}'
     );

@@ -224,15 +224,22 @@ jobs:
       - name: Verify Max package
         run: python3 scripts/verify-max-package.py --package dist/maxforge
 
-      - name: Resolve versioned archive name
+      - name: Resolve archive identity
         id: package-version
         shell: bash
         run: |
           set -euo pipefail
           version="$(node -p 'require("./package.json").version')"
-          archive="maxforge-v${version}.zip"
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            archive="maxforge-v${version}.zip"
+            artifact="maxforge-package-${version}"
+          else
+            archive="maxforge-ci-${GITHUB_SHA}.zip"
+            artifact="maxforge-ci-${GITHUB_SHA}"
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+          echo "artifact=${artifact}" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_EVENT_NAME}" == "release" && "${GITHUB_REF_NAME}" != "v${version}" ]]; then
             echo "::error::Release tag ${GITHUB_REF_NAME} does not match package version v${version}"
             exit 1
@@ -272,7 +279,7 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
-          name: maxforge-package-${{ steps.package-version.outputs.version }}
+          name: ${{ steps.package-version.outputs.artifact }}
           path: |
             dist/${{ steps.package-version.outputs.archive }}
             dist/${{ steps.package-version.outputs.archive }}.sha256

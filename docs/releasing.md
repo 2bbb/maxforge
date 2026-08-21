@@ -44,18 +44,25 @@ on Linux after CI: that can damage macOS bundle metadata and permissions.
 
 - pull requests targeting `main`: build, test, validate, and upload the Actions
   artifact only;
-- pushes to `main`: do the same and upload a version-named Actions artifact;
+- pushes to `main`: do the same and upload a commit-named
+  `maxforge-ci-<commit>.zip` Actions artifact;
 - a published GitHub Release: rebuild the tagged source and attach
   `maxforge-vX.Y.Z.zip` and its checksum to that versioned release; the workflow
   rejects a release tag that differs from `package.json`;
-- manual `workflow_dispatch`: build and upload the Actions artifact without
-  changing a release.
+- manual `workflow_dispatch`: build and upload the same commit-named CI artifact
+  without changing a release.
 
 Push and pull-request runs use one concurrency group per event and ref. A newer
 commit cancels an older run for the same branch. Published-release and manual
 runs are not auto-cancelled. There is deliberately no moving `latest` Git tag,
 GitHub Release, or unversioned public ZIP: live MCP compatibility requires a
 one-to-one npm version, Git tag, and native package.
+
+Only a matching published-release event may produce
+`maxforge-vX.Y.Z.zip`. Main, pull-request, and manual builds use the source
+commit in both Actions artifact and ZIP names. This prevents unpublished source
+changes from masquerading as an already published semantic version. CI archives
+are test evidence, not installer inputs.
 
 The package combines both platforms, matching the other bbb Max packages. Max
 ignores the external extension for the other platform.
