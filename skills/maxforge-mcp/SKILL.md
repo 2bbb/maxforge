@@ -148,11 +148,13 @@ accessibility automation, Max JavaScript, `node.script`, or invented
      range refers to the original retained source and ranges must not overlap.
      The broker reconstructs and compiles the complete next DSL; this is a
      compact transport, not imperative patch syntax. A stale ref fails closed.
-   Omitted managed objects and cords are deletions. Use real Max object names;
-   signal subpatch ports are `inlet signal` and `outlet signal`, never invented
-   `inlet~`/`outlet~` names. Give every object a contextual semantic DSL name,
-   which becomes its managed varname suffix. Never use `obj1`, `thing`,
-   `new_object`, or `temp` merely because the user did not provide a name.
+    Omitted managed objects and cords are deletions. Use real Max object names;
+    signal subpatch ports are `inlet signal` and `outlet signal`, never invented
+    `inlet~`/`outlet~` names. Give every object a contextual semantic DSL name,
+    which becomes its managed varname suffix. When the user did not provide a
+    name, inspect the surrounding patch context before naming it: use topology,
+    object text, comments, and established vocabulary. Never use `obj1`,
+    `thing`, `new_object`, or `temp` merely because the user omitted a name.
 9. If inspection reports live changes, call `maxforge_review_live_changes`.
    The default summary deliberately omits the full snapshot, raw change rows,
    duplicate signal rows, and proposed full DSL. Request `detail: "full"` only
